@@ -87,6 +87,33 @@ const STATUS_CODES: Record<string, string> = {
     "720": "Alert: This claim/encounter is part of a cyclic filing..."
 };
 
+// Common CPT/HCPCS Codes
+export const PROCEDURE_CODES: Record<string, string> = {
+    "99201": "Office/outpatient visit, new patient, level 1",
+    "99202": "Office/outpatient visit, new patient, level 2",
+    "99203": "Office/outpatient visit, new patient, level 3",
+    "99204": "Office/outpatient visit, new patient, level 4",
+    "99205": "Office/outpatient visit, new patient, level 5",
+    "99211": "Office/outpatient visit, est patient, level 1",
+    "99212": "Office/outpatient visit, est patient, level 2",
+    "99213": "Office/outpatient visit, est patient, level 3",
+    "99214": "Office/outpatient visit, est patient, level 4",
+    "99215": "Office/outpatient visit, est patient, level 5",
+    "99221": "Initial hospital care, low complexity",
+    "99222": "Initial hospital care, moderate complexity",
+    "99223": "Initial hospital care, high complexity",
+    "99281": "Emergency department visit, level 1",
+    "99282": "Emergency department visit, level 2",
+    "99283": "Emergency department visit, level 3",
+    "99284": "Emergency department visit, level 4",
+    "99285": "Emergency department visit, level 5",
+    "73030": "Radiologic examination, shoulder; complete, minimum of 2 views",
+    "71046": "Radiologic examination, chest; 2 views",
+    "85025": "Blood count; complete (CBC), automated",
+    "80053": "Comprehensive metabolic panel",
+    "J0120": "Injection, tetracycline, up to 250 mg",
+};
+
 // Maps Segment Tag -> Element Index (1-based) -> Definition
 const ELEMENT_DEFINITIONS: Record<string, Record<number, { name: string, codes?: Record<string, string> }>> = {
   ISA: {
@@ -336,6 +363,10 @@ export const getElementDefinition = (tag: string, index: number, value: string):
     return value; // Fallback to raw value if no code match
 };
 
+export const getProcedureDefinition = (code: string): string => {
+    return PROCEDURE_CODES[code] || "Procedure " + code;
+};
+
 export const analyzeSegmentOffline = (segment: EdiSegment): SegmentAnalysis => {
   const segDef = SEGMENT_DESCRIPTIONS[segment.tag] || "Unknown Segment";
   const elemDefs = ELEMENT_DEFINITIONS[segment.tag] || {};
@@ -363,6 +394,14 @@ export const analyzeSegmentOffline = (segment: EdiSegment): SegmentAnalysis => {
       // Amounts
       else if (def && (def.name.includes("Amount") || def.name.includes("Quantity"))) {
         definition = el.value; 
+      }
+      
+      // SVC Procedure Code lookup
+      else if (segment.tag === 'SVC' && el.index === 1) {
+          const parts = el.value.split(':');
+          if (parts.length > 1) {
+              definition = getProcedureDefinition(parts[1]);
+          }
       }
     }
 
@@ -432,6 +471,11 @@ export const analyzeSegmentOffline = (segment: EdiSegment): SegmentAnalysis => {
   else if (segment.tag === 'MSG') {
       const text = fields.find(f => f.code === 'MSG01')?.value;
       if (text) summary = `Message: ${text}`;
+  }
+  else if (segment.tag === 'SVC') {
+      const proc = fields.find(f => f.code === 'SVC01')?.definition;
+      const fee = fields.find(f => f.code === 'SVC02')?.value;
+      if (proc) summary = `Service: ${proc} ($${fee})`;
   }
 
   return {
