@@ -119,3 +119,84 @@ export const askEdiQuestion = async (
         return "I'm sorry, I couldn't connect to your local Ollama instance. Please make sure it is running (ollama serve) and 'llama3' is pulled.";
     }
 };
+
+/**
+ * Generate form data for EDI 270/276 using Local Ollama
+ */
+export const generateFormData = async (formType: '270' | '276', description: string = "A realistic healthcare scenario"): Promise<any> => {
+    const schema270 = {
+        payerName: "string (e.g. Medicare)",
+        payerId: "string (e.g. CMS001)",
+        providerName: "string (e.g. General Hospital)",
+        providerNpi: "string (10 digits)",
+        subscriberFirstName: "string",
+        subscriberLastName: "string",
+        subscriberId: "string (Member ID)",
+        subscriberDob: "YYYY-MM-DD",
+        serviceDate: "YYYY-MM-DD (today or recent)",
+        serviceTypeCode: "string (e.g. 30, 1, 33)",
+        hasDependent: "boolean",
+        dependentFirstName: "string (empty if hasDependent is false)",
+        dependentLastName: "string (empty if hasDependent is false)",
+        dependentDob: "YYYY-MM-DD (empty if hasDependent is false)",
+        dependentGender: "string (M, F, or U - empty if false)"
+    };
+
+    const schema276 = {
+        payerName: "string",
+        payerId: "string",
+        providerName: "string",
+        providerNpi: "string",
+        subscriberFirstName: "string",
+        subscriberLastName: "string",
+        subscriberId: "string",
+        hasDependent: "boolean",
+        dependentFirstName: "string",
+        dependentLastName: "string",
+        claimId: "string (Trace Number)",
+        chargeAmount: "string (e.g. 150.00)",
+        serviceDate: "YYYY-MM-DD"
+    };
+
+    const targetSchema = formType === '270' ? schema270 : schema276;
+    
+    const prompt = `
+        You are a medical test data generator. 
+        Generate valid JSON data for an EDI ${formType} form based on this scenario: "${description}".
+        
+        The JSON MUST match this structure exactly:
+        ${JSON.stringify(targetSchema, null, 2)}
+        
+        Rules:
+        - Return ONLY raw JSON. No markdown, no explanations.
+        - Use realistic names and valid-looking IDs.
+        - Dates must be YYYY-MM-DD.
+        - Ensure boolean fields are actual booleans (true/false), not strings.
+    `;
+
+    try {
+        const response = await fetch(`${OLLAMA_HOST}/api/chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                model: MODEL_NAME,
+                messages: [{ role: 'user', content: prompt }],
+                stream: false,
+                format: "json"
+            })
+        });
+
+        if (!response.ok) throw new Error(response.statusText);
+
+        const data = await response.json();
+        let content = data.message.content;
+        
+        // Cleanup potential markdown wrapping
+        content = content.replace(/```json/g, '').replace(/```/g, '').trim();
+        
+        return JSON.parse(content);
+    } catch (error) {
+        console.error("Generation Error", error);
+        throw error;
+    }
+};

@@ -39,7 +39,7 @@ const SEGMENT_DESCRIPTIONS: Record<string, string> = {
 const YES_NO = { "Y": "Yes", "N": "No", "U": "Unknown" };
 
 // STC01-1 Claim Status Categories
-const STATUS_CATEGORIES: Record<string, string> = {
+export const STATUS_CATEGORIES: Record<string, string> = {
     "A0": "Acknowledgment of Receipt - Forwarded",
     "A1": "Acknowledgment of Receipt",
     "A2": "Acknowledgment of Acceptance",
@@ -67,7 +67,7 @@ const STATUS_CATEGORIES: Record<string, string> = {
 };
 
 // STC01-2 Claim Status Codes (Subset of common codes)
-const STATUS_CODES: Record<string, string> = {
+export const STATUS_CODES: Record<string, string> = {
     "1": "For more detailed information, see the remittance advice.",
     "2": "More detailed information is available in the letter or email.",
     "15": "Authorization number is missing, invalid, or does not apply.",

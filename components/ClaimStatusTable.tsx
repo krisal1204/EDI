@@ -1,5 +1,6 @@
 import React, { useState, Fragment } from 'react';
 import { ClaimStatusRow } from '../services/ediMapper';
+import { STATUS_CODES } from '../services/offlineAnalyzer';
 
 export const ClaimStatusTable = ({ claims }: { claims: ClaimStatusRow[] }) => {
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
@@ -54,7 +55,7 @@ export const ClaimStatusTable = ({ claims }: { claims: ClaimStatusRow[] }) => {
                                {c.claimRef}
                                <div className="text-[10px] text-gray-400 mt-0.5">{c.statusDate}</div>
                             </td>
-                            <td className="px-4 py-3 align-top">
+                            <td className="px-4 py-3 align-top max-w-xs">
                                 <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium border
                                     ${c.statusCategory === 'F1' || c.statusCategory === 'F0' 
                                         ? 'bg-green-50 text-green-700 border-green-200' 
@@ -64,6 +65,11 @@ export const ClaimStatusTable = ({ claims }: { claims: ClaimStatusRow[] }) => {
                                     }`}>
                                     {c.statusCategory}-{c.statusCode}
                                 </span>
+                                {STATUS_CODES[c.statusCode] && (
+                                    <div className="text-[10px] text-gray-500 mt-1 leading-tight">
+                                        {STATUS_CODES[c.statusCode]}
+                                    </div>
+                                )}
                             </td>
                             <td className="px-4 py-3 text-right font-mono text-gray-700 align-top">
                                 ${c.billedAmount}
@@ -104,11 +110,18 @@ export const ClaimStatusTable = ({ claims }: { claims: ClaimStatusRow[] }) => {
                                                             <div className="font-mono font-medium">{line.procedureCode}</div>
                                                             <div className="text-gray-500 truncate max-w-xs">{line.procedureDesc}</div>
                                                         </td>
-                                                        <td className="px-3 py-2">
+                                                        <td className="px-3 py-2 max-w-xs">
                                                             {line.statusCategory ? (
-                                                                <span className="text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">
-                                                                    {line.statusCategory}-{line.statusCode}
-                                                                </span>
+                                                                <>
+                                                                    <span className="text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200 inline-block mb-1">
+                                                                        {line.statusCategory}-{line.statusCode}
+                                                                    </span>
+                                                                    {STATUS_CODES[line.statusCode] && (
+                                                                        <div className="text-gray-500 leading-tight">
+                                                                            {STATUS_CODES[line.statusCode]}
+                                                                        </div>
+                                                                    )}
+                                                                </>
                                                             ) : '-'}
                                                         </td>
                                                         <td className="px-3 py-2 text-right font-mono text-gray-600">

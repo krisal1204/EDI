@@ -4,6 +4,7 @@ import { SegmentTree } from './components/SegmentTree';
 import { SegmentDetail } from './components/SegmentDetail';
 import { EdiGenerator } from './components/EdiGenerator';
 import { ChatInterface } from './components/ChatInterface';
+import { CodeSearch } from './components/CodeSearch';
 import { parseEdi, flattenTree } from './services/ediParser';
 import { EdiDocument, EdiSegment } from './types';
 import { FormData270, FormData276, build270, build276 } from './services/ediBuilder';
@@ -91,7 +92,7 @@ function App() {
   const [benefits, setBenefits] = useState<BenefitRow[]>([]);
   const [claims, setClaims] = useState<ClaimStatusRow[]>([]);
   const [selectedSegment, setSelectedSegment] = useState<EdiSegment | null>(null);
-  const [viewMode, setViewMode] = useState<'inspector' | 'raw' | 'json'>('inspector');
+  const [viewMode, setViewMode] = useState<'inspector' | 'raw' | 'json' | 'reference'>('inspector');
   const [copyFeedback, setCopyFeedback] = useState(false);
   
   // Track which generator is currently active (if not viewing a parsed file)
@@ -325,8 +326,7 @@ function App() {
           <div className="flex text-xs font-medium bg-gray-100 p-0.5 rounded-sm">
                <button
                  onClick={() => setViewMode('inspector')}
-                 disabled={!doc}
-                 className={`px-3 py-1 rounded-sm transition-all ${viewMode === 'inspector' ? 'bg-white shadow-sm text-black' : 'text-gray-400 hover:text-gray-600 disabled:opacity-50'}`}
+                 className={`px-3 py-1 rounded-sm transition-all ${viewMode === 'inspector' ? 'bg-white shadow-sm text-black' : 'text-gray-400 hover:text-gray-600'}`}
                >
                  Inspector
                </button>
@@ -339,10 +339,15 @@ function App() {
                </button>
                <button
                  onClick={() => setViewMode('raw')}
-                 disabled={!doc}
-                 className={`px-3 py-1 rounded-sm transition-all ${viewMode === 'raw' ? 'bg-white shadow-sm text-black' : 'text-gray-400 hover:text-gray-600 disabled:opacity-50'}`}
+                 className={`px-3 py-1 rounded-sm transition-all ${viewMode === 'raw' ? 'bg-white shadow-sm text-black' : 'text-gray-400 hover:text-gray-600'}`}
                >
                  Editor
+               </button>
+               <button
+                 onClick={() => setViewMode('reference')}
+                 className={`px-3 py-1 rounded-sm transition-all ${viewMode === 'reference' ? 'bg-white shadow-sm text-black' : 'text-gray-400 hover:text-gray-600'}`}
+               >
+                 Codes
                </button>
           </div>
           
@@ -358,144 +363,157 @@ function App() {
       {/* Main Content Area */}
       <div className="flex-1 flex overflow-hidden">
         
-        {/* Pane 1: Generator/Benefits/Claims (Resizable) */}
-        <div 
-            className="flex-none bg-white z-20 border-r border-gray-200 relative"
-            style={{ width: sidebarWidth }}
-        >
-          <EdiGenerator 
-            formData={formData} 
-            onChange={handleFormChange}
-            formData276={formData276}
-            onChange276={handleForm276Change}
-            transactionType={doc?.transactionType} 
-            generatorMode={generatorMode}
-            onSetGeneratorMode={handleGeneratorModeChange}
-            benefits={benefits}
-            claims={claims}
-            selectedSegment={selectedSegment}
-            onFieldFocus={handleFieldFocus}
-          />
-        </div>
+        {/* Pane 1: Generator/Benefits/Claims (Resizable) - Hide if Reference Mode */}
+        {viewMode !== 'reference' && (
+            <div 
+                className="flex-none bg-white z-20 border-r border-gray-200 relative"
+                style={{ width: sidebarWidth }}
+            >
+            <EdiGenerator 
+                formData={formData} 
+                onChange={handleFormChange}
+                formData276={formData276}
+                onChange276={handleForm276Change}
+                transactionType={doc?.transactionType} 
+                generatorMode={generatorMode}
+                onSetGeneratorMode={handleGeneratorModeChange}
+                benefits={benefits}
+                claims={claims}
+                selectedSegment={selectedSegment}
+                onFieldFocus={handleFieldFocus}
+            />
+            </div>
+        )}
 
-        {/* Drag Handle */}
-        <div 
-            className="flex-none w-1 -ml-1 cursor-col-resize z-30 relative group hover:bg-blue-500 transition-colors"
-            onMouseDown={() => setIsResizing(true)}
-        ></div>
+        {/* Drag Handle - Hide if Reference Mode */}
+        {viewMode !== 'reference' && (
+            <div 
+                className="flex-none w-1 -ml-1 cursor-col-resize z-30 relative group hover:bg-blue-500 transition-colors"
+                onMouseDown={() => setIsResizing(true)}
+            ></div>
+        )}
 
         {/* Pane 2 & 3: Viewer Area */}
         <div className="flex-1 flex min-w-0 bg-white relative">
-          {!doc && !rawEdi ? (
-            <div className="w-full h-full">
-              <DragDropInput onProcess={(txt) => {
-                  // When loading from DragDrop, we assume manual raw change
-                  setRawEdi(txt);
-                  processEdi(txt, true);
-              }} />
-            </div>
+          
+          {/* Reference Mode Overrides Everything */}
+          {viewMode === 'reference' ? (
+              <div className="w-full h-full">
+                  <CodeSearch />
+              </div>
           ) : (
             <>
-                {viewMode === 'inspector' && (
-                  <>
-                    {/* Pane 2: Tree */}
-                    <div className="w-1/3 min-w-[250px] max-w-sm border-r border-gray-200 flex flex-col h-full bg-white">
-                       {doc && (
-                           <SegmentTree 
-                              segments={doc.segments} 
-                              selectedId={selectedSegment?.id || null} 
-                              onSelect={setSelectedSegment} 
-                           />
-                       )}
+                {!doc && !rawEdi ? (
+                    <div className="w-full h-full">
+                    <DragDropInput onProcess={(txt) => {
+                        setRawEdi(txt);
+                        processEdi(txt, true);
+                    }} />
                     </div>
-
-                    {/* Pane 3: Details */}
-                    <div className="flex-1 bg-white h-full overflow-hidden">
-                      {selectedSegment ? (
-                        <SegmentDetail segment={selectedSegment} />
-                      ) : (
-                        <div className="flex items-center justify-center h-full text-gray-300 text-sm">
-                          Select a segment to view details
-                        </div>
-                      )}
-                    </div>
-                  </>
-                )}
-
-                {viewMode === 'raw' && (
-                   /* Raw View */
-                   <div className="w-full h-full bg-white overflow-hidden flex flex-col relative">
-                     <div className="absolute top-2 right-4 z-10">
-                         <button
-                            onClick={() => handleCopy(rawEdi)}
-                            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md border text-xs font-medium transition-all duration-200 ${
-                                copyFeedback 
-                                    ? 'bg-green-50 border-green-200 text-green-700' 
-                                    : 'bg-white border-gray-200 text-gray-600 hover:text-gray-900 hover:border-gray-300 shadow-sm'
-                            }`}
-                         >
-                            {copyFeedback ? (
-                                <>
-                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                    </svg>
-                                    <span>Copied!</span>
-                                </>
-                            ) : (
-                                <>
-                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                    </svg>
-                                    <span>Copy</span>
-                                </>
+                ) : (
+                    <>
+                        {viewMode === 'inspector' && (
+                        <>
+                            {/* Pane 2: Tree */}
+                            <div className="w-1/3 min-w-[250px] max-w-sm border-r border-gray-200 flex flex-col h-full bg-white">
+                            {doc && (
+                                <SegmentTree 
+                                    segments={doc.segments} 
+                                    selectedId={selectedSegment?.id || null} 
+                                    onSelect={setSelectedSegment} 
+                                />
                             )}
-                         </button>
-                     </div>
-                     <textarea 
-                        className="flex-1 w-full p-8 bg-white text-gray-800 font-mono text-sm resize-none focus:outline-none leading-relaxed custom-scrollbar"
-                        value={rawEdi}
-                        onChange={(e) => {
-                            setRawEdi(e.target.value);
-                            processEdi(e.target.value, true);
-                        }}
-                        spellCheck={false}
-                     />
-                   </div>
-                )}
+                            </div>
 
-                {viewMode === 'json' && (
-                    /* JSON View */
-                    <div className="w-full h-full bg-white overflow-hidden flex flex-col relative">
-                        <div className="absolute top-2 right-4 z-10">
-                            <button
-                                onClick={() => handleCopy(enrichedJson)}
-                                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md border text-xs font-medium transition-all duration-200 ${
-                                    copyFeedback 
-                                        ? 'bg-green-50 border-green-200 text-green-700' 
-                                        : 'bg-white border-gray-200 text-gray-600 hover:text-gray-900 hover:border-gray-300 shadow-sm'
-                                }`}
-                            >
-                                {copyFeedback ? (
-                                    <>
-                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                        </svg>
-                                        <span>Copied!</span>
-                                    </>
-                                ) : (
-                                    <>
-                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                        </svg>
-                                        <span>Copy JSON</span>
-                                    </>
-                                )}
-                            </button>
+                            {/* Pane 3: Details */}
+                            <div className="flex-1 bg-white h-full overflow-hidden">
+                            {selectedSegment ? (
+                                <SegmentDetail segment={selectedSegment} />
+                            ) : (
+                                <div className="flex items-center justify-center h-full text-gray-300 text-sm">
+                                Select a segment to view details
+                                </div>
+                            )}
+                            </div>
+                        </>
+                        )}
+
+                        {viewMode === 'raw' && (
+                        /* Raw View */
+                        <div className="w-full h-full bg-white overflow-hidden flex flex-col relative">
+                            <div className="absolute top-2 right-4 z-10">
+                                <button
+                                    onClick={() => handleCopy(rawEdi)}
+                                    className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md border text-xs font-medium transition-all duration-200 ${
+                                        copyFeedback 
+                                            ? 'bg-green-50 border-green-200 text-green-700' 
+                                            : 'bg-white border-gray-200 text-gray-600 hover:text-gray-900 hover:border-gray-300 shadow-sm'
+                                    }`}
+                                >
+                                    {copyFeedback ? (
+                                        <>
+                                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                            </svg>
+                                            <span>Copied!</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                            </svg>
+                                            <span>Copy</span>
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                            <textarea 
+                                className="flex-1 w-full p-8 bg-white text-gray-800 font-mono text-sm resize-none focus:outline-none leading-relaxed custom-scrollbar"
+                                value={rawEdi}
+                                onChange={(e) => {
+                                    setRawEdi(e.target.value);
+                                    processEdi(e.target.value, true);
+                                }}
+                                spellCheck={false}
+                            />
                         </div>
-                        <div className="flex-1 overflow-auto p-8 custom-scrollbar bg-gray-50">
-                            <pre className="text-xs font-mono text-gray-800 whitespace-pre-wrap">{enrichedJson}</pre>
-                        </div>
-                    </div>
+                        )}
+
+                        {viewMode === 'json' && (
+                            /* JSON View */
+                            <div className="w-full h-full bg-white overflow-hidden flex flex-col relative">
+                                <div className="absolute top-2 right-4 z-10">
+                                    <button
+                                        onClick={() => handleCopy(enrichedJson)}
+                                        className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md border text-xs font-medium transition-all duration-200 ${
+                                            copyFeedback 
+                                                ? 'bg-green-50 border-green-200 text-green-700' 
+                                                : 'bg-white border-gray-200 text-gray-600 hover:text-gray-900 hover:border-gray-300 shadow-sm'
+                                        }`}
+                                    >
+                                        {copyFeedback ? (
+                                            <>
+                                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                                </svg>
+                                                <span>Copied!</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                                </svg>
+                                                <span>Copy JSON</span>
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+                                <div className="flex-1 overflow-auto p-8 custom-scrollbar bg-gray-50">
+                                    <pre className="text-xs font-mono text-gray-800 whitespace-pre-wrap">{enrichedJson}</pre>
+                                </div>
+                            </div>
+                        )}
+                    </>
                 )}
             </>
           )}
@@ -503,7 +521,7 @@ function App() {
       </div>
 
       {/* Floating Chat Interface */}
-      {doc && <ChatInterface rawEdi={rawEdi} />}
+      {doc && viewMode !== 'reference' && <ChatInterface rawEdi={rawEdi} />}
     </div>
   );
 }

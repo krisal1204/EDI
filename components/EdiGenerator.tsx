@@ -4,6 +4,7 @@ import { BenefitRow, ClaimStatusRow } from '../services/ediMapper';
 import { EdiSegment } from '../types';
 import { BenefitTable } from './BenefitTable';
 import { ClaimStatusTable } from './ClaimStatusTable';
+import { generateFormData } from '../services/geminiService';
 
 interface Props {
   formData: FormData270;
@@ -73,6 +74,7 @@ export const EdiGenerator: React.FC<Props> = ({
   const activeMode = (transactionType === '270' || transactionType === '276') ? transactionType : generatorMode;
 
   const [view, setView] = useState<'form' | 'table'>('table');
+  const [isAiLoading, setIsAiLoading] = useState(false);
   const fieldRefs = useRef<Record<string, HTMLInputElement | HTMLSelectElement | null>>({});
 
   const setRef = (name: string) => (el: HTMLInputElement | HTMLSelectElement | null) => {
@@ -94,6 +96,46 @@ export const EdiGenerator: React.FC<Props> = ({
         onChange276({ ...formData276, [name]: (e.target as HTMLInputElement).checked });
     } else {
         onChange276({ ...formData276, [name]: value });
+    }
+  };
+
+  const handleAiAutofill = async () => {
+    // Determine the current mode to know which generation to request
+    const mode = activeMode as '270' | '276';
+    
+    // Prompt user for scenario (optional)
+    const description = window.prompt(
+        "Describe the scenario to generate (e.g. 'Child with broken arm, dependent on mother')", 
+        "Realistic random scenario"
+    );
+    
+    if (!description) return; // User cancelled
+
+    setIsAiLoading(true);
+    try {
+        const generatedData = await generateFormData(mode, description);
+        
+        if (mode === '270') {
+            // Merge with defaults to ensure safety, then overwrite with generated
+            // Be careful with boolean mapping if LLM sends strings, though prompt requests boolean.
+            onChange({ 
+                ...formData, 
+                ...generatedData,
+                // Ensure dependent fields are cleared if hasDependent is false, to be safe
+                dependentFirstName: generatedData.hasDependent ? generatedData.dependentFirstName : '',
+                dependentLastName: generatedData.hasDependent ? generatedData.dependentLastName : ''
+            });
+        } else {
+             onChange276({
+                 ...formData276,
+                 ...generatedData
+             });
+        }
+    } catch (e) {
+        alert("Failed to generate data. Please ensure Ollama is running locally (localhost:11434) with 'llama3' model.");
+        console.error(e);
+    } finally {
+        setIsAiLoading(false);
     }
   };
 
@@ -144,14 +186,40 @@ export const EdiGenerator: React.FC<Props> = ({
                          {transactionType} Response
                     </h2>
                 ) : (
-                    <select 
-                        value={activeMode}
-                        onChange={(e) => onSetGeneratorMode(e.target.value as '270' | '276')}
-                        className="text-sm font-semibold text-gray-900 bg-transparent border-none focus:ring-0 cursor-pointer hover:bg-gray-50 rounded px-1 -ml-1 py-1"
-                    >
-                        <option value="270">Eligibility (270)</option>
-                        <option value="276">Claim Status (276)</option>
-                    </select>
+                    <>
+                        <select 
+                            value={activeMode}
+                            onChange={(e) => onSetGeneratorMode(e.target.value as '270' | '276')}
+                            className="text-sm font-semibold text-gray-900 bg-transparent border-none focus:ring-0 cursor-pointer hover:bg-gray-50 rounded px-1 -ml-1 py-1"
+                        >
+                            <option value="270">Eligibility (270)</option>
+                            <option value="276">Claim Status (276)</option>
+                        </select>
+                        
+                        <button 
+                            onClick={handleAiAutofill}
+                            disabled={isAiLoading}
+                            className="ml-2 flex items-center space-x-1 px-2 py-1 bg-brand-50 hover:bg-brand-100 text-brand-600 rounded text-[10px] font-medium transition-colors disabled:opacity-50 border border-brand-100"
+                            title="Generate data with Local AI"
+                        >
+                            {isAiLoading ? (
+                                <>
+                                    <svg className="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    <span>Generating...</span>
+                                </>
+                            ) : (
+                                <>
+                                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                    </svg>
+                                    <span>AI Autofill</span>
+                                </>
+                            )}
+                        </button>
+                    </>
                 )}
             </div>
             
