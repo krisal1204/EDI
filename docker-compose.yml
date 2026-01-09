@@ -6,11 +6,10 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "4000:80"
+      - "80:80"
     environment:
       # Use host.docker.internal to access Ollama running on the host machine
-      # - OLLAMA_HOST=http://host.docker.internal:11434
-      - VITE_OLLAMA_HOST=http://192.168.1.20:11434      
-    # extra_hosts:
-    #   - "host.docker.internal:host-gateway"
+      - OLLAMA_HOST=http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     restart: always

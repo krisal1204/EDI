@@ -1,8 +1,8 @@
 import { EdiSegment, SegmentAnalysis } from "../types";
 
 // Configuration for Local Ollama Instance
-const OLLAMA_HOST = import.meta.env.VITE_OLLAMA_HOST || "http://localhost:11434";
-const MODEL_NAME = "qwen3:8b"; // Ensure you have pulled this model via 'ollama pull llama3'
+const OLLAMA_HOST = process.env.OLLAMA_HOST || "http://localhost:11434";
+const MODEL_NAME = "llama3"; // Ensure you have pulled this model via 'ollama pull llama3'
 
 /**
  * Analyze a specific segment using Local Ollama
@@ -44,7 +44,7 @@ export const analyzeSegment = async (segment: EdiSegment, transactionType: strin
     });
 
     if (!response.ok) {
-      throw new Error(`Ollama API Error: ${response.statusText}`);
+        throw new Error(`Ollama API Error: ${response.statusText}`);
     }
 
     const data = await response.json();
@@ -67,17 +67,17 @@ export const analyzeSegment = async (segment: EdiSegment, transactionType: strin
  * Chat with the EDI context using Local Ollama
  */
 export const askEdiQuestion = async (
-  question: string,
-  ediContext: string,
-  history: { role: string; parts: { text: string }[] }[]
+    question: string, 
+    ediContext: string, 
+    history: { role: string; parts: { text: string }[] }[]
 ) => {
-  // Map existing history structure (Gemini style) to Ollama format
-  const ollamaHistory = history.map(h => ({
-    role: h.role === 'model' ? 'assistant' : 'user',
-    content: h.parts[0].text
-  }));
+    // Map existing history structure (Gemini style) to Ollama format
+    const ollamaHistory = history.map(h => ({
+        role: h.role === 'model' ? 'assistant' : 'user',
+        content: h.parts[0].text
+    }));
 
-  const systemPrompt = `You are an expert Medical EDI (Electronic Data Interchange) analyst specializing in X12 270 (Eligibility Inquiry) and 271 (Eligibility Response) transactions. 
+    const systemPrompt = `You are an expert Medical EDI (Electronic Data Interchange) analyst specializing in X12 270 (Eligibility Inquiry) and 271 (Eligibility Response) transactions. 
     
     You have access to the raw EDI file content provided by the user. 
     
@@ -91,31 +91,31 @@ export const askEdiQuestion = async (
     Current EDI Document Context:
     ${ediContext}`;
 
-  const messages = [
-    { role: 'system', content: systemPrompt },
-    ...ollamaHistory,
-    { role: 'user', content: question }
-  ];
+    const messages = [
+        { role: 'system', content: systemPrompt },
+        ...ollamaHistory,
+        { role: 'user', content: question }
+    ];
 
-  try {
-    const response = await fetch(`${OLLAMA_HOST}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: MODEL_NAME,
-        messages: messages,
-        stream: false
-      })
-    });
+    try {
+        const response = await fetch(`${OLLAMA_HOST}/api/chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                model: MODEL_NAME,
+                messages: messages,
+                stream: false
+            })
+        });
 
-    if (!response.ok) {
-      throw new Error(`Ollama API Error: ${response.statusText}`);
+        if (!response.ok) {
+            throw new Error(`Ollama API Error: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        return data.message.content;
+    } catch (error) {
+        console.error("Chat error", error);
+        return "I'm sorry, I couldn't connect to your local Ollama instance. Please make sure it is running (ollama serve) and 'llama3' is pulled.";
     }
-
-    const data = await response.json();
-    return data.message.content;
-  } catch (error) {
-    console.error("Chat error", error);
-    return "I'm sorry, I couldn't connect to your local Ollama instance. Please make sure it is running (ollama serve) and 'llama3' is pulled.";
-  }
 };
