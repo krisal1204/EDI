@@ -1,0 +1,368 @@
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { FormData270, FormData276 } from '../services/ediBuilder';
+import { BenefitRow, ClaimStatusRow } from '../services/ediMapper';
+import { EdiSegment } from '../types';
+import { BenefitTable } from './BenefitTable';
+import { ClaimStatusTable } from './ClaimStatusTable';
+
+interface Props {
+  formData: FormData270;
+  onChange: (data: FormData270) => void;
+  
+  formData276: FormData276;
+  onChange276: (data: FormData276) => void;
+
+  transactionType?: string; // from parser (270, 271, 276, 277)
+  
+  // For forcing generator mode when manual
+  generatorMode: '270' | '276';
+  onSetGeneratorMode: (mode: '270' | '276') => void;
+
+  benefits?: BenefitRow[];
+  claims?: ClaimStatusRow[];
+  
+  selectedSegment?: EdiSegment | null;
+  onFieldFocus?: (fieldName: string) => void;
+}
+
+const InputGroup: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
+  <div className="mb-4">
+    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">{label}</label>
+    {children}
+  </div>
+);
+
+interface TextInputProps extends React.InputHTMLAttributes<HTMLInputElement> {
+    isActive?: boolean;
+}
+
+const TextInput = React.forwardRef<HTMLInputElement, TextInputProps>(({ isActive, className, ...props }, ref) => (
+  <input
+    ref={ref}
+    {...props}
+    className={`w-full px-3 py-2 rounded-sm text-sm focus:outline-none transition-all duration-300 disabled:bg-gray-50 disabled:text-gray-400
+        ${isActive 
+            ? 'bg-blue-50 border-blue-500 ring-1 ring-blue-500 shadow-sm text-blue-900' 
+            : 'bg-white border-gray-200 focus:border-black'
+        }
+        border
+    `}
+  />
+));
+
+export const EdiGenerator: React.FC<Props> = ({ 
+    formData, 
+    onChange, 
+    formData276, 
+    onChange276,
+    transactionType, 
+    generatorMode,
+    onSetGeneratorMode,
+    benefits = [], 
+    claims = [],
+    selectedSegment,
+    onFieldFocus
+}) => {
+  
+  // Determine if we are viewing a parsed response
+  const is271 = transactionType === '271';
+  const is277 = transactionType === '277';
+  const isResponse = is271 || is277;
+
+  // If parsed type exists and matches a generator, use it, otherwise use manual mode
+  const activeMode = (transactionType === '270' || transactionType === '276') ? transactionType : generatorMode;
+
+  const [view, setView] = useState<'form' | 'table'>('table');
+  const fieldRefs = useRef<Record<string, HTMLInputElement | HTMLSelectElement | null>>({});
+
+  const setRef = (name: string) => (el: HTMLInputElement | HTMLSelectElement | null) => {
+      fieldRefs.current[name] = el;
+  };
+
+  const handleChange270 = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value, type } = e.target as HTMLInputElement;
+    if (type === 'checkbox') {
+        onChange({ ...formData, [name]: (e.target as HTMLInputElement).checked });
+    } else {
+        onChange({ ...formData, [name]: value });
+    }
+  };
+
+  const handleChange276 = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value, type } = e.target;
+    if (type === 'checkbox') {
+        onChange276({ ...formData276, [name]: (e.target as HTMLInputElement).checked });
+    } else {
+        onChange276({ ...formData276, [name]: value });
+    }
+  };
+
+  const activeFields = useMemo(() => {
+    if (!selectedSegment) return [];
+    const val01 = selectedSegment.elements[0]?.value;
+
+    if (selectedSegment.tag === 'NM1') {
+        if (val01 === 'PR') return ['payerName', 'payerId'];
+        if (val01 === '1P' || val01 === '41') return ['providerName', 'providerNpi'];
+        if (val01 === 'IL') return ['subscriberFirstName', 'subscriberLastName', 'subscriberId'];
+        if (val01 === '03') return ['dependentFirstName', 'dependentLastName'];
+    }
+    if (selectedSegment.tag === 'DMG') {
+        return ['subscriberDob', 'dependentDob', 'dependentGender'];
+    }
+    if (selectedSegment.tag === 'DTP') {
+        if (val01 === '291' || val01 === '472') return ['serviceDate'];
+    }
+    if (selectedSegment.tag === 'TRN' && val01 === '1') return ['claimId'];
+    if (selectedSegment.tag === 'AMT' && val01 === 'T3') return ['chargeAmount'];
+    if (selectedSegment.tag === 'EQ') return ['serviceTypeCode'];
+
+    return [];
+  }, [selectedSegment]);
+
+  // Scroll active field into view
+  useEffect(() => {
+      if (activeFields.length > 0) {
+          const firstField = activeFields[0];
+          const el = fieldRefs.current[firstField];
+          if (el) {
+              el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+      }
+  }, [activeFields]);
+
+  const handleFocus = (name: string) => {
+      if (onFieldFocus) onFieldFocus(name);
+  };
+
+  return (
+    <div className="h-full flex flex-col bg-white border-r border-gray-200">
+      <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+                {isResponse ? (
+                    <h2 className="text-sm font-semibold text-gray-900">
+                         {transactionType} Response
+                    </h2>
+                ) : (
+                    <select 
+                        value={activeMode}
+                        onChange={(e) => onSetGeneratorMode(e.target.value as '270' | '276')}
+                        className="text-sm font-semibold text-gray-900 bg-transparent border-none focus:ring-0 cursor-pointer hover:bg-gray-50 rounded px-1 -ml-1 py-1"
+                    >
+                        <option value="270">Eligibility (270)</option>
+                        <option value="276">Claim Status (276)</option>
+                    </select>
+                )}
+            </div>
+            
+            {isResponse && (
+             <div className="flex bg-gray-100 p-0.5 rounded-sm">
+                <button 
+                  onClick={() => setView('table')}
+                  className={`py-1 px-3 text-[10px] font-medium transition-all ${view === 'table' ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+                >
+                  Table
+                </button>
+                <button 
+                  onClick={() => setView('form')}
+                  className={`py-1 px-3 text-[10px] font-medium transition-all ${view === 'form' ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+                >
+                  Details
+                </button>
+             </div>
+            )}
+      </div>
+
+      {is271 && view === 'table' ? (
+          <BenefitTable benefits={benefits} />
+      ) : is277 && view === 'table' ? (
+          <ClaimStatusTable claims={claims} />
+      ) : (
+        <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
+            {isResponse && (
+                <div className="mb-6 p-3 bg-gray-50 border border-gray-100 text-gray-500 text-xs">
+                    Form editing is disabled for response transactions.
+                </div>
+            )}
+
+            <div className={`space-y-8 ${isResponse ? 'opacity-60 pointer-events-none' : ''}`}>
+            
+            {/* 270 Generator Form */}
+            {activeMode === '270' && (
+                <>
+                <div>
+                    <h3 className="text-xs font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-100">Information Source</h3>
+                    <InputGroup label="Payer Name">
+                        <TextInput name="payerName" ref={setRef('payerName')} onFocus={() => handleFocus('payerName')} value={formData.payerName} onChange={handleChange270} isActive={activeFields.includes('payerName')} />
+                    </InputGroup>
+                    <InputGroup label="Payer ID">
+                        <TextInput name="payerId" ref={setRef('payerId')} onFocus={() => handleFocus('payerId')} value={formData.payerId} onChange={handleChange270} isActive={activeFields.includes('payerId')} />
+                    </InputGroup>
+                </div>
+
+                <div>
+                    <h3 className="text-xs font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-100">Information Receiver</h3>
+                    <InputGroup label="Provider Name">
+                        <TextInput name="providerName" ref={setRef('providerName')} onFocus={() => handleFocus('providerName')} value={formData.providerName} onChange={handleChange270} isActive={activeFields.includes('providerName')} />
+                    </InputGroup>
+                    <InputGroup label="NPI">
+                        <TextInput name="providerNpi" ref={setRef('providerNpi')} onFocus={() => handleFocus('providerNpi')} value={formData.providerNpi} onChange={handleChange270} isActive={activeFields.includes('providerNpi')} />
+                    </InputGroup>
+                </div>
+
+                <div>
+                    <h3 className="text-xs font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-100">Subscriber</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                    <InputGroup label="First Name">
+                        <TextInput name="subscriberFirstName" ref={setRef('subscriberFirstName')} onFocus={() => handleFocus('subscriberFirstName')} value={formData.subscriberFirstName} onChange={handleChange270} isActive={activeFields.includes('subscriberFirstName')} />
+                    </InputGroup>
+                    <InputGroup label="Last Name">
+                        <TextInput name="subscriberLastName" ref={setRef('subscriberLastName')} onFocus={() => handleFocus('subscriberLastName')} value={formData.subscriberLastName} onChange={handleChange270} isActive={activeFields.includes('subscriberLastName')} />
+                    </InputGroup>
+                    </div>
+                    <InputGroup label="Member ID">
+                        <TextInput name="subscriberId" ref={setRef('subscriberId')} onFocus={() => handleFocus('subscriberId')} value={formData.subscriberId} onChange={handleChange270} isActive={activeFields.includes('subscriberId')} />
+                    </InputGroup>
+                    <InputGroup label="Date of Birth">
+                        <TextInput type="date" name="subscriberDob" ref={setRef('subscriberDob')} onFocus={() => handleFocus('subscriberDob')} value={formData.subscriberDob} onChange={handleChange270} isActive={activeFields.includes('subscriberDob')} />
+                    </InputGroup>
+                </div>
+
+                <div className={`transition-all ${formData.hasDependent ? '' : ''}`}>
+                    <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-100">
+                    <h3 className="text-xs font-semibold text-gray-900">Dependent</h3>
+                    <label className="flex items-center cursor-pointer">
+                        <span className="mr-2 text-[10px] text-gray-400 uppercase font-bold">Is Patient?</span>
+                        <div className="relative">
+                            <input type="checkbox" name="hasDependent" checked={formData.hasDependent} onChange={handleChange270} className="sr-only" />
+                            <div className={`block w-8 h-4 rounded-full transition-colors ${formData.hasDependent ? 'bg-black' : 'bg-gray-200'}`}></div>
+                            <div className={`absolute left-0.5 top-0.5 bg-white w-3 h-3 rounded-full transition-transform ${formData.hasDependent ? 'transform translate-x-4' : ''}`}></div>
+                        </div>
+                    </label>
+                    </div>
+
+                    {formData.hasDependent && (
+                    <div className="animate-fade-in-down">
+                        <div className="grid grid-cols-2 gap-4">
+                            <InputGroup label="First Name">
+                                <TextInput name="dependentFirstName" ref={setRef('dependentFirstName')} onFocus={() => handleFocus('dependentFirstName')} value={formData.dependentFirstName} onChange={handleChange270} isActive={activeFields.includes('dependentFirstName')} />
+                            </InputGroup>
+                            <InputGroup label="Last Name">
+                                <TextInput name="dependentLastName" ref={setRef('dependentLastName')} onFocus={() => handleFocus('dependentLastName')} value={formData.dependentLastName} onChange={handleChange270} isActive={activeFields.includes('dependentLastName')} />
+                            </InputGroup>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                        <InputGroup label="Date of Birth">
+                            <TextInput type="date" name="dependentDob" ref={setRef('dependentDob')} onFocus={() => handleFocus('dependentDob')} value={formData.dependentDob} onChange={handleChange270} isActive={activeFields.includes('dependentDob')} />
+                        </InputGroup>
+                        <InputGroup label="Gender">
+                            <select 
+                                name="dependentGender" 
+                                value={formData.dependentGender} 
+                                onChange={handleChange270}
+                                ref={setRef('dependentGender')}
+                                onFocus={() => handleFocus('dependentGender')}
+                                className={`w-full px-3 py-2 border rounded-sm text-sm focus:outline-none transition-colors
+                                  ${activeFields.includes('dependentGender') ? 'bg-blue-50 border-blue-500 ring-1 ring-blue-500 shadow-sm' : 'bg-white border-gray-200 focus:border-black'}
+                                `}
+                            >
+                                <option value="F">Female</option>
+                                <option value="M">Male</option>
+                                <option value="U">Unknown</option>
+                            </select>
+                        </InputGroup>
+                        </div>
+                    </div>
+                    )}
+                </div>
+                </>
+            )}
+
+            {/* 276 Generator Form */}
+            {activeMode === '276' && (
+                <>
+                <div>
+                    <h3 className="text-xs font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-100">Information Source</h3>
+                    <InputGroup label="Payer Name">
+                        <TextInput name="payerName" ref={setRef('payerName')} onFocus={() => handleFocus('payerName')} value={formData276.payerName} onChange={handleChange276} isActive={activeFields.includes('payerName')} />
+                    </InputGroup>
+                    <InputGroup label="Payer ID">
+                        <TextInput name="payerId" ref={setRef('payerId')} onFocus={() => handleFocus('payerId')} value={formData276.payerId} onChange={handleChange276} isActive={activeFields.includes('payerId')} />
+                    </InputGroup>
+                </div>
+
+                <div>
+                    <h3 className="text-xs font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-100">Information Receiver</h3>
+                    <InputGroup label="Provider Name">
+                        <TextInput name="providerName" ref={setRef('providerName')} onFocus={() => handleFocus('providerName')} value={formData276.providerName} onChange={handleChange276} isActive={activeFields.includes('providerName')} />
+                    </InputGroup>
+                    <InputGroup label="NPI">
+                        <TextInput name="providerNpi" ref={setRef('providerNpi')} onFocus={() => handleFocus('providerNpi')} value={formData276.providerNpi} onChange={handleChange276} isActive={activeFields.includes('providerNpi')} />
+                    </InputGroup>
+                </div>
+
+                <div>
+                    <h3 className="text-xs font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-100">Subscriber</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                        <InputGroup label="First Name">
+                            <TextInput name="subscriberFirstName" ref={setRef('subscriberFirstName')} onFocus={() => handleFocus('subscriberFirstName')} value={formData276.subscriberFirstName} onChange={handleChange276} isActive={activeFields.includes('subscriberFirstName')} />
+                        </InputGroup>
+                        <InputGroup label="Last Name">
+                            <TextInput name="subscriberLastName" ref={setRef('subscriberLastName')} onFocus={() => handleFocus('subscriberLastName')} value={formData276.subscriberLastName} onChange={handleChange276} isActive={activeFields.includes('subscriberLastName')} />
+                        </InputGroup>
+                    </div>
+                    <InputGroup label="Member ID">
+                        <TextInput name="subscriberId" ref={setRef('subscriberId')} onFocus={() => handleFocus('subscriberId')} value={formData276.subscriberId} onChange={handleChange276} isActive={activeFields.includes('subscriberId')} />
+                    </InputGroup>
+                </div>
+
+                <div className={`transition-all ${formData276.hasDependent ? '' : ''}`}>
+                    <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-100">
+                    <h3 className="text-xs font-semibold text-gray-900">Dependent</h3>
+                    <label className="flex items-center cursor-pointer">
+                        <span className="mr-2 text-[10px] text-gray-400 uppercase font-bold">Is Patient?</span>
+                        <div className="relative">
+                            <input type="checkbox" name="hasDependent" checked={formData276.hasDependent} onChange={handleChange276} className="sr-only" />
+                            <div className={`block w-8 h-4 rounded-full transition-colors ${formData276.hasDependent ? 'bg-black' : 'bg-gray-200'}`}></div>
+                            <div className={`absolute left-0.5 top-0.5 bg-white w-3 h-3 rounded-full transition-transform ${formData276.hasDependent ? 'transform translate-x-4' : ''}`}></div>
+                        </div>
+                    </label>
+                    </div>
+
+                    {formData276.hasDependent && (
+                    <div className="animate-fade-in-down">
+                        <div className="grid grid-cols-2 gap-4">
+                            <InputGroup label="First Name">
+                                <TextInput name="dependentFirstName" ref={setRef('dependentFirstName')} onFocus={() => handleFocus('dependentFirstName')} value={formData276.dependentFirstName} onChange={handleChange276} isActive={activeFields.includes('dependentFirstName')} />
+                            </InputGroup>
+                            <InputGroup label="Last Name">
+                                <TextInput name="dependentLastName" ref={setRef('dependentLastName')} onFocus={() => handleFocus('dependentLastName')} value={formData276.dependentLastName} onChange={handleChange276} isActive={activeFields.includes('dependentLastName')} />
+                            </InputGroup>
+                        </div>
+                    </div>
+                    )}
+                </div>
+
+                <div>
+                    <h3 className="text-xs font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-100">Claim Details</h3>
+                    <InputGroup label="Claim Trace Number (ID)">
+                        <TextInput name="claimId" ref={setRef('claimId')} onFocus={() => handleFocus('claimId')} value={formData276.claimId} onChange={handleChange276} isActive={activeFields.includes('claimId')} />
+                    </InputGroup>
+                    <div className="grid grid-cols-2 gap-4">
+                        <InputGroup label="Total Charge">
+                            <TextInput type="number" name="chargeAmount" ref={setRef('chargeAmount')} onFocus={() => handleFocus('chargeAmount')} value={formData276.chargeAmount} onChange={handleChange276} isActive={activeFields.includes('chargeAmount')} />
+                        </InputGroup>
+                        <InputGroup label="Service Date">
+                            <TextInput type="date" name="serviceDate" ref={setRef('serviceDate')} onFocus={() => handleFocus('serviceDate')} value={formData276.serviceDate} onChange={handleChange276} isActive={activeFields.includes('serviceDate')} />
+                        </InputGroup>
+                    </div>
+                </div>
+                </>
+            )}
+
+            </div>
+        </div>
+      )}
+    </div>
+  );
+};

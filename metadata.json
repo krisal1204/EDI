@@ -1,0 +1,5 @@
+{
+  "name": "EDI Insight - Universal X12 Inspector",
+  "description": "A production-ready, fully offline EDI X12 inspector. Supports 270/271 (Eligibility) and 276/277 (Claim Status). Visualizes hierarchical data and translates standard codes instantly.",
+  "requestFramePermissions": []
+}
