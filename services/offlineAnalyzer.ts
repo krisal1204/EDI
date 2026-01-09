@@ -1,4 +1,5 @@
 import { EdiSegment, SegmentAnalysis } from "../types";
+import { PROCEDURE_CODES, ICD10_CODES } from "./referenceData";
 
 // --- X12 DICTIONARY DATA ---
 
@@ -30,6 +31,7 @@ const SEGMENT_DESCRIPTIONS: Record<string, string> = {
   HSD: "Health Care Services Delivery",
   STC: "Claim Status Information",
   SVC: "Service Information",
+  HI: "Health Care Information Codes (Diagnosis)",
   LS: "Loop Header",
   LE: "Loop Trailer"
 };
@@ -85,33 +87,6 @@ const STATUS_CODES: Record<string, string> = {
     "568": "Review in progress.",
     "663": "Entity acknowledges receipt of claim/encounter; claim/encounter is being adjudicated.",
     "720": "Alert: This claim/encounter is part of a cyclic filing..."
-};
-
-// Common CPT/HCPCS Codes
-export const PROCEDURE_CODES: Record<string, string> = {
-    "99201": "Office/outpatient visit, new patient, level 1",
-    "99202": "Office/outpatient visit, new patient, level 2",
-    "99203": "Office/outpatient visit, new patient, level 3",
-    "99204": "Office/outpatient visit, new patient, level 4",
-    "99205": "Office/outpatient visit, new patient, level 5",
-    "99211": "Office/outpatient visit, est patient, level 1",
-    "99212": "Office/outpatient visit, est patient, level 2",
-    "99213": "Office/outpatient visit, est patient, level 3",
-    "99214": "Office/outpatient visit, est patient, level 4",
-    "99215": "Office/outpatient visit, est patient, level 5",
-    "99221": "Initial hospital care, low complexity",
-    "99222": "Initial hospital care, moderate complexity",
-    "99223": "Initial hospital care, high complexity",
-    "99281": "Emergency department visit, level 1",
-    "99282": "Emergency department visit, level 2",
-    "99283": "Emergency department visit, level 3",
-    "99284": "Emergency department visit, level 4",
-    "99285": "Emergency department visit, level 5",
-    "73030": "Radiologic examination, shoulder; complete, minimum of 2 views",
-    "71046": "Radiologic examination, chest; 2 views",
-    "85025": "Blood count; complete (CBC), automated",
-    "80053": "Comprehensive metabolic panel",
-    "J0120": "Injection, tetracycline, up to 250 mg",
 };
 
 // Maps Segment Tag -> Element Index (1-based) -> Definition
@@ -347,6 +322,21 @@ const ELEMENT_DEFINITIONS: Record<string, Record<number, { name: string, codes?:
   III: {
       1: { name: "Code List Qualifier", codes: { "ZZ": "Mutually Defined" } },
       2: { name: "Industry Code" }
+  },
+  HI: {
+      // HI segment has 12 composite elements, all generic diagnosis
+      1: { name: "Health Care Code Information" },
+      2: { name: "Health Care Code Information" },
+      3: { name: "Health Care Code Information" },
+      4: { name: "Health Care Code Information" },
+      5: { name: "Health Care Code Information" },
+      6: { name: "Health Care Code Information" },
+      7: { name: "Health Care Code Information" },
+      8: { name: "Health Care Code Information" },
+      9: { name: "Health Care Code Information" },
+      10: { name: "Health Care Code Information" },
+      11: { name: "Health Care Code Information" },
+      12: { name: "Health Care Code Information" }
   }
 };
 
@@ -365,6 +355,18 @@ export const getElementDefinition = (tag: string, index: number, value: string):
 
 export const getProcedureDefinition = (code: string): string => {
     return PROCEDURE_CODES[code] || "Procedure " + code;
+};
+
+export const getDiagnosisDefinition = (code: string): string => {
+    // Check for direct match or variations (simple logic)
+    if (ICD10_CODES[code]) return ICD10_CODES[code];
+    
+    // Sometimes codes come with dots, sometimes without in EDI (usually without, but good to be safe)
+    // EDI usually sends "I10", "A01" without dots.
+    // If the map uses dots (standard ICD-10), we might need to normalize. 
+    // For this implementation, the map has dots where standard.
+    
+    return ICD10_CODES[code] || "Diagnosis " + code;
 };
 
 export const analyzeSegmentOffline = (segment: EdiSegment): SegmentAnalysis => {
@@ -401,6 +403,24 @@ export const analyzeSegmentOffline = (segment: EdiSegment): SegmentAnalysis => {
           const parts = el.value.split(':');
           if (parts.length > 1) {
               definition = getProcedureDefinition(parts[1]);
+          }
+      }
+
+      // HI Diagnosis Code Lookup (Composite Element)
+      else if (segment.tag === 'HI') {
+          // Format is usually Qual:Code e.g. BK:I10 or ABK:I10
+          const parts = el.value.split(':');
+          if (parts.length >= 2) {
+              const qual = parts[0];
+              const code = parts[1];
+              const diagDesc = getDiagnosisDefinition(code);
+              
+              let qualDesc = qual;
+              if (qual === 'BK' || qual === 'ABK') qualDesc = 'Principal Diag';
+              else if (qual === 'BF' || qual === 'ABF') qualDesc = 'Diagnosis';
+              else if (qual === 'BJ') qualDesc = 'Admitting Diag';
+              
+              definition = `${qualDesc}: ${diagDesc}`;
           }
       }
     }
@@ -476,6 +496,11 @@ export const analyzeSegmentOffline = (segment: EdiSegment): SegmentAnalysis => {
       const proc = fields.find(f => f.code === 'SVC01')?.definition;
       const fee = fields.find(f => f.code === 'SVC02')?.value;
       if (proc) summary = `Service: ${proc} ($${fee})`;
+  }
+  else if (segment.tag === 'HI') {
+      const diag1 = fields[0]?.definition;
+      if (diag1 && diag1 !== '-') summary = `Diagnoses: ${diag1.split(':')[1]}...`;
+      else summary = "Diagnoses Information";
   }
 
   return {
