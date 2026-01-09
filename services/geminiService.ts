@@ -1,7 +1,7 @@
 import { EdiSegment, SegmentAnalysis } from "../types";
 
 // Configuration for Local Ollama Instance
-const OLLAMA_HOST = process.env.OLLAMA_HOST || "http://localhost:11434";
+const OLLAMA_HOST = process.env.VITE_OLLAMA_HOST || "http://localhost:11434";
 const MODEL_NAME = "llama3"; // Ensure you have pulled this model via 'ollama pull llama3'
 
 /**
