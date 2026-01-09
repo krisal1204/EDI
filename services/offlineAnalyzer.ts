@@ -82,6 +82,7 @@ const STATUS_CODES: Record<string, string> = {
     "45": "Charge exceeds fee schedule/maximum allowable or contracted/legislated fee arrangement.",
     "97": "Payment is included in the allowance for another service/procedure.",
     "187": "Date(s) of service.",
+    "197": "Precertification/authorization/notification/pre-treatment absent.",
     "243": "Services not authorized by network/primary care providers.",
     "479": "Missing or invalid Explanation of Benefits (EOB).",
     "568": "Review in progress.",
