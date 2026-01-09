@@ -4,7 +4,7 @@ import { BenefitRow, ClaimStatusRow } from '../services/ediMapper';
 import { EdiSegment } from '../types';
 import { BenefitTable } from './BenefitTable';
 import { ClaimStatusTable } from './ClaimStatusTable';
-import { generateFormData } from '../services/geminiService';
+import { generateFormData, getModelName } from '../services/geminiService';
 
 interface Props {
   formData: FormData270;
@@ -28,7 +28,7 @@ interface Props {
 
 const InputGroup: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
   <div className="mb-4">
-    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">{label}</label>
+    <label className="block text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest mb-1.5">{label}</label>
     {children}
   </div>
 );
@@ -41,10 +41,10 @@ const TextInput = React.forwardRef<HTMLInputElement, TextInputProps>(({ isActive
   <input
     ref={ref}
     {...props}
-    className={`w-full px-3 py-2 rounded-sm text-sm focus:outline-none transition-all duration-300 disabled:bg-gray-50 disabled:text-gray-400
+    className={`w-full px-3 py-2 rounded-sm text-sm focus:outline-none transition-all duration-300 disabled:bg-gray-50 disabled:text-gray-400 dark:disabled:bg-slate-800 dark:disabled:text-slate-600
         ${isActive 
-            ? 'bg-blue-50 border-blue-500 ring-1 ring-blue-500 shadow-sm text-blue-900' 
-            : 'bg-white border-gray-200 focus:border-black'
+            ? 'bg-blue-50 border-blue-500 ring-1 ring-blue-500 shadow-sm text-blue-900 dark:bg-blue-900/20 dark:text-blue-100 dark:border-blue-500' 
+            : 'bg-white border-gray-200 focus:border-black dark:bg-slate-900 dark:border-slate-700 dark:focus:border-slate-500 dark:text-slate-200 placeholder-gray-400 dark:placeholder-slate-600'
         }
         border
     `}
@@ -102,6 +102,7 @@ export const EdiGenerator: React.FC<Props> = ({
   const handleAiAutofill = async () => {
     // Determine the current mode to know which generation to request
     const mode = activeMode as '270' | '276';
+    const modelName = getModelName();
     
     // Prompt user for scenario (optional)
     const description = window.prompt(
@@ -132,7 +133,7 @@ export const EdiGenerator: React.FC<Props> = ({
              });
         }
     } catch (e) {
-        alert("Failed to generate data. Please ensure Ollama is running locally (localhost:11434) with 'llama3' model.");
+        alert(`Failed to generate data. Please ensure Ollama is configured correctly in Settings.`);
         console.error(e);
     } finally {
         setIsAiLoading(false);
@@ -178,11 +179,11 @@ export const EdiGenerator: React.FC<Props> = ({
   };
 
   return (
-    <div className="h-full flex flex-col bg-white border-r border-gray-200">
-      <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+    <div className="h-full flex flex-col bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-800 transition-colors">
+      <div className="p-4 border-b border-gray-100 dark:border-slate-800 flex items-center justify-between">
             <div className="flex items-center gap-2">
                 {isResponse ? (
-                    <h2 className="text-sm font-semibold text-gray-900">
+                    <h2 className="text-sm font-semibold text-gray-900 dark:text-white">
                          {transactionType} Response
                     </h2>
                 ) : (
@@ -190,17 +191,17 @@ export const EdiGenerator: React.FC<Props> = ({
                         <select 
                             value={activeMode}
                             onChange={(e) => onSetGeneratorMode(e.target.value as '270' | '276')}
-                            className="text-sm font-semibold text-gray-900 bg-transparent border-none focus:ring-0 cursor-pointer hover:bg-gray-50 rounded px-1 -ml-1 py-1"
+                            className="text-sm font-semibold text-gray-900 dark:text-white bg-transparent border-none focus:ring-0 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-800 rounded px-1 -ml-1 py-1"
                         >
-                            <option value="270">Eligibility (270)</option>
-                            <option value="276">Claim Status (276)</option>
+                            <option value="270" className="text-black dark:text-white dark:bg-slate-900">Eligibility (270)</option>
+                            <option value="276" className="text-black dark:text-white dark:bg-slate-900">Claim Status (276)</option>
                         </select>
                         
                         <button 
                             onClick={handleAiAutofill}
                             disabled={isAiLoading}
-                            className="ml-2 flex items-center space-x-1 px-2 py-1 bg-brand-50 hover:bg-brand-100 text-brand-600 rounded text-[10px] font-medium transition-colors disabled:opacity-50 border border-brand-100"
-                            title="Generate data with Local AI"
+                            className="ml-2 flex items-center space-x-1 px-2 py-1 bg-brand-50 hover:bg-brand-100 text-brand-600 dark:bg-brand-900/30 dark:text-brand-300 dark:hover:bg-brand-900/50 dark:border-brand-800/50 rounded text-[10px] font-medium transition-colors disabled:opacity-50 border border-brand-100 dark:border-brand-900"
+                            title={`Generate data with Local AI`}
                         >
                             {isAiLoading ? (
                                 <>
@@ -224,16 +225,16 @@ export const EdiGenerator: React.FC<Props> = ({
             </div>
             
             {isResponse && (
-             <div className="flex bg-gray-100 p-0.5 rounded-sm">
+             <div className="flex bg-gray-100 dark:bg-slate-800 p-0.5 rounded-sm">
                 <button 
                   onClick={() => setView('table')}
-                  className={`py-1 px-3 text-[10px] font-medium transition-all ${view === 'table' ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+                  className={`py-1 px-3 text-[10px] font-medium transition-all rounded-sm ${view === 'table' ? 'bg-white dark:bg-slate-600 text-black dark:text-white shadow-sm' : 'text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200'}`}
                 >
                   Table
                 </button>
                 <button 
                   onClick={() => setView('form')}
-                  className={`py-1 px-3 text-[10px] font-medium transition-all ${view === 'form' ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+                  className={`py-1 px-3 text-[10px] font-medium transition-all rounded-sm ${view === 'form' ? 'bg-white dark:bg-slate-600 text-black dark:text-white shadow-sm' : 'text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200'}`}
                 >
                   Details
                 </button>
@@ -248,7 +249,7 @@ export const EdiGenerator: React.FC<Props> = ({
       ) : (
         <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
             {isResponse && (
-                <div className="mb-6 p-3 bg-gray-50 border border-gray-100 text-gray-500 text-xs">
+                <div className="mb-6 p-3 bg-gray-50 dark:bg-slate-800/50 border border-gray-100 dark:border-slate-800 text-gray-500 dark:text-slate-400 text-xs rounded-sm">
                     Form editing is disabled for response transactions.
                 </div>
             )}
@@ -259,7 +260,7 @@ export const EdiGenerator: React.FC<Props> = ({
             {activeMode === '270' && (
                 <>
                 <div>
-                    <h3 className="text-xs font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-100">Information Source</h3>
+                    <h3 className="text-xs font-semibold text-gray-900 dark:text-slate-200 mb-4 pb-2 border-b border-gray-100 dark:border-slate-800">Information Source</h3>
                     <InputGroup label="Payer Name">
                         <TextInput name="payerName" ref={setRef('payerName')} onFocus={() => handleFocus('payerName')} value={formData.payerName} onChange={handleChange270} isActive={activeFields.includes('payerName')} />
                     </InputGroup>
@@ -269,7 +270,7 @@ export const EdiGenerator: React.FC<Props> = ({
                 </div>
 
                 <div>
-                    <h3 className="text-xs font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-100">Information Receiver</h3>
+                    <h3 className="text-xs font-semibold text-gray-900 dark:text-slate-200 mb-4 pb-2 border-b border-gray-100 dark:border-slate-800">Information Receiver</h3>
                     <InputGroup label="Provider Name">
                         <TextInput name="providerName" ref={setRef('providerName')} onFocus={() => handleFocus('providerName')} value={formData.providerName} onChange={handleChange270} isActive={activeFields.includes('providerName')} />
                     </InputGroup>
@@ -279,7 +280,7 @@ export const EdiGenerator: React.FC<Props> = ({
                 </div>
 
                 <div>
-                    <h3 className="text-xs font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-100">Subscriber</h3>
+                    <h3 className="text-xs font-semibold text-gray-900 dark:text-slate-200 mb-4 pb-2 border-b border-gray-100 dark:border-slate-800">Subscriber</h3>
                     <div className="grid grid-cols-2 gap-4">
                     <InputGroup label="First Name">
                         <TextInput name="subscriberFirstName" ref={setRef('subscriberFirstName')} onFocus={() => handleFocus('subscriberFirstName')} value={formData.subscriberFirstName} onChange={handleChange270} isActive={activeFields.includes('subscriberFirstName')} />
@@ -297,13 +298,13 @@ export const EdiGenerator: React.FC<Props> = ({
                 </div>
 
                 <div className={`transition-all ${formData.hasDependent ? '' : ''}`}>
-                    <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-100">
-                    <h3 className="text-xs font-semibold text-gray-900">Dependent</h3>
+                    <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-100 dark:border-slate-800">
+                    <h3 className="text-xs font-semibold text-gray-900 dark:text-slate-200">Dependent</h3>
                     <label className="flex items-center cursor-pointer">
-                        <span className="mr-2 text-[10px] text-gray-400 uppercase font-bold">Is Patient?</span>
+                        <span className="mr-2 text-[10px] text-gray-400 dark:text-slate-500 uppercase font-bold">Is Patient?</span>
                         <div className="relative">
                             <input type="checkbox" name="hasDependent" checked={formData.hasDependent} onChange={handleChange270} className="sr-only" />
-                            <div className={`block w-8 h-4 rounded-full transition-colors ${formData.hasDependent ? 'bg-black' : 'bg-gray-200'}`}></div>
+                            <div className={`block w-8 h-4 rounded-full transition-colors ${formData.hasDependent ? 'bg-black dark:bg-brand-500' : 'bg-gray-200 dark:bg-slate-700'}`}></div>
                             <div className={`absolute left-0.5 top-0.5 bg-white w-3 h-3 rounded-full transition-transform ${formData.hasDependent ? 'transform translate-x-4' : ''}`}></div>
                         </div>
                     </label>
@@ -330,8 +331,10 @@ export const EdiGenerator: React.FC<Props> = ({
                                 onChange={handleChange270}
                                 ref={setRef('dependentGender')}
                                 onFocus={() => handleFocus('dependentGender')}
-                                className={`w-full px-3 py-2 border rounded-sm text-sm focus:outline-none transition-colors
-                                  ${activeFields.includes('dependentGender') ? 'bg-blue-50 border-blue-500 ring-1 ring-blue-500 shadow-sm' : 'bg-white border-gray-200 focus:border-black'}
+                                className={`w-full px-3 py-2 border rounded-sm text-sm focus:outline-none transition-colors dark:bg-slate-900 dark:text-white
+                                  ${activeFields.includes('dependentGender') 
+                                    ? 'bg-blue-50 border-blue-500 ring-1 ring-blue-500 shadow-sm dark:bg-blue-900/30 dark:border-blue-500' 
+                                    : 'bg-white border-gray-200 focus:border-black dark:border-slate-700 dark:focus:border-slate-500'}
                                 `}
                             >
                                 <option value="F">Female</option>
@@ -350,7 +353,7 @@ export const EdiGenerator: React.FC<Props> = ({
             {activeMode === '276' && (
                 <>
                 <div>
-                    <h3 className="text-xs font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-100">Information Source</h3>
+                    <h3 className="text-xs font-semibold text-gray-900 dark:text-slate-200 mb-4 pb-2 border-b border-gray-100 dark:border-slate-800">Information Source</h3>
                     <InputGroup label="Payer Name">
                         <TextInput name="payerName" ref={setRef('payerName')} onFocus={() => handleFocus('payerName')} value={formData276.payerName} onChange={handleChange276} isActive={activeFields.includes('payerName')} />
                     </InputGroup>
@@ -360,7 +363,7 @@ export const EdiGenerator: React.FC<Props> = ({
                 </div>
 
                 <div>
-                    <h3 className="text-xs font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-100">Information Receiver</h3>
+                    <h3 className="text-xs font-semibold text-gray-900 dark:text-slate-200 mb-4 pb-2 border-b border-gray-100 dark:border-slate-800">Information Receiver</h3>
                     <InputGroup label="Provider Name">
                         <TextInput name="providerName" ref={setRef('providerName')} onFocus={() => handleFocus('providerName')} value={formData276.providerName} onChange={handleChange276} isActive={activeFields.includes('providerName')} />
                     </InputGroup>
@@ -370,7 +373,7 @@ export const EdiGenerator: React.FC<Props> = ({
                 </div>
 
                 <div>
-                    <h3 className="text-xs font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-100">Subscriber</h3>
+                    <h3 className="text-xs font-semibold text-gray-900 dark:text-slate-200 mb-4 pb-2 border-b border-gray-100 dark:border-slate-800">Subscriber</h3>
                     <div className="grid grid-cols-2 gap-4">
                         <InputGroup label="First Name">
                             <TextInput name="subscriberFirstName" ref={setRef('subscriberFirstName')} onFocus={() => handleFocus('subscriberFirstName')} value={formData276.subscriberFirstName} onChange={handleChange276} isActive={activeFields.includes('subscriberFirstName')} />
@@ -385,13 +388,13 @@ export const EdiGenerator: React.FC<Props> = ({
                 </div>
 
                 <div className={`transition-all ${formData276.hasDependent ? '' : ''}`}>
-                    <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-100">
-                    <h3 className="text-xs font-semibold text-gray-900">Dependent</h3>
+                    <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-100 dark:border-slate-800">
+                    <h3 className="text-xs font-semibold text-gray-900 dark:text-slate-200">Dependent</h3>
                     <label className="flex items-center cursor-pointer">
-                        <span className="mr-2 text-[10px] text-gray-400 uppercase font-bold">Is Patient?</span>
+                        <span className="mr-2 text-[10px] text-gray-400 dark:text-slate-500 uppercase font-bold">Is Patient?</span>
                         <div className="relative">
                             <input type="checkbox" name="hasDependent" checked={formData276.hasDependent} onChange={handleChange276} className="sr-only" />
-                            <div className={`block w-8 h-4 rounded-full transition-colors ${formData276.hasDependent ? 'bg-black' : 'bg-gray-200'}`}></div>
+                            <div className={`block w-8 h-4 rounded-full transition-colors ${formData276.hasDependent ? 'bg-black dark:bg-brand-500' : 'bg-gray-200 dark:bg-slate-700'}`}></div>
                             <div className={`absolute left-0.5 top-0.5 bg-white w-3 h-3 rounded-full transition-transform ${formData276.hasDependent ? 'transform translate-x-4' : ''}`}></div>
                         </div>
                     </label>
@@ -412,7 +415,7 @@ export const EdiGenerator: React.FC<Props> = ({
                 </div>
 
                 <div>
-                    <h3 className="text-xs font-semibold text-gray-900 mb-4 pb-2 border-b border-gray-100">Claim Details</h3>
+                    <h3 className="text-xs font-semibold text-gray-900 dark:text-slate-200 mb-4 pb-2 border-b border-gray-100 dark:border-slate-800">Claim Details</h3>
                     <InputGroup label="Claim Trace Number (ID)">
                         <TextInput name="claimId" ref={setRef('claimId')} onFocus={() => handleFocus('claimId')} value={formData276.claimId} onChange={handleChange276} isActive={activeFields.includes('claimId')} />
                     </InputGroup>

@@ -33,7 +33,9 @@ const SegmentNode: React.FC<{
     <div className="select-none">
       <div 
         className={`flex items-center py-1.5 px-3 cursor-pointer border-l-2 transition-colors duration-150 text-xs font-mono
-          ${isSelected ? 'border-black bg-gray-50 text-black font-medium' : 'border-transparent text-gray-500 hover:text-gray-900'}`}
+          ${isSelected 
+            ? 'border-black dark:border-brand-500 bg-gray-50 dark:bg-slate-800/80 text-black dark:text-white font-medium' 
+            : 'border-transparent text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200'}`}
         style={{ paddingLeft: `${(segment.depth * 12) + 12}px` }}
         onClick={(e) => {
           e.stopPropagation();
@@ -46,7 +48,7 @@ const SegmentNode: React.FC<{
               e.stopPropagation();
               setExpanded(!expanded);
             }} 
-            className="mr-1.5 focus:outline-none hover:text-black"
+            className="mr-1.5 focus:outline-none hover:text-black dark:hover:text-white transition-colors"
           >
             <span className={`inline-block transform transition-transform ${expanded ? 'rotate-90' : ''}`}>›</span>
           </button>
@@ -73,8 +75,8 @@ const SegmentNode: React.FC<{
 
 export const SegmentTree: React.FC<SegmentTreeProps> = ({ segments, selectedId, onSelect }) => {
   return (
-    <div className="h-full overflow-y-auto bg-white border-r border-gray-200">
-      <div className="p-4 border-b border-gray-100 text-[10px] font-bold text-gray-400 uppercase tracking-widest sticky top-0 bg-white z-10">
+    <div className="h-full overflow-y-auto bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-800 transition-colors custom-scrollbar">
+      <div className="p-4 border-b border-gray-100 dark:border-slate-800 text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest sticky top-0 bg-white dark:bg-slate-900 z-10">
         Structure
       </div>
       <div className="py-2 pb-20">

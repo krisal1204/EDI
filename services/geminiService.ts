@@ -1,13 +1,26 @@
 import { EdiSegment, SegmentAnalysis } from "../types";
+import { useAppStore } from "../store/useAppStore";
 
-// Configuration for Local Ollama Instance
-const OLLAMA_HOST = process.env.VITE_OLLAMA_HOST || "http://localhost:11434";
-const MODEL_NAME = "llama3"; // Ensure you have pulled this model via 'ollama pull llama3'
+/**
+ * Get current configuration from store
+ */
+const getConfig = () => {
+  const state = useAppStore.getState();
+  return {
+    host: state.ollamaHost,
+    model: state.ollamaModel
+  };
+};
+
+// Exporting model name getter for UI display
+export const getModelName = () => getConfig().model;
 
 /**
  * Analyze a specific segment using Local Ollama
  */
 export const analyzeSegment = async (segment: EdiSegment, transactionType: string = "270/271"): Promise<SegmentAnalysis> => {
+  const { host, model } = getConfig();
+  
   const prompt = `
     You are an expert EDI X12 Analyst.
     Analyze the following X12 EDI segment from a ${transactionType} document.
@@ -32,11 +45,11 @@ export const analyzeSegment = async (segment: EdiSegment, transactionType: strin
   `;
 
   try {
-    const response = await fetch(`${OLLAMA_HOST}/api/chat`, {
+    const response = await fetch(`${host}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: MODEL_NAME,
+        model: model,
         messages: [{ role: 'user', content: prompt }],
         format: 'json',
         stream: false
@@ -52,7 +65,7 @@ export const analyzeSegment = async (segment: EdiSegment, transactionType: strin
   } catch (error) {
     console.error("Ollama Analysis Failed", error);
     return {
-      summary: "Analysis unavailable. Please ensure Ollama is running locally on port 11434 with llama3.",
+      summary: `Analysis unavailable. Please ensure Ollama is running at ${host} with ${model}.`,
       fields: segment.elements.map(e => ({
         code: `${segment.tag}${e.index.toString().padStart(2, '0')}`,
         description: "Unknown Element",
@@ -71,6 +84,8 @@ export const askEdiQuestion = async (
     ediContext: string, 
     history: { role: string; parts: { text: string }[] }[]
 ) => {
+    const { host, model } = getConfig();
+
     // Map existing history structure (Gemini style) to Ollama format
     const ollamaHistory = history.map(h => ({
         role: h.role === 'model' ? 'assistant' : 'user',
@@ -98,11 +113,11 @@ export const askEdiQuestion = async (
     ];
 
     try {
-        const response = await fetch(`${OLLAMA_HOST}/api/chat`, {
+        const response = await fetch(`${host}/api/chat`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                model: MODEL_NAME,
+                model: model,
                 messages: messages,
                 stream: false
             })
@@ -116,7 +131,7 @@ export const askEdiQuestion = async (
         return data.message.content;
     } catch (error) {
         console.error("Chat error", error);
-        return "I'm sorry, I couldn't connect to your local Ollama instance. Please make sure it is running (ollama serve) and 'llama3' is pulled.";
+        return `I'm sorry, I couldn't connect to your local Ollama instance at ${host}. Please make sure it is running and '${model}' is pulled.`;
     }
 };
 
@@ -124,6 +139,8 @@ export const askEdiQuestion = async (
  * Generate form data for EDI 270/276 using Local Ollama
  */
 export const generateFormData = async (formType: '270' | '276', description: string = "A realistic healthcare scenario"): Promise<any> => {
+    const { host, model } = getConfig();
+    
     const schema270 = {
         payerName: "string (e.g. Medicare)",
         payerId: "string (e.g. CMS001)",
@@ -175,11 +192,11 @@ export const generateFormData = async (formType: '270' | '276', description: str
     `;
 
     try {
-        const response = await fetch(`${OLLAMA_HOST}/api/chat`, {
+        const response = await fetch(`${host}/api/chat`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                model: MODEL_NAME,
+                model: model,
                 messages: [{ role: 'user', content: prompt }],
                 stream: false,
                 format: "json"

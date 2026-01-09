@@ -5,11 +5,13 @@ import { SegmentDetail } from './components/SegmentDetail';
 import { EdiGenerator } from './components/EdiGenerator';
 import { ChatInterface } from './components/ChatInterface';
 import { CodeSearch } from './components/CodeSearch';
+import { Settings } from './components/Settings';
 import { parseEdi, flattenTree } from './services/ediParser';
 import { EdiDocument, EdiSegment } from './types';
 import { FormData270, FormData276, build270, build276 } from './services/ediBuilder';
 import { mapEdiToForm, mapEdiToForm276, mapEdiToBenefits, BenefitRow, mapEdiToClaimStatus, ClaimStatusRow } from './services/ediMapper';
 import { analyzeSegmentOffline } from './services/offlineAnalyzer';
+import { useAppStore } from './store/useAppStore';
 
 // Default Data 270 (For Demo Initialization)
 const INITIAL_FORM_DATA: FormData270 = {
@@ -83,7 +85,28 @@ const EMPTY_FORM_DATA_276: FormData276 = {
     serviceDate: ''
 };
 
+// --- Nav Button Component ---
+const NavTab = ({ active, onClick, disabled, icon, label }: { active: boolean, onClick: () => void, disabled?: boolean, icon: React.ReactNode, label: string }) => (
+  <button
+    onClick={onClick}
+    disabled={disabled}
+    className={`
+      flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-medium transition-all duration-200 select-none
+      ${active 
+        ? 'bg-white dark:bg-slate-700 text-brand-700 dark:text-brand-300 shadow-sm ring-1 ring-black/5 dark:ring-white/10' 
+        : 'text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200 hover:bg-gray-200/50 dark:hover:bg-slate-700/50'
+      }
+      ${disabled ? 'opacity-40 cursor-not-allowed' : ''}
+    `}
+  >
+    {icon}
+    <span>{label}</span>
+  </button>
+);
+
 function App() {
+  const { theme } = useAppStore();
+
   const [formData, setFormData] = useState<FormData270>(INITIAL_FORM_DATA);
   const [formData276, setFormData276] = useState<FormData276>(INITIAL_FORM_DATA_276);
   
@@ -92,7 +115,7 @@ function App() {
   const [benefits, setBenefits] = useState<BenefitRow[]>([]);
   const [claims, setClaims] = useState<ClaimStatusRow[]>([]);
   const [selectedSegment, setSelectedSegment] = useState<EdiSegment | null>(null);
-  const [viewMode, setViewMode] = useState<'inspector' | 'raw' | 'json' | 'reference'>('inspector');
+  const [viewMode, setViewMode] = useState<'inspector' | 'raw' | 'json' | 'reference' | 'settings'>('inspector');
   const [copyFeedback, setCopyFeedback] = useState(false);
   
   // Track which generator is currently active (if not viewing a parsed file)
@@ -102,6 +125,15 @@ function App() {
   const [sidebarWidth, setSidebarWidth] = useState(350);
   const [isResizing, setIsResizing] = useState(false);
   const [lastTransactionType, setLastTransactionType] = useState<string>('Unknown');
+
+  // Theme effect
+  useEffect(() => {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [theme]);
 
   // Handle Resizing Logic
   useEffect(() => {
@@ -307,66 +339,84 @@ function App() {
   }, [doc]);
 
   return (
-    <div className="flex flex-col h-screen bg-white text-gray-900 font-sans overflow-hidden">
+    <div className="flex flex-col h-screen bg-white dark:bg-slate-950 text-gray-900 dark:text-slate-200 font-sans overflow-hidden transition-colors duration-200">
       {/* Minimalist Top Bar */}
-      <header className="flex-none h-14 bg-white border-b border-gray-200 flex items-center justify-between px-6 z-30">
-        <div className="flex items-center space-x-3">
-            <div className="w-6 h-6 bg-black rounded-sm flex items-center justify-center">
-                <span className="text-white font-mono font-bold text-xs">X12</span>
+      <header className="flex-none h-14 bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 flex items-center justify-between px-6 z-30 transition-colors duration-200">
+        <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2">
+                <div className="w-6 h-6 bg-black dark:bg-brand-500 rounded-sm flex items-center justify-center shadow-sm">
+                    <span className="text-white font-mono font-bold text-xs">X12</span>
+                </div>
+                <span className="font-medium text-sm tracking-tight text-gray-900 dark:text-white">EDI Insight</span>
             </div>
-            <span className="font-medium text-sm tracking-tight text-gray-900">EDI Insight</span>
             {doc?.transactionType && doc.transactionType !== 'Unknown' && (
-                <span className="text-[10px] px-2 py-0.5 rounded border border-gray-200 bg-gray-50 text-gray-500 font-mono">
+                <span className="text-[10px] px-2 py-0.5 rounded-full border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-500 dark:text-slate-400 font-mono">
                     {doc.transactionType}
                 </span>
             )}
         </div>
         
         <div className="flex items-center space-x-4">
-          <div className="flex text-xs font-medium bg-gray-100 p-0.5 rounded-sm">
-               <button
-                 onClick={() => setViewMode('inspector')}
-                 className={`px-3 py-1 rounded-sm transition-all ${viewMode === 'inspector' ? 'bg-white shadow-sm text-black' : 'text-gray-400 hover:text-gray-600'}`}
-               >
-                 Inspector
-               </button>
-               <button
-                 onClick={() => setViewMode('json')}
-                 disabled={!doc}
-                 className={`px-3 py-1 rounded-sm transition-all ${viewMode === 'json' ? 'bg-white shadow-sm text-black' : 'text-gray-400 hover:text-gray-600 disabled:opacity-50'}`}
-               >
-                 JSON
-               </button>
-               <button
-                 onClick={() => setViewMode('raw')}
-                 className={`px-3 py-1 rounded-sm transition-all ${viewMode === 'raw' ? 'bg-white shadow-sm text-black' : 'text-gray-400 hover:text-gray-600'}`}
-               >
-                 Editor
-               </button>
-               <button
-                 onClick={() => setViewMode('reference')}
-                 className={`px-3 py-1 rounded-sm transition-all ${viewMode === 'reference' ? 'bg-white shadow-sm text-black' : 'text-gray-400 hover:text-gray-600'}`}
-               >
-                 Codes
-               </button>
-          </div>
+          <nav className="flex items-center gap-1 p-1 bg-gray-100/80 dark:bg-slate-800/80 rounded-lg border border-gray-200 dark:border-slate-700">
+             <NavTab 
+                active={viewMode === 'inspector'} 
+                onClick={() => setViewMode('inspector')}
+                label="Inspector"
+                icon={<svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" /></svg>}
+             />
+             <NavTab 
+                active={viewMode === 'json'} 
+                onClick={() => setViewMode('json')}
+                label="JSON"
+                disabled={!doc}
+                icon={<svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" /></svg>}
+             />
+             <NavTab 
+                active={viewMode === 'raw'} 
+                onClick={() => setViewMode('raw')}
+                label="Editor"
+                icon={<svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>}
+             />
+             
+             <div className="w-px h-4 bg-gray-300 dark:bg-slate-600 mx-1"></div>
+             
+             <NavTab 
+                active={viewMode === 'reference'} 
+                onClick={() => setViewMode('reference')}
+                label="Codes"
+                icon={<svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>}
+             />
+          </nav>
           
-          <button 
-            onClick={handleClear}
-            className="text-xs px-3 py-1.5 hover:bg-gray-50 rounded-sm text-gray-500 border border-transparent hover:border-gray-200 transition-colors"
-          >
-            Clear
-          </button>
+          <div className="flex items-center gap-3">
+             <button 
+                onClick={handleClear}
+                className="text-xs px-3 py-1.5 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400 rounded-md text-gray-500 dark:text-slate-400 transition-colors font-medium"
+                title="Clear All"
+              >
+                Clear
+              </button>
+              
+              <div className="w-px h-4 bg-gray-200 dark:bg-slate-700"></div>
+
+              <button 
+                onClick={() => setViewMode('settings')}
+                className={`p-1.5 rounded-md transition-all duration-200 ${viewMode === 'settings' ? 'text-brand-600 bg-brand-50 dark:bg-brand-900/20 dark:text-brand-400 ring-1 ring-brand-200 dark:ring-brand-800' : 'text-gray-400 hover:text-gray-700 dark:text-slate-500 dark:hover:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800'}`}
+                title="Settings"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+              </button>
+          </div>
         </div>
       </header>
 
       {/* Main Content Area */}
       <div className="flex-1 flex overflow-hidden">
         
-        {/* Pane 1: Generator/Benefits/Claims (Resizable) - Hide if Reference Mode */}
-        {viewMode !== 'reference' && (
+        {/* Pane 1: Generator/Benefits/Claims (Resizable) - Hide if Fullscreen Mode */}
+        {(viewMode !== 'reference' && viewMode !== 'settings') && (
             <div 
-                className="flex-none bg-white z-20 border-r border-gray-200 relative"
+                className="flex-none bg-white dark:bg-slate-900 z-20 border-r border-gray-200 dark:border-slate-800 relative"
                 style={{ width: sidebarWidth }}
             >
             <EdiGenerator 
@@ -385,8 +435,8 @@ function App() {
             </div>
         )}
 
-        {/* Drag Handle - Hide if Reference Mode */}
-        {viewMode !== 'reference' && (
+        {/* Drag Handle - Hide if Fullscreen Mode */}
+        {(viewMode !== 'reference' && viewMode !== 'settings') && (
             <div 
                 className="flex-none w-1 -ml-1 cursor-col-resize z-30 relative group hover:bg-blue-500 transition-colors"
                 onMouseDown={() => setIsResizing(true)}
@@ -394,10 +444,14 @@ function App() {
         )}
 
         {/* Pane 2 & 3: Viewer Area */}
-        <div className="flex-1 flex min-w-0 bg-white relative">
+        <div className="flex-1 flex min-w-0 bg-white dark:bg-slate-950 relative">
           
-          {/* Reference Mode Overrides Everything */}
-          {viewMode === 'reference' ? (
+          {/* Settings Mode Overrides Everything */}
+          {viewMode === 'settings' ? (
+              <div className="w-full h-full">
+                  <Settings />
+              </div>
+          ) : viewMode === 'reference' ? (
               <div className="w-full h-full">
                   <CodeSearch />
               </div>
@@ -415,7 +469,7 @@ function App() {
                         {viewMode === 'inspector' && (
                         <>
                             {/* Pane 2: Tree */}
-                            <div className="w-1/3 min-w-[250px] max-w-sm border-r border-gray-200 flex flex-col h-full bg-white">
+                            <div className="w-1/3 min-w-[250px] max-w-sm border-r border-gray-200 dark:border-slate-800 flex flex-col h-full bg-white dark:bg-slate-900">
                             {doc && (
                                 <SegmentTree 
                                     segments={doc.segments} 
@@ -426,11 +480,11 @@ function App() {
                             </div>
 
                             {/* Pane 3: Details */}
-                            <div className="flex-1 bg-white h-full overflow-hidden">
+                            <div className="flex-1 bg-white dark:bg-slate-950 h-full overflow-hidden">
                             {selectedSegment ? (
                                 <SegmentDetail segment={selectedSegment} />
                             ) : (
-                                <div className="flex items-center justify-center h-full text-gray-300 text-sm">
+                                <div className="flex items-center justify-center h-full text-gray-300 dark:text-slate-600 text-sm">
                                 Select a segment to view details
                                 </div>
                             )}
@@ -440,14 +494,14 @@ function App() {
 
                         {viewMode === 'raw' && (
                         /* Raw View */
-                        <div className="w-full h-full bg-white overflow-hidden flex flex-col relative">
+                        <div className="w-full h-full bg-white dark:bg-slate-950 overflow-hidden flex flex-col relative">
                             <div className="absolute top-2 right-4 z-10">
                                 <button
                                     onClick={() => handleCopy(rawEdi)}
                                     className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md border text-xs font-medium transition-all duration-200 ${
                                         copyFeedback 
-                                            ? 'bg-green-50 border-green-200 text-green-700' 
-                                            : 'bg-white border-gray-200 text-gray-600 hover:text-gray-900 hover:border-gray-300 shadow-sm'
+                                            ? 'bg-green-50 border-green-200 text-green-700 dark:bg-green-900/30 dark:border-green-800 dark:text-green-400' 
+                                            : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-white shadow-sm'
                                     }`}
                                 >
                                     {copyFeedback ? (
@@ -468,7 +522,7 @@ function App() {
                                 </button>
                             </div>
                             <textarea 
-                                className="flex-1 w-full p-8 bg-white text-gray-800 font-mono text-sm resize-none focus:outline-none leading-relaxed custom-scrollbar"
+                                className="flex-1 w-full p-8 bg-white dark:bg-slate-950 text-gray-800 dark:text-slate-200 font-mono text-sm resize-none focus:outline-none leading-relaxed custom-scrollbar"
                                 value={rawEdi}
                                 onChange={(e) => {
                                     setRawEdi(e.target.value);
@@ -481,14 +535,14 @@ function App() {
 
                         {viewMode === 'json' && (
                             /* JSON View */
-                            <div className="w-full h-full bg-white overflow-hidden flex flex-col relative">
+                            <div className="w-full h-full bg-white dark:bg-slate-950 overflow-hidden flex flex-col relative">
                                 <div className="absolute top-2 right-4 z-10">
                                     <button
                                         onClick={() => handleCopy(enrichedJson)}
                                         className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md border text-xs font-medium transition-all duration-200 ${
                                             copyFeedback 
-                                                ? 'bg-green-50 border-green-200 text-green-700' 
-                                                : 'bg-white border-gray-200 text-gray-600 hover:text-gray-900 hover:border-gray-300 shadow-sm'
+                                                ? 'bg-green-50 border-green-200 text-green-700 dark:bg-green-900/30 dark:border-green-800 dark:text-green-400' 
+                                                : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-white shadow-sm'
                                         }`}
                                     >
                                         {copyFeedback ? (
@@ -508,8 +562,8 @@ function App() {
                                         )}
                                     </button>
                                 </div>
-                                <div className="flex-1 overflow-auto p-8 custom-scrollbar bg-gray-50">
-                                    <pre className="text-xs font-mono text-gray-800 whitespace-pre-wrap">{enrichedJson}</pre>
+                                <div className="flex-1 overflow-auto p-8 custom-scrollbar bg-gray-50 dark:bg-slate-900">
+                                    <pre className="text-xs font-mono text-gray-800 dark:text-slate-200 whitespace-pre-wrap">{enrichedJson}</pre>
                                 </div>
                             </div>
                         )}
@@ -521,7 +575,7 @@ function App() {
       </div>
 
       {/* Floating Chat Interface */}
-      {doc && viewMode !== 'reference' && <ChatInterface rawEdi={rawEdi} />}
+      {doc && viewMode !== 'reference' && viewMode !== 'settings' && <ChatInterface rawEdi={rawEdi} />}
     </div>
   );
 }

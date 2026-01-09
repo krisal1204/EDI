@@ -10,6 +10,7 @@ services:
     environment:
       # Use host.docker.internal to access Ollama running on the host machine
       - VITE_OLLAMA_HOST=http://host.docker.internal:11434
+      - VITE_OLLAMA_MODEL=qwen3:8b
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: always

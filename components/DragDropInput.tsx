@@ -148,17 +148,17 @@ GE*1*1~
 IEA*1*400000001~`;
 
   return (
-    <div className="flex flex-col items-center justify-center h-full p-6 w-full bg-white">
+    <div className="flex flex-col items-center justify-center h-full p-6 w-full bg-white dark:bg-slate-950 transition-colors duration-200">
       <div className="w-full text-center mb-8">
-        <h1 className="text-xl font-semibold text-gray-900 mb-2 tracking-tight">Inspect EDI</h1>
-        <p className="text-sm text-gray-400">
+        <h1 className="text-xl font-semibold text-gray-900 dark:text-white mb-2 tracking-tight">Inspect EDI</h1>
+        <p className="text-sm text-gray-400 dark:text-slate-500">
           Supported Formats: 270, 271, 276, 277
         </p>
       </div>
 
       <div className="w-full flex-1 max-w-2xl mb-6">
         <textarea 
-          className="w-full h-full p-6 rounded border border-gray-200 bg-white font-mono text-xs focus:outline-none focus:border-black focus:ring-0 resize-none text-gray-800 placeholder-gray-300 transition-colors"
+          className="w-full h-full p-6 rounded border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 font-mono text-xs focus:outline-none focus:border-black dark:focus:border-brand-500 focus:ring-0 resize-none text-gray-800 dark:text-slate-200 placeholder-gray-300 dark:placeholder-slate-700 transition-colors custom-scrollbar shadow-sm dark:shadow-none"
           placeholder="Paste X12 content here..."
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -169,16 +169,16 @@ IEA*1*400000001~`;
         <button 
           onClick={() => onProcess(text)}
           disabled={!text.trim()}
-          className="w-full py-3 bg-black hover:bg-gray-800 disabled:bg-gray-200 disabled:text-gray-400 text-white rounded text-sm font-medium transition-colors"
+          className="w-full py-3 bg-black dark:bg-brand-600 hover:bg-gray-800 dark:hover:bg-brand-500 disabled:bg-gray-200 dark:disabled:bg-slate-800 disabled:text-gray-400 dark:disabled:text-slate-600 text-white rounded text-sm font-medium transition-colors shadow-sm"
         >
           Analyze Transaction
         </button>
         
         <div className="flex flex-wrap justify-center gap-2 w-full">
-            <button onClick={() => setText(sample270)} className="px-3 py-1.5 border border-gray-200 rounded hover:bg-gray-50 text-gray-600 text-xs font-medium transition-colors">Load 270</button>
-            <button onClick={() => setText(sample271)} className="px-3 py-1.5 border border-gray-200 rounded hover:bg-gray-50 text-gray-600 text-xs font-medium transition-colors">Load 271</button>
-            <button onClick={() => setText(sample276)} className="px-3 py-1.5 border border-gray-200 rounded hover:bg-gray-50 text-gray-600 text-xs font-medium transition-colors">Load 276</button>
-            <button onClick={() => setText(sample277)} className="px-3 py-1.5 border border-gray-200 rounded hover:bg-gray-50 text-gray-600 text-xs font-medium transition-colors">Load 277</button>
+            <button onClick={() => setText(sample270)} className="px-3 py-1.5 border border-gray-200 dark:border-slate-700 rounded hover:bg-gray-50 dark:hover:bg-slate-800 text-gray-600 dark:text-slate-400 dark:hover:text-slate-200 text-xs font-medium transition-colors">Load 270</button>
+            <button onClick={() => setText(sample271)} className="px-3 py-1.5 border border-gray-200 dark:border-slate-700 rounded hover:bg-gray-50 dark:hover:bg-slate-800 text-gray-600 dark:text-slate-400 dark:hover:text-slate-200 text-xs font-medium transition-colors">Load 271</button>
+            <button onClick={() => setText(sample276)} className="px-3 py-1.5 border border-gray-200 dark:border-slate-700 rounded hover:bg-gray-50 dark:hover:bg-slate-800 text-gray-600 dark:text-slate-400 dark:hover:text-slate-200 text-xs font-medium transition-colors">Load 276</button>
+            <button onClick={() => setText(sample277)} className="px-3 py-1.5 border border-gray-200 dark:border-slate-700 rounded hover:bg-gray-50 dark:hover:bg-slate-800 text-gray-600 dark:text-slate-400 dark:hover:text-slate-200 text-xs font-medium transition-colors">Load 277</button>
         </div>
       </div>
     </div>
