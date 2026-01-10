@@ -6,10 +6,13 @@ import { EdiGenerator } from './components/EdiGenerator';
 import { ChatInterface } from './components/ChatInterface';
 import { CodeSearch } from './components/CodeSearch';
 import { Settings } from './components/Settings';
+import { Landing } from './components/Landing';
+import { JsonViewer } from './components/JsonViewer';
+import { SendMessage } from './components/SendMessage';
 import { parseEdi, flattenTree } from './services/ediParser';
 import { EdiDocument, EdiSegment } from './types';
-import { FormData270, FormData276, FormData837, build270, build276, build837 } from './services/ediBuilder';
-import { mapEdiToForm, mapEdiToForm276, mapEdiToForm837, mapEdiToBenefits, BenefitRow, mapEdiToClaimStatus, ClaimStatusRow } from './services/ediMapper';
+import { FormData270, FormData276, FormData837, FormData834, build270, build276, build837, build834 } from './services/ediBuilder';
+import { mapEdiToForm, mapEdiToForm276, mapEdiToForm837, mapEdiToForm834, mapEdiToBenefits, BenefitRow, mapEdiToClaimStatus, ClaimStatusRow } from './services/ediMapper';
 import { analyzeSegmentOffline } from './services/offlineAnalyzer';
 import { useAppStore } from './store/useAppStore';
 
@@ -81,6 +84,29 @@ const INITIAL_FORM_DATA_837: FormData837 = {
     ]
 };
 
+const INITIAL_FORM_DATA_834: FormData834 = {
+    sponsorName: 'ACME CORP',
+    sponsorTaxId: '998877665',
+    payerName: 'AETNA',
+    payerId: '60054',
+    maintenanceType: '021', // Add
+    maintenanceReason: '01', // New Hire
+    benefitStatus: '024', // Active
+    policyNumber: 'GROUP554433',
+    coverageLevelCode: 'FAM',
+    planEffectiveDate: new Date().toISOString().slice(0, 10),
+    subscriber: {
+        id: 'SUB123456',
+        firstName: 'JOHN',
+        lastName: 'DOE',
+        ssn: '123456789',
+        dob: '1980-01-01',
+        gender: 'M',
+        relationship: '18'
+    },
+    dependents: []
+};
+
 // Empty State 270 (For Resetting on Load)
 const EMPTY_FORM_DATA_270: FormData270 = {
     payerName: '',
@@ -139,20 +165,28 @@ const NavTab = ({ active, onClick, disabled, icon, label }: { active: boolean, o
 function App() {
   const { theme } = useAppStore();
 
+  // Route State
+  const [currentPage, setCurrentPage] = useState<'landing' | 'workspace'>('landing');
+
   const [formData, setFormData] = useState<FormData270>(INITIAL_FORM_DATA);
   const [formData276, setFormData276] = useState<FormData276>(INITIAL_FORM_DATA_276);
   const [formData837, setFormData837] = useState<FormData837>(INITIAL_FORM_DATA_837);
+  const [formData834, setFormData834] = useState<FormData834>(INITIAL_FORM_DATA_834);
   
   const [rawEdi, setRawEdi] = useState<string>('');
   const [doc, setDoc] = useState<EdiDocument | null>(null);
   const [benefits, setBenefits] = useState<BenefitRow[]>([]);
   const [claims, setClaims] = useState<ClaimStatusRow[]>([]);
   const [selectedSegment, setSelectedSegment] = useState<EdiSegment | null>(null);
-  const [viewMode, setViewMode] = useState<'inspector' | 'raw' | 'json' | 'reference' | 'settings'>('inspector');
+  const [viewMode, setViewMode] = useState<'inspector' | 'raw' | 'json' | 'reference' | 'settings' | 'contact'>('inspector');
   const [copyFeedback, setCopyFeedback] = useState(false);
   
+  // JSON Viewer State
+  const [jsonExpandMode, setJsonExpandMode] = useState<'auto' | 'expanded' | 'collapsed'>('auto');
+  const [jsonViewKey, setJsonViewKey] = useState(0);
+
   // Track which generator is currently active (if not viewing a parsed file)
-  const [generatorMode, setGeneratorMode] = useState<'270' | '276' | '837'>('270');
+  const [generatorMode, setGeneratorMode] = useState<'270' | '276' | '837' | '834'>('270');
 
   // Resizable Sidebar State
   const [sidebarWidth, setSidebarWidth] = useState(350);
@@ -247,8 +281,12 @@ function App() {
              setGeneratorMode('276');
         } else if (parsed.transactionType === '837') {
              const mappedData = mapEdiToForm837(parsed);
-             setFormData837({ ...INITIAL_FORM_DATA_837, ...mappedData }); // Merge with defaults to ensure valid initial state
+             setFormData837({ ...INITIAL_FORM_DATA_837, ...mappedData });
              setGeneratorMode('837');
+        } else if (parsed.transactionType === '834') {
+             const mappedData = mapEdiToForm834(parsed);
+             setFormData834({ ...INITIAL_FORM_DATA_834, ...mappedData });
+             setGeneratorMode('834');
         }
       }
     } catch (e) {
@@ -277,16 +315,25 @@ function App() {
     processEdi(newEdi, false);
   }
 
+  const handleForm834Change = (newData: FormData834) => {
+    setFormData834(newData);
+    const newEdi = build834(newData);
+    setRawEdi(newEdi);
+    processEdi(newEdi, false);
+  }
+
   // Handle manual switching of generator mode
-  const handleGeneratorModeChange = (mode: '270' | '276' | '837') => {
+  const handleGeneratorModeChange = (mode: '270' | '276' | '837' | '834') => {
       setGeneratorMode(mode);
       let newEdi = '';
       if (mode === '270') {
           newEdi = build270(formData);
       } else if (mode === '276') {
           newEdi = build276(formData276);
-      } else {
+      } else if (mode === '837') {
           newEdi = build837(formData837);
+      } else {
+          newEdi = build834(formData834);
       }
       setRawEdi(newEdi);
       processEdi(newEdi, false);
@@ -296,6 +343,7 @@ function App() {
     setFormData(INITIAL_FORM_DATA);
     setFormData276(INITIAL_FORM_DATA_276);
     setFormData837(INITIAL_FORM_DATA_837);
+    setFormData834(INITIAL_FORM_DATA_834);
     setRawEdi('');
     setDoc(null);
     setBenefits([]);
@@ -304,6 +352,8 @@ function App() {
     setSidebarWidth(350); 
     setLastTransactionType('Unknown');
     setGeneratorMode('270');
+    setJsonExpandMode('auto');
+    setJsonViewKey(0);
   };
 
   const handleCopy = async (content: string) => {
@@ -316,6 +366,11 @@ function App() {
     }
   };
 
+  const toggleJsonExpand = (mode: 'expanded' | 'collapsed') => {
+      setJsonExpandMode(mode);
+      setJsonViewKey(prev => prev + 1); // Force remount to apply new recursion depth
+  };
+
   const handleFieldFocus = (fieldName: string) => {
     if (!doc) return;
     const flat = flattenTree(doc.segments);
@@ -323,7 +378,11 @@ function App() {
 
     // Common NM1s
     if (['payerName', 'payerId'].includes(fieldName)) {
-        found = flat.find(s => s.tag === 'NM1' && s.elements[0]?.value === 'PR');
+        found = flat.find(s => s.tag === 'NM1' && s.elements[0]?.value === 'PR') ||
+                flat.find(s => s.tag === 'N1' && s.elements[0]?.value === 'IN'); // 834 Payer
+    }
+    else if (['sponsorName', 'sponsorTaxId'].includes(fieldName)) {
+        found = flat.find(s => s.tag === 'N1' && s.elements[0]?.value === 'P5');
     }
     else if (['providerName', 'providerNpi'].includes(fieldName)) {
         // 270 uses 1P, 276 uses 1P or 41, 837 uses 85 usually
@@ -394,6 +453,21 @@ function App() {
     else if (['procedureCode', 'lineCharge', 'units'].includes(fieldName)) {
         found = flat.find(s => ['SV1', 'SV2'].includes(s.tag));
     }
+    // 834 Fields
+    else if (['maintenanceType', 'maintenanceReason', 'benefitStatus', 'coverageLevelCode'].includes(fieldName)) {
+        found = flat.find(s => s.tag === 'INS');
+        if ((fieldName === 'benefitStatus' || fieldName === 'coverageLevelCode') && found) {
+             const idx = flat.indexOf(found);
+             const hd = flat.slice(idx, idx+10).find(s => s.tag === 'HD');
+             if (hd) found = hd;
+        }
+    }
+    else if (fieldName === 'planEffectiveDate') {
+        found = flat.find(s => s.tag === 'DTP' && (s.elements[0]?.value === '348' || s.elements[0]?.value === '356'));
+    }
+    else if (fieldName === 'policyNumber') {
+        found = flat.find(s => s.tag === 'REF' && s.elements[0]?.value === '1L');
+    }
 
     if (found) {
         setSelectedSegment(found);
@@ -402,7 +476,7 @@ function App() {
 
   // Generate Enriched JSON on the fly
   const enrichedJson = useMemo(() => {
-    if (!doc) return '';
+    if (!doc) return null;
 
     const enrichSegment = (seg: EdiSegment): any => {
         const analysis = analyzeSegmentOffline(seg);
@@ -420,21 +494,34 @@ function App() {
         };
     };
 
-    const structure = doc.segments.map(enrichSegment);
-    return JSON.stringify(structure, null, 2);
+    return doc.segments.map(enrichSegment);
   }, [doc]);
 
+  // If on landing page, show landing component
+  if (currentPage === 'landing') {
+      return (
+        <Landing 
+            onEnter={() => { setCurrentPage('workspace'); setViewMode('inspector'); }} 
+            onContact={() => { setCurrentPage('workspace'); setViewMode('contact'); }}
+        />
+      );
+  }
+
   return (
-    <div className="flex flex-col h-screen bg-white dark:bg-slate-950 text-gray-900 dark:text-slate-200 font-sans overflow-hidden transition-colors duration-200">
+    <div className="flex flex-col h-screen bg-white dark:bg-slate-950 text-gray-900 dark:text-slate-200 font-sans overflow-hidden transition-colors duration-200 animate-fade-in">
       {/* Minimalist Top Bar */}
       <header className="flex-none h-14 bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 flex items-center justify-between px-6 z-30 transition-colors duration-200">
         <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2">
+            <button 
+                onClick={() => setCurrentPage('landing')}
+                className="flex items-center space-x-2 hover:opacity-80 transition-opacity"
+                title="Back to Home"
+            >
                 <div className="w-6 h-6 bg-black dark:bg-brand-500 rounded-sm flex items-center justify-center shadow-sm">
                     <span className="text-white font-mono font-bold text-xs">X12</span>
                 </div>
                 <span className="font-medium text-sm tracking-tight text-gray-900 dark:text-white">EDI Insight</span>
-            </div>
+            </button>
             {doc?.transactionType && doc.transactionType !== 'Unknown' && (
                 <span className="text-[10px] px-2 py-0.5 rounded-full border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-500 dark:text-slate-400 font-mono">
                     {doc.transactionType}
@@ -500,7 +587,7 @@ function App() {
       <div className="flex-1 flex overflow-hidden">
         
         {/* Pane 1: Generator/Benefits/Claims (Resizable) - Hide if Fullscreen Mode */}
-        {(viewMode !== 'reference' && viewMode !== 'settings') && (
+        {(viewMode !== 'reference' && viewMode !== 'settings' && viewMode !== 'contact') && (
             <div 
                 className="flex-none bg-white dark:bg-slate-900 z-20 border-r border-gray-200 dark:border-slate-800 relative"
                 style={{ width: sidebarWidth }}
@@ -512,6 +599,8 @@ function App() {
                 onChange276={handleForm276Change}
                 formData837={formData837}
                 onChange837={handleForm837Change}
+                formData834={formData834}
+                onChange834={handleForm834Change}
                 transactionType={doc?.transactionType} 
                 generatorMode={generatorMode}
                 onSetGeneratorMode={handleGeneratorModeChange}
@@ -524,7 +613,7 @@ function App() {
         )}
 
         {/* Drag Handle - Hide if Fullscreen Mode */}
-        {(viewMode !== 'reference' && viewMode !== 'settings') && (
+        {(viewMode !== 'reference' && viewMode !== 'settings' && viewMode !== 'contact') && (
             <div 
                 className="flex-none w-1 -ml-1 cursor-col-resize z-30 relative group hover:bg-blue-500 transition-colors"
                 onMouseDown={() => setIsResizing(true)}
@@ -538,6 +627,10 @@ function App() {
           {viewMode === 'settings' ? (
               <div className="w-full h-full">
                   <Settings />
+              </div>
+          ) : viewMode === 'contact' ? (
+              <div className="w-full h-full">
+                  <SendMessage />
               </div>
           ) : viewMode === 'reference' ? (
               <div className="w-full h-full">
@@ -624,9 +717,24 @@ function App() {
                         {viewMode === 'json' && (
                             /* JSON View */
                             <div className="w-full h-full bg-white dark:bg-slate-950 overflow-hidden flex flex-col relative">
-                                <div className="absolute top-2 right-4 z-10">
+                                <div className="absolute top-2 right-4 z-10 flex gap-2">
+                                    <div className="flex bg-white dark:bg-slate-800 rounded-md shadow-sm border border-gray-200 dark:border-slate-700">
+                                        <button 
+                                            onClick={() => toggleJsonExpand('expanded')}
+                                            className="px-3 py-1.5 text-xs font-medium border-r border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 rounded-l-md transition-colors"
+                                        >
+                                            Expand All
+                                        </button>
+                                        <button 
+                                            onClick={() => toggleJsonExpand('collapsed')}
+                                            className="px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 rounded-r-md transition-colors"
+                                        >
+                                            Collapse All
+                                        </button>
+                                    </div>
+
                                     <button
-                                        onClick={() => handleCopy(enrichedJson)}
+                                        onClick={() => handleCopy(JSON.stringify(enrichedJson, null, 2))}
                                         className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-md border text-xs font-medium transition-all duration-200 ${
                                             copyFeedback 
                                                 ? 'bg-green-50 border-green-200 text-green-700 dark:bg-green-900/30 dark:border-green-800 dark:text-green-400' 
@@ -651,7 +759,15 @@ function App() {
                                     </button>
                                 </div>
                                 <div className="flex-1 overflow-auto p-8 custom-scrollbar bg-gray-50 dark:bg-slate-900">
-                                    <pre className="text-xs font-mono text-gray-800 dark:text-slate-200 whitespace-pre-wrap">{enrichedJson}</pre>
+                                    {enrichedJson ? (
+                                        <JsonViewer 
+                                            key={jsonViewKey} 
+                                            data={enrichedJson} 
+                                            initiallyOpen={jsonExpandMode === 'auto' ? undefined : (jsonExpandMode === 'expanded')} 
+                                        />
+                                    ) : (
+                                        <div className="text-gray-400 text-xs">No data available</div>
+                                    )}
                                 </div>
                             </div>
                         )}
@@ -663,7 +779,7 @@ function App() {
       </div>
 
       {/* Floating Chat Interface */}
-      {doc && viewMode !== 'reference' && viewMode !== 'settings' && <ChatInterface rawEdi={rawEdi} />}
+      {doc && viewMode !== 'reference' && viewMode !== 'settings' && viewMode !== 'contact' && <ChatInterface rawEdi={rawEdi} />}
     </div>
   );
 }

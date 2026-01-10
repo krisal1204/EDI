@@ -35,7 +35,7 @@ export const parseEdi = (rawEdi: string): EdiDocument => {
     .map(s => s.trim())
     .filter(s => s.length > 0);
 
-  let transactionType: '270' | '271' | '276' | '277' | '837' | 'Unknown' = 'Unknown';
+  let transactionType: '270' | '271' | '276' | '277' | '837' | '834' | 'Unknown' = 'Unknown';
 
   const segments: EdiSegment[] = rawSegments.map((rawSeg, index) => {
     // Split elements
@@ -50,6 +50,7 @@ export const parseEdi = (rawEdi: string): EdiDocument => {
         else if (typeCode === '276') transactionType = '276';
         else if (typeCode === '277') transactionType = '277';
         else if (typeCode === '837') transactionType = '837';
+        else if (typeCode === '834') transactionType = '834';
     }
 
     const elements = elementsRaw.slice(1).map((val, i) => ({
@@ -117,6 +118,11 @@ export const parseEdi = (rawEdi: string): EdiDocument => {
       }
     }
   });
+
+  // Special handling for 834 flat loops if no HL (834 usually doesn't use HL, it uses N1/INS loops)
+  // Standard 834 doesn't strictly use HL for hierarchy, it uses N1 loops then INS loops.
+  // This simple parser defaults to flat list if no HLs found, which is fine for 834 inspection.
+  // We can enhance visualization by grouping N1 loops if needed, but basic list is okay.
 
   const result: EdiDocument = {
     segments: hlMap.size > 0 ? tree : segments,

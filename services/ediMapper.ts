@@ -1,5 +1,5 @@
 import { EdiDocument, EdiSegment } from '../types';
-import { FormData270, FormData276, FormData837, ServiceLine837 } from './ediBuilder';
+import { FormData270, FormData276, FormData837, FormData834, ServiceLine837, Member834 } from './ediBuilder';
 import { getElementDefinition, getProcedureDefinition } from './offlineAnalyzer';
 
 /**
@@ -310,6 +310,98 @@ export const mapEdiToForm837 = (doc: EdiDocument): Partial<FormData837> => {
             data.serviceLines.push(line);
         }
     }
+
+    return data;
+};
+
+export const mapEdiToForm834 = (doc: EdiDocument): Partial<FormData834> => {
+    const segments = flattenSegments(doc.segments);
+    const data: Partial<FormData834> = {
+        dependents: []
+    };
+
+    // Loop 1000A Sponsor
+    const sponsor = segments.find(s => s.tag === 'N1' && s.elements[0]?.value === 'P5');
+    if (sponsor) {
+        data.sponsorName = sponsor.elements[1]?.value || '';
+        data.sponsorTaxId = sponsor.elements[3]?.value || '';
+    }
+
+    // Loop 1000B Payer
+    const payer = segments.find(s => s.tag === 'N1' && s.elements[0]?.value === 'IN');
+    if (payer) {
+        data.payerName = payer.elements[1]?.value || '';
+        data.payerId = payer.elements[3]?.value || '';
+    }
+
+    // Find all INS segments
+    const insIndices = segments.map((s, i) => s.tag === 'INS' ? i : -1).filter(i => i !== -1);
+    
+    insIndices.forEach(idx => {
+        const ins = segments[idx];
+        const isSub = ins.elements[1]?.value === '18';
+        const maintType = ins.elements[2]?.value;
+        const maintReason = ins.elements[3]?.value;
+        
+        // Scan for Member Info (REF, DTP, NM1, DMG) inside this loop
+        // Loop ends at next INS or SE
+        let nextIdx = segments.length;
+        // Find next INS index
+        const nextIns = insIndices.find(i => i > idx);
+        if (nextIns) nextIdx = nextIns;
+
+        const loopSegs = segments.slice(idx, nextIdx);
+        
+        const member: Member834 = {
+            id: '',
+            firstName: '',
+            lastName: '',
+            ssn: '',
+            dob: '',
+            gender: '',
+            relationship: ins.elements[1]?.value || '18'
+        };
+
+        const ref0F = loopSegs.find(s => s.tag === 'REF' && s.elements[0]?.value === '0F');
+        if (ref0F) member.id = ref0F.elements[1]?.value || '';
+        
+        const refSY = loopSegs.find(s => s.tag === 'REF' && s.elements[0]?.value === 'SY');
+        if (refSY) member.ssn = refSY.elements[1]?.value || '';
+
+        const nm1 = loopSegs.find(s => s.tag === 'NM1' && s.elements[0]?.value === 'IL');
+        if (nm1) {
+            member.lastName = nm1.elements[2]?.value || '';
+            member.firstName = nm1.elements[3]?.value || '';
+        }
+
+        const dmg = loopSegs.find(s => s.tag === 'DMG');
+        if (dmg) {
+            member.dob = formatDate(dmg.elements[1]?.value);
+            member.gender = dmg.elements[2]?.value || '';
+        }
+
+        if (isSub) {
+            data.subscriber = member;
+            data.maintenanceType = maintType;
+            data.maintenanceReason = maintReason;
+            
+            const hd = loopSegs.find(s => s.tag === 'HD');
+            if (hd) {
+                data.benefitStatus = hd.elements[0]?.value || '';
+                data.coverageLevelCode = hd.elements[4]?.value || '';
+            }
+            
+            const ref1L = loopSegs.find(s => s.tag === 'REF' && s.elements[0]?.value === '1L');
+            if (ref1L) {
+                data.policyNumber = ref1L.elements[1]?.value || '';
+            }
+            
+            const dtp = loopSegs.find(s => s.tag === 'DTP' && s.elements[0]?.value === '348'); // Benefit Begin usually inside loop 2300 or 2000
+            if (dtp) data.planEffectiveDate = formatDate(dtp.elements[2]?.value);
+        } else {
+            if (data.dependents) data.dependents.push(member);
+        }
+    });
 
     return data;
 };

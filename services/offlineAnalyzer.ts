@@ -8,8 +8,10 @@ const SEGMENT_DESCRIPTIONS: Record<string, string> = {
   GS: "Functional Group Header",
   ST: "Transaction Set Header",
   BHT: "Beginning of Hierarchical Transaction",
+  BGN: "Beginning Segment",
   HL: "Hierarchical Level",
   NM1: "Individual or Organizational Name",
+  N1: "Name",
   N3: "Address Information",
   N4: "Geographic Location",
   PER: "Administrative Communications Contact",
@@ -42,7 +44,8 @@ const SEGMENT_DESCRIPTIONS: Record<string, string> = {
   SBR: "Subscriber Information",
   PAT: "Patient Information",
   LX: "Service Line Number",
-  CUR: "Foreign Currency Information"
+  CUR: "Foreign Currency Information",
+  HD: "Health Coverage"
 };
 
 const YES_NO = { "Y": "Yes", "N": "No", "U": "Unknown" };
@@ -117,10 +120,17 @@ const ELEMENT_DEFINITIONS: Record<string, Record<number, { name: string, codes?:
             "HN": "Claim Status Response (277)",
             "HP": "Health Care Claim Payment/Advice (835)",
             "HC": "Health Care Claim (837)",
-            "FA": "Functional Acknowledgment (997)"
+            "FA": "Functional Acknowledgment (997)",
+            "BE": "Benefit Enrollment (834)"
         } 
     },
-    8: { name: "Version Code", codes: { "005010X279A1": "HIPAA 5010 270/271", "005010X212": "HIPAA 5010 276/277" } }
+    8: { name: "Version Code", codes: { "005010X279A1": "HIPAA 5010 270/271", "005010X212": "HIPAA 5010 276/277", "005010X220A1": "HIPAA 5010 834" } }
+  },
+  BGN: {
+      1: { name: "Transaction Set Purpose Code", codes: { "00": "Original", "15": "Re-Submission", "22": "Information Copy" }},
+      2: { name: "Reference Identification" },
+      3: { name: "Date" },
+      8: { name: "Action Code", codes: { "2": "Change", "4": "Verify" }}
   },
   BHT: {
     1: { name: "Hierarchical Structure Code", codes: { "0022": "Info Source -> Info Receiver -> Subscriber -> Dependent", "0010": "Information Source, Receiver, Provider, Subscriber, Dependent", "0019": "Info Source, Receiver, Provider, Subscriber, Dependent (Claim)" } },
@@ -139,6 +149,11 @@ const ELEMENT_DEFINITIONS: Record<string, Record<number, { name: string, codes?:
       } 
     },
     4: { name: "Hierarchical Child Code", codes: { "0": "No Children (Leaf)", "1": "Has Children" } }
+  },
+  N1: {
+      1: { name: "Entity Identifier Code", codes: { "P5": "Plan Sponsor", "IN": "Insurer" } },
+      2: { name: "Name" },
+      3: { name: "ID Code Qualifier", codes: { "FI": "Tax ID", "XV": "CMS Plan ID", "91": "Assigned by Vendor" }}
   },
   NM1: {
     1: { 
@@ -171,7 +186,8 @@ const ELEMENT_DEFINITIONS: Record<string, Record<number, { name: string, codes?:
         "PRP": "Primary Payer",
         "SEP": "Secondary Payer",
         "TTP": "Tertiary Payer",
-        "QD": "Responsible Party"
+        "QD": "Responsible Party",
+        "74": "Corrected Insured"
       } 
     },
     2: { name: "Entity Type", codes: { "1": "Person", "2": "Non-Person Entity" } },
@@ -273,7 +289,8 @@ const ELEMENT_DEFINITIONS: Record<string, Record<number, { name: string, codes?:
         "Y4": "Agency Claim Number",
         "F5": "Medicare Claim Number",
         "0B": "State License Number",
-        "LU": "Location Number"
+        "LU": "Location Number",
+        "0F": "Subscriber Number"
     } }
   },
   DMG: {
@@ -303,8 +320,8 @@ const ELEMENT_DEFINITIONS: Record<string, Record<number, { name: string, codes?:
         "346": "Plan Begin",
         "348": "Benefit Begin",
         "349": "Benefit End",
-        "356": "Service",
-        "357": "Eligibility Begin",
+        "356": "Eligibility Begin",
+        "357": "Eligibility End",
         "382": "Enrollment",
         "435": "Admission", 
         "472": "Service Date",
@@ -316,6 +333,16 @@ const ELEMENT_DEFINITIONS: Record<string, Record<number, { name: string, codes?:
       } 
     },
     2: { name: "Format", codes: { "D8": "Date", "RD8": "Date Range (start-end)", "DTS": "Date Time range" } }
+  },
+  INS: {
+      1: { name: "Member Indicator", codes: { "Y": "Subscriber", "N": "Dependent" } },
+      2: { name: "Relationship Code", codes: { "18": "Self", "01": "Spouse", "19": "Child", "21": "Unknown" } },
+      3: { name: "Maintenance Type Code", codes: { "001": "Change", "021": "Add", "024": "Cancel/Term", "030": "Audit" } },
+      4: { name: "Maintenance Reason Code", codes: { "01": "Divorce", "02": "Birth", "03": "Death", "07": "Term of Employment", "28": "Initial Enrollment" } }
+  },
+  HD: {
+      1: { name: "Maintenance Type Code", codes: { "001": "Change", "021": "Add", "024": "Cancel/Term", "030": "Audit" } },
+      3: { name: "Insurance Line Code", codes: { "HLT": "Health", "DEN": "Dental", "VIS": "Vision" } }
   },
   EB: {
     1: {
@@ -643,7 +670,7 @@ export const analyzeSegmentOffline = (segment: EdiSegment): SegmentAnalysis => {
     if (definition === "-") {
       // Dates (D8 format usually)
       if (el.value.length === 8 && !isNaN(Number(el.value)) && 
-         ((el.index === 3 || el.index === 2) && (segment.tag === 'DTP' || segment.tag === 'DMG' || segment.tag === 'STC'))) {
+         ((el.index === 3 || el.index === 2) && (segment.tag === 'DTP' || segment.tag === 'DMG' || segment.tag === 'STC' || segment.tag === 'BGN'))) {
         definition = `${el.value.substring(4,6)}/${el.value.substring(6,8)}/${el.value.substring(0,4)}`;
       } 
       // Amounts
@@ -782,6 +809,15 @@ export const analyzeSegmentOffline = (segment: EdiSegment): SegmentAnalysis => {
       const id = fields.find(f => f.code === 'CLM01')?.value;
       const amt = fields.find(f => f.code === 'CLM02')?.value;
       summary = `Claim ${id} ($${amt})`;
+  }
+  else if (segment.tag === 'INS') {
+      const rel = fields.find(f => f.code === 'INS02')?.definition;
+      const type = fields.find(f => f.code === 'INS03')?.definition;
+      summary = `Member: ${rel} - ${type}`;
+  }
+  else if (segment.tag === 'HD') {
+      const type = fields.find(f => f.code === 'HD01')?.definition;
+      summary = `Coverage: ${type}`;
   }
 
   return {

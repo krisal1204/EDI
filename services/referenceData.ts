@@ -293,3 +293,20 @@ export const ICD10_CODES: Record<string, string> = {
     "Z51.11": "Encounter for antineoplastic chemotherapy",
     "Z71.3": "Dietary counseling and surveillance"
 };
+
+export const SERVICE_TYPE_CODES: Record<string, string> = {
+  "1": "Medical Care",
+  "30": "Health Benefit Plan Coverage",
+  "33": "Chiropractic",
+  "35": "Dental Care",
+  "47": "Hospital",
+  "48": "Hospital - Inpatient",
+  "50": "Hospital - Outpatient",
+  "86": "Emergency Services",
+  "88": "Pharmacy",
+  "98": "Professional Visit - Office",
+  "AL": "Vision (Optometry)",
+  "MH": "Mental Health",
+  "UC": "Urgent Care",
+  "PT": "Physical Therapy"
+};

@@ -1,274 +1,139 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
+
+const sample270 = `ISA*00*          *00*          *ZZ*SENDER         *ZZ*RECEIVER       *240101*1200*^*00501*000000001*0*T*:~GS*HS*SENDER*RECEIVER*20240101*1200*1*X*005010X279A1~ST*270*0001*005010X279A1~BHT*0022*13*10001234*20240101*1200~HL*1**20*1~NM1*PR*2*CMS MEDICARE*****PI*CMS001~HL*2*1*21*1~NM1*1P*2*GENERAL HOSPITAL*****XX*1234567890~HL*3*2*22*0~TRN*1*9300000000001*9876543210~NM1*IL*1*DOE*JOHN****MI*MBI123456789~DMG*D8*19550512~DTP*291*D8*20240101~EQ*30~SE*13*0001~GE*1*1~IEA*1*000000001~`;
+
+const sample271 = `ISA*00*          *00*          *ZZ*RECEIVER       *ZZ*SENDER         *240101*1205*^*00501*000000002*0*T*:~GS*HB*RECEIVER*SENDER*20240101*1205*2*X*005010X279A1~ST*271*0002*005010X279A1~BHT*0022*11*10001234*20240101*1205~HL*1**20*1~NM1*PR*2*CMS MEDICARE*****PI*CMS001~HL*2*1*21*1~NM1*1P*2*GENERAL HOSPITAL*****XX*1234567890~HL*3*2*22*0~TRN*2*9300000000001*9876543210~NM1*IL*1*DOE*JOHN****MI*MBI123456789~EB*1**30*MA**26~EB*C**30*MA*23*150.00~MSG*DEDUCTIBLE REMAINING~DTP*291*D8*20240101~SE*13*0002~GE*1*2~IEA*1*000000002~`;
+
+const sample834 = `ISA*00*          *00*          *ZZ*SENDER         *ZZ*RECEIVER       *240101*1000*^*00501*000000003*0*P*:~GS*BE*SENDER*RECEIVER*20240101*1000*3*X*005010X220A1~ST*834*0003*005010X220A1~BGN*00*123456*20240101*1000***2~N1*P5*ACME CORP*FI*998877665~N1*IN*AETNA*XV*60054~INS*Y*18*021*01*A***FT~REF*0F*SUB123456~REF*SY*123456789~NM1*IL*1*DOE*JOHN~DMG*D8*19800101*M~HD*024**HLT**FAM~DTP*348*D8*20240101~SE*12*0003~GE*1*3~IEA*1*000000003~`;
+
+const sample837Prof = `ISA*00*          *00*          *ZZ*SENDER         *ZZ*RECEIVER       *240101*1400*^*00501*000000004*0*P*:~GS*HC*SENDER*RECEIVER*20240101*1400*4*X*005010X222A1~ST*837*0004*005010X222A1~BHT*0019*00*000000004*20240101*1400*CH~NM1*41*2*SUBMITTER*****46*SUBID~PER*IC*CONTACT*TE*5551234567~NM1*40*2*PAYER*****46*PAYERID~HL*1**20*1~NM1*85*2*PROVIDER GROUP*****XX*1999999999~N3*123 MAIN ST~N4*AUSTIN*TX*78701~REF*EI*741234567~HL*2*1*22*0~SBR*P*18*******CI~NM1*IL*1*DOE*JOHN****MI*MEMBERID~DMG*D8*19800101*M~NM1*PR*2*PAYER NAME*****PI*PAYERID~CLM*CLM12345*150.00***11:B:1*Y*A*Y*Y~HI*ABK:R05~LX*1~SV1*HC:99213*150.00*UN*1***1~DTP*472*D8*20240101~SE*18*0004~GE*1*4~IEA*1*000000004~`;
+
+const sample837Inst = `ISA*00*          *00*          *ZZ*SENDER         *ZZ*RECEIVER       *240101*1400*^*00501*000000005*0*P*:~GS*HC*SENDER*RECEIVER*20240101*1400*5*X*005010X223A2~ST*837*0005*005010X223A2~BHT*0019*00*000000005*20240101*1400*CH~NM1*41*2*SUBMITTER*****46*SUBID~PER*IC*CONTACT*TE*5551234567~NM1*40*2*PAYER*****46*PAYERID~HL*1**20*1~NM1*85*2*HOSPITAL*****XX*1888888888~N3*456 HEALTH BLVD~N4*HOUSTON*TX*77002~REF*EI*749876543~HL*2*1*22*0~SBR*P*18*******CI~NM1*IL*1*SMITH*JANE****MI*MEMBERID2~DMG*D8*19750505*F~NM1*PR*2*PAYER NAME*****PI*PAYERID~CLM*CLM67890*5000.00***111*Y*A*Y*Y~HI*ABK:A09~LX*1~SV2*0110*HC:12345*5000.00*UN*1~DTP*472*D8*20240101~SE*18*0005~GE*1*5~IEA*1*000000005~`;
+
+const sample276 = `ISA*00*          *00*          *ZZ*SENDER         *ZZ*RECEIVER       *240101*1500*^*00501*000000006*0*T*:~GS*HR*SENDER*RECEIVER*20240101*1500*6*X*005010X212~ST*276*0006*005010X212~BHT*0010*13*000000006*20240101*1500~HL*1**20*1~NM1*PR*2*PAYER*****PI*PAYERID~HL*2*1*21*1~NM1*41*2*PROVIDER*****XX*1234567890~HL*3*2*22*0~NM1*IL*1*DOE*JOHN****MI*MEMBERID~TRN*1*CLM12345~AMT*T3*150.00~DTP*472*D8*20240101~SE*13*0006~GE*1*6~IEA*1*000000006~`;
+
+const sample277 = `ISA*00*          *00*          *ZZ*RECEIVER       *ZZ*SENDER         *240101*1505*^*00501*000000007*0*T*:~GS*HN*RECEIVER*SENDER*20240101*1505*7*X*005010X212~ST*277*0007*005010X212~BHT*0010*08*000000007*20240101*1505~HL*1**20*1~NM1*PR*2*PAYER*****PI*PAYERID~HL*2*1*21*1~NM1*41*2*PROVIDER*****XX*1234567890~HL*3*2*22*0~NM1*IL*1*DOE*JOHN****MI*MEMBERID~TRN*2*CLM12345~STC*A1:20:PR*20240101**150.00*0.00~REF*1K*999999~SE*14*0007~GE*1*7~IEA*1*000000007~`;
 
 interface Props {
-  onProcess: (edi: string) => void;
+  onProcess: (text: string) => void;
 }
 
-// Production-grade 270 Eligibility Inquiry
-const sample270 = `ISA*00*          *00*          *ZZ*SUBMITTERID    *ZZ*PAYERID        *240228*1430*^*00501*100000001*0*T*:~
-GS*HS*SUBMITTERID*PAYERID*20240228*1430*1*X*005010X279A1~
-ST*270*0001*005010X279A1~
-BHT*0022*13*REQ1234567*20240228*143000~
-HL*1**20*1~
-NM1*PR*2*ANTHEM BLUE CROSS*****PI*ANTHEM01~
-HL*2*1*21*1~
-NM1*1P*2*VALLEY MEDICAL GROUP*****XX*1999999999~
-N3*123 HEALTH AVE~
-N4*SPRINGFIELD*IL*62704~
-HL*3*2*22*0~
-TRN*1*981726354*9876543210~
-NM1*IL*1*SMITH*JONATHAN*A***MI*XJ99887766~
-N3*456 MAPLE DRIVE~
-N4*SPRINGFIELD*IL*62704~
-DMG*D8*19800515*M~
-DTP*291*D8*20240228~
-EQ*30~
-EQ*35~
-EQ*88~
-SE*19*0001~
-GE*1*1~
-IEA*1*100000001~`;
-
-// Production-grade 271 Eligibility Response
-const sample271 = `ISA*00*          *00*          *ZZ*PAYERID        *ZZ*SUBMITTERID    *240228*1431*^*00501*200000001*0*T*:~
-GS*HB*PAYERID*SUBMITTERID*20240228*1431*1*X*005010X279A1~
-ST*271*0001*005010X279A1~
-BHT*0022*11*RESP987654*20240228*143100~
-HL*1**20*1~
-NM1*PR*2*ANTHEM BLUE CROSS*****PI*ANTHEM01~
-PER*IC*MEMBER SERVICES*TE*8005551234*UR*WWW.ANTHEM.COM~
-HL*2*1*21*1~
-NM1*1P*2*VALLEY MEDICAL GROUP*****XX*1999999999~
-HL*3*2*22*0~
-TRN*2*981726354*9876543210~
-NM1*IL*1*SMITH*JONATHAN*A***MI*XJ99887766~
-N3*456 MAPLE DRIVE~
-N4*SPRINGFIELD*IL*62704~
-DMG*D8*19800515*M~
-DTP*346*D8*20240101~
-EB*1*IND*30*PO**26*******Y~
-REF*18*PPO GOLD 500~
-REF*6P*GRP12345~
-DTP*307*RD8*20240101-20241231~
-EB*C*IND*30*PO*23*1000*****N~
-MSG*CALENDAR YEAR DEDUCTIBLE - IN NETWORK~
-EB*C*IND*30*PO*23*3000*****Y~
-MSG*CALENDAR YEAR DEDUCTIBLE - OUT OF NETWORK~
-EB*G*IND*30*PO*23*5000*****N~
-MSG*OUT OF POCKET MAXIMUM - IN NETWORK~
-EB*B*IND*98*PO*27*25****Y~
-MSG*OFFICE VISIT COPAY~
-EB*B*IND*98*PO*27*50****N~
-MSG*SPECIALIST VISIT COPAY~
-EB*B*IND*UC*PO*27*75~
-MSG*URGENT CARE COPAY~
-EB*B*IND*86*PO*27*250~
-MSG*EMERGENCY ROOM COPAY (WAIVED IF ADMITTED)~
-EB*A*IND*47*PO*27*.20~
-MSG*INPATIENT HOSPITAL COINSURANCE (AFTER DEDUCTIBLE)~
-EB*1*IND*88*PO**26~
-EB*B*IND*88*PO*27*10****CA*30~
-MSG*GENERIC RX TIER 1 - 30 DAY SUPPLY~
-EB*B*IND*88*PO*27*35****CA*30~
-MSG*BRAND RX TIER 2 - 30 DAY SUPPLY~
-EB*F*IND*PT*PO*23*20****VS~
-MSG*PHYSICAL THERAPY VISITS PER YEAR~
-EB*D*IND*35*PO~
-MSG*DENTAL COVERAGE UNDER SEPARATE POLICY~
-EB*I*IND*A0*PO~
-MSG*COSMETIC PROCEDURES NOT COVERED~
-SE*36*0001~
-GE*1*1~
-IEA*1*200000001~`;
-
-// Production-grade 276 Claim Status Request
-const sample276 = `ISA*00*          *00*          *ZZ*SUBMITTERID    *ZZ*PAYERID        *240315*0900*^*00501*300000001*0*T*:~
-GS*HR*SUBMITTERID*PAYERID*20240315*0900*1*X*005010X212~
-ST*276*0001*005010X212~
-BHT*0010*13*CLMREQ001*20240315*090000~
-HL*1**20*1~
-NM1*PR*2*UNITED HEALTHCARE*****PI*UHC999~
-HL*2*1*21*1~
-NM1*41*2*CITY GENERAL HOSPITAL*****XX*1888888888~
-HL*3*2*22*1~
-NM1*IL*1*WILLIAMS*SARAH****MI*UHC123456789~
-N3*789 PINE STREET~
-N4*AUSTIN*TX*73301~
-HL*4*3*23*0~
-NM1*03*1*WILLIAMS*MICHAEL~
-DMG*D8*20150620*M~
-TRN*1*PAT20231201A*1888888888~
-AMT*T3*1500.00~
-DTP*472*D8*20231201~
-SVC*HC:99213*150.00~
-REF*6R*LINE001~
-SVC*HC:73030*250.00~
-REF*6R*LINE002~
-SE*20*0001~
-GE*1*1~
-IEA*1*300000001~`;
-
-// Production-grade 277 Claim Status Response (Complex)
-const sample277 = `ISA*00*          *00*          *ZZ*PAYERID        *ZZ*SUBMITTERID    *240315*0905*^*00501*400000001*0*T*:~
-GS*HN*PAYERID*SUBMITTERID*20240315*0905*1*X*005010X212~
-ST*277*0001*005010X212~
-BHT*0010*08*CLMRESP001*20240315*090500*RP~
-HL*1**20*1~
-NM1*PR*2*UNITED HEALTHCARE*****PI*UHC999~
-HL*2*1*21*1~
-NM1*41*2*CITY GENERAL HOSPITAL*****XX*1888888888~
-HL*3*2*22*1~
-NM1*IL*1*WILLIAMS*SARAH****MI*UHC123456789~
-HL*4*3*23*0~
-NM1*03*1*WILLIAMS*MICHAEL~
-TRN*2*CLM20240001*1888888888~
-STC*F1:20:PR*20240315*UHC001*1250.00*890.00*20240315*CHECK123456~
-REF*1K*UHC2401500099~
-REF*CK*CHECK123456~
-DTP*576*D8*20240315~
-DTP*472*D8*20240301~
-SVC*HC:99285*450.00*400.00~
-STC*F1:1:PR*20240315**450.00*400.00~
-DTP*472*D8*20240301~
-SVC*HC:71046*150.00*100.00~
-STC*F1:1:PR*20240315**150.00*100.00~
-DTP*472*D8*20240301~
-SVC*HC:85025*50.00*40.00~
-STC*F1:1:PR*20240315**50.00*40.00~
-DTP*472*D8*20240301~
-SVC*HC:72148*600.00*0.00~
-STC*F2:197:PR*20240315**600.00*0.00~
-REF*BB*AUTHREQUIRED~
-DTP*472*D8*20240301~
-SE*34*0001~
-GE*1*1~
-IEA*1*400000001~`;
-
-// 837 Professional Sample
-const sample837Prof = `ISA*00*          *00*          *ZZ*SUBMITTERID    *ZZ*PAYERID        *240320*1000*^*00501*500000001*0*P*:~
-GS*HC*SUBMITTERID*PAYERID*20240320*1000*1*X*005010X222A1~
-ST*837*0001*005010X222A1~
-BHT*0019*00*CLM2024001*20240320*1000*CH~
-NM1*41*2*DR SMITH MEDICAL*****46*SUBMITTER01~
-PER*IC*BILLING DEPT*TE*5551234567~
-NM1*40*2*BLUE SHIELD*****46*PAYER01~
-HL*1**20*1~
-NM1*85*2*DR SMITH MEDICAL*****XX*1234567890~
-N3*100 MAIN ST~
-N4*ANYTOWN*CA*90210~
-REF*EI*998877665~
-HL*2*1*22*0~
-SBR*P*18*******CI~
-NM1*IL*1*JOHNSON*ROBERT****MI*MBI123456789~
-N3*500 OAK AVE~
-N4*ANYTOWN*CA*90210~
-DMG*D8*19750615*M~
-NM1*PR*2*BLUE SHIELD*****PI*PAYER01~
-CLM*CLAIM24001*150.00***11:B:1*Y*A*Y*Y~
-HI*ABK:R05~
-LX*1~
-SV1*HC:99213*150.00*UN*1***1~
-DTP*472*D8*20240315~
-SE*23*0001~
-GE*1*1~
-IEA*1*500000001~`;
-
-// 837 Institutional Sample
-const sample837Inst = `ISA*00*          *00*          *ZZ*SUBMITTERID    *ZZ*PAYERID        *240320*1005*^*00501*600000001*0*P*:~
-GS*HC*SUBMITTERID*PAYERID*20240320*1005*1*X*005010X223A2~
-ST*837*0001*005010X223A2~
-BHT*0019*00*CLM2024002*20240320*1005*CH~
-NM1*41*2*GENERAL HOSPITAL*****46*SUBMITTER02~
-PER*IC*BUSINESS OFFICE*TE*5559876543~
-NM1*40*2*MEDICARE*****46*CMS001~
-HL*1**20*1~
-NM1*85*2*GENERAL HOSPITAL*****XX*1987654321~
-N3*200 HOSPITAL WAY~
-N4*METROPOLIS*NY*10001~
-REF*EI*112233445~
-HL*2*1*22*0~
-SBR*P*18*******MB~
-NM1*IL*1*WILLIAMS*MARY****MI*MBI987654321~
-N3*300 ELM ST~
-N4*METROPOLIS*NY*10001~
-DMG*D8*19500101*F~
-NM1*PR*2*MEDICARE*****PI*CMS001~
-CLM*CLAIM24002*2500.00***111*Y*A*Y*Y~
-HI*ABK:A09~
-LX*1~
-SV2*0450*HC:99283*2500.00*UN*1~
-DTP*472*D8*20240318~
-SE*23*0001~
-GE*1*1~
-IEA*1*600000001~`;
-
 const ButtonGroup = ({ title, children }: { title: string, children?: React.ReactNode }) => (
-  <div className="flex flex-col items-center gap-2 w-full">
-      <span className="text-[10px] font-bold text-gray-400 dark:text-slate-600 uppercase tracking-wider">{title}</span>
-      <div className="flex flex-wrap justify-center gap-2">
-          {children}
-      </div>
-  </div>
+    <div className="flex flex-col gap-2">
+        <h3 className="text-xs font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wider">{title}</h3>
+        <div className="flex flex-col gap-2">
+            {children}
+        </div>
+    </div>
 );
 
-const SampleButton = ({ label, code, onClick }: { label: string, code: string, onClick: () => void }) => (
+const SampleButton = ({ code, label, onClick }: { code: string, label: string, onClick: () => void }) => (
     <button 
-      onClick={onClick} 
-      className="group relative px-3 py-2 border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 rounded hover:bg-white dark:hover:bg-slate-800 text-gray-600 dark:text-slate-400 dark:hover:text-slate-200 text-xs font-medium transition-all shadow-sm hover:shadow-md hover:-translate-y-0.5"
+        onClick={onClick}
+        className="flex items-center justify-between px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 hover:border-brand-500 dark:hover:border-brand-500 rounded-md transition-all group text-left shadow-sm"
     >
-      <span className="font-mono font-bold text-gray-900 dark:text-slate-300 mr-1.5">{code}</span>
-      {label}
+        <span className="text-xs text-gray-600 dark:text-slate-300 font-medium">{label}</span>
+        <span className="text-[10px] bg-gray-100 dark:bg-slate-700 text-gray-500 dark:text-slate-400 px-1.5 py-0.5 rounded font-mono group-hover:bg-brand-50 dark:group-hover:bg-brand-900/30 group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">{code}</span>
     </button>
 );
 
 export const DragDropInput: React.FC<Props> = ({ onProcess }) => {
   const [text, setText] = useState('');
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    
+    const file = e.dataTransfer.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const content = ev.target?.result as string;
+        setText(content);
+        onProcess(content);
+      };
+      reader.readAsText(file);
+    }
+  }, [onProcess]);
+
+  const handleProcess = () => {
+    if (text.trim()) onProcess(text);
+  };
 
   return (
-    <div className="flex flex-col items-center justify-center h-full p-6 w-full bg-white dark:bg-slate-950 transition-colors duration-200 overflow-y-auto">
-      <div className="w-full text-center mb-8 max-w-2xl">
-        <h1 className="text-2xl font-semibold text-gray-900 dark:text-white mb-3 tracking-tight">EDI Inspector</h1>
-        <p className="text-sm text-gray-500 dark:text-slate-400 leading-relaxed">
-          Paste any standard X12 transaction (270, 271, 276, 277, 837) below to visualize, validate, and analyze the data structure. All processing is done locally in your browser.
-        </p>
-      </div>
-
-      <div className="w-full flex-1 max-w-3xl mb-8 min-h-[200px]">
-        <textarea 
-          className="w-full h-full p-6 rounded-lg border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 font-mono text-xs focus:outline-none focus:border-brand-500 dark:focus:border-brand-500 focus:ring-1 focus:ring-brand-500 resize-none text-gray-800 dark:text-slate-200 placeholder-gray-300 dark:placeholder-slate-700 transition-all shadow-sm dark:shadow-none"
-          placeholder="ISA*00*          *00*          *ZZ*SUBMITTER..."
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          spellCheck={false}
-        />
-      </div>
-
-      <div className="w-full max-w-3xl space-y-8">
-        <button 
-          onClick={() => onProcess(text)}
-          disabled={!text.trim()}
-          className="w-full py-3.5 bg-black dark:bg-brand-600 hover:bg-gray-800 dark:hover:bg-brand-500 disabled:bg-gray-100 dark:disabled:bg-slate-800 disabled:text-gray-400 dark:disabled:text-slate-600 text-white rounded-lg text-sm font-medium transition-all shadow-md transform active:scale-[0.99]"
-        >
-          Analyze Transaction
-        </button>
+    <div className="h-full flex flex-col p-8 bg-white dark:bg-slate-950 overflow-y-auto custom-scrollbar">
+      <div className="max-w-4xl mx-auto w-full flex-1 flex flex-col justify-center">
         
+        <div className="text-center mb-10">
+            <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-3 tracking-tight">X12 EDI Inspector</h2>
+            <p className="text-gray-500 dark:text-slate-400 text-lg font-light">
+                Paste your EDI content below or drop a file to instantly parse, validate, and analyze.
+            </p>
+        </div>
+
+        <div 
+          className={`
+            relative rounded-xl border-2 border-dashed transition-all duration-300 p-8 flex flex-col items-center justify-center min-h-[300px] mb-10 group
+            ${isDragging 
+              ? 'border-brand-500 bg-brand-50/50 dark:bg-brand-900/10' 
+              : 'border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 hover:border-brand-400 dark:hover:border-brand-600'
+            }
+          `}
+          onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={handleDrop}
+        >
+          <textarea
+            className="w-full h-full absolute inset-0 bg-transparent p-6 resize-none focus:outline-none font-mono text-sm text-gray-800 dark:text-slate-300 z-10 text-center placeholder-gray-400 dark:placeholder-slate-600 focus:text-left focus:placeholder-transparent transition-all"
+            placeholder="Paste X12 EDI content here..."
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            spellCheck={false}
+          />
+          
+          {!text && (
+             <div className="pointer-events-none flex flex-col items-center text-gray-400 dark:text-slate-500 group-hover:text-brand-500 dark:group-hover:text-brand-400 transition-colors">
+                <svg className="w-12 h-12 mb-4 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <span className="text-sm font-medium">Drag & Drop file or Paste Text</span>
+             </div>
+          )}
+          
+          {text && (
+             <div className="absolute bottom-4 right-4 z-20">
+                 <button 
+                    onClick={handleProcess}
+                    className="bg-black dark:bg-brand-600 text-white px-6 py-2 rounded-full font-medium shadow-lg hover:bg-gray-800 dark:hover:bg-brand-500 transition-all transform hover:scale-105"
+                 >
+                    Analyze
+                 </button>
+             </div>
+          )}
+        </div>
+
         <div className="border-t border-gray-100 dark:border-slate-800 pt-8">
-            <p className="text-center text-xs text-gray-400 dark:text-slate-500 mb-6">Or load a sample transaction to explore:</p>
+            <p className="text-center text-xs text-gray-400 dark:text-slate-500 mb-6 font-medium uppercase tracking-widest">Or load a sample transaction</p>
             
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
+                <ButtonGroup title="Enrollment">
+                    <SampleButton code="834" label="Maintenance" onClick={() => { setText(sample834); onProcess(sample834); }} />
+                </ButtonGroup>
+
                 <ButtonGroup title="Eligibility">
-                    <SampleButton code="270" label="Inquiry" onClick={() => setText(sample270)} />
-                    <SampleButton code="271" label="Response" onClick={() => setText(sample271)} />
+                    <SampleButton code="270" label="Inquiry" onClick={() => { setText(sample270); onProcess(sample270); }} />
+                    <SampleButton code="271" label="Response" onClick={() => { setText(sample271); onProcess(sample271); }} />
                 </ButtonGroup>
 
                 <ButtonGroup title="File Claims">
-                    <SampleButton code="837P" label="Professional" onClick={() => setText(sample837Prof)} />
-                    <SampleButton code="837I" label="Institutional" onClick={() => setText(sample837Inst)} />
+                    <SampleButton code="837P" label="Professional" onClick={() => { setText(sample837Prof); onProcess(sample837Prof); }} />
+                    <SampleButton code="837I" label="Institutional" onClick={() => { setText(sample837Inst); onProcess(sample837Inst); }} />
                 </ButtonGroup>
                 
                 <ButtonGroup title="Claims Status">
-                    <SampleButton code="276" label="Request" onClick={() => setText(sample276)} />
-                    <SampleButton code="277" label="Response" onClick={() => setText(sample277)} />
+                    <SampleButton code="276" label="Request" onClick={() => { setText(sample276); onProcess(sample276); }} />
+                    <SampleButton code="277" label="Response" onClick={() => { setText(sample277); onProcess(sample277); }} />
                 </ButtonGroup>
             </div>
         </div>
