@@ -33,7 +33,9 @@ const SEGMENT_DESCRIPTIONS: Record<string, string> = {
   SVC: "Service Information",
   HI: "Health Care Information Codes (Diagnosis)",
   LS: "Loop Header",
-  LE: "Loop Trailer"
+  LE: "Loop Trailer",
+  MPI: "Military Personnel Information",
+  CN1: "Contract Information"
 };
 
 const YES_NO = { "Y": "Yes", "N": "No", "U": "Unknown" };
@@ -105,7 +107,10 @@ const ELEMENT_DEFINITIONS: Record<string, Record<number, { name: string, codes?:
             "HS": "Eligibility Inquiry (270)", 
             "HB": "Eligibility Response (271)",
             "HR": "Claim Status Request (276)",
-            "HN": "Claim Status Response (277)"
+            "HN": "Claim Status Response (277)",
+            "HP": "Health Care Claim Payment/Advice (835)",
+            "HC": "Health Care Claim (837)",
+            "FA": "Functional Acknowledgment (997)"
         } 
     },
     8: { name: "Version Code", codes: { "005010X279A1": "HIPAA 5010 270/271", "005010X212": "HIPAA 5010 276/277" } }
@@ -141,7 +146,25 @@ const ELEMENT_DEFINITIONS: Record<string, Record<number, { name: string, codes?:
         "QC": "Patient",
         "HK": "Subscriber (Trace)",
         "Y2": "Managed Care Organization",
-        "41": "Submitter"
+        "41": "Submitter",
+        "40": "Receiver",
+        "00": "Other",
+        "2B": "Third-Party Administrator",
+        "36": "Employer",
+        "73": "Other Physician",
+        "77": "Service Location",
+        "82": "Rendering Provider",
+        "85": "Billing Provider",
+        "87": "Pay-to Provider",
+        "98": "Receiver",
+        "GP": "Gateway Provider",
+        "P3": "Primary Care Provider",
+        "P4": "Prior Insurance Carrier",
+        "P7": "Third Party Administrator",
+        "PRP": "Primary Payer",
+        "SEP": "Secondary Payer",
+        "TTP": "Tertiary Payer",
+        "QD": "Responsible Party"
       } 
     },
     2: { name: "Entity Type", codes: { "1": "Person", "2": "Non-Person Entity" } },
@@ -155,8 +178,46 @@ const ELEMENT_DEFINITIONS: Record<string, Record<number, { name: string, codes?:
         "XV": "CMS Plan ID",
         "24": "Employer ID",
         "34": "SSN",
-        "46": "ETIN"
+        "46": "ETIN",
+        "FA": "Facility ID",
+        "NI": "NAIC ID",
+        "PP": "Pharmacy Processor Number",
+        "SV": "Service Provider Number",
+        "91": "Assigned by Vendor",
+        "92": "Assigned by Payer"
       } 
+    }
+  },
+  PER: {
+    1: {
+        name: "Contact Function Code",
+        codes: {
+            "IC": "Information Contact",
+            "IP": "Information Provider",
+            "FQ": "Facsimile Qualifier",
+            "CX": "Payers Claim Office",
+            "BL": "Technical Department"
+        }
+    },
+    3: {
+        name: "Communication Number Qualifier",
+        codes: {
+            "TE": "Telephone",
+            "FX": "Facsimile",
+            "EM": "Email",
+            "EX": "Telephone Extension",
+            "UR": "URL"
+        }
+    },
+    5: {
+        name: "Communication Number Qualifier",
+        codes: {
+            "TE": "Telephone",
+            "FX": "Facsimile",
+            "EM": "Email",
+            "EX": "Telephone Extension",
+            "UR": "URL"
+        }
     }
   },
   TRN: {
@@ -167,13 +228,22 @@ const ELEMENT_DEFINITIONS: Record<string, Record<number, { name: string, codes?:
         "SY": "SSN", 
         "EI": "Employer ID", 
         "18": "Plan Number", 
+        "1L": "Group or Policy Number",
+        "1W": "Member ID",
+        "28": "Employee Identification Number",
+        "3H": "Case Number",
         "49": "Family Unit Number", 
         "6P": "Group Number",
+        "9A": "Purchase Order Number",
+        "9B": "Repriced Claim Ref Number",
+        "9D": "Referral Number",
         "HPI": "NPI",
         "IG": "Insurance Policy Number",
         "Q4": "Prior Authorization Number",
         "9F": "Referral Number",
         "G1": "Prior Authorization Number",
+        "G2": "Provider Commercial Number",
+        "G3": "Predetermination of Benefits ID",
         "0K": "Policy Form Identifying Number",
         "1K": "Payer Claim Number",
         "D9": "Claim Number",
@@ -181,7 +251,22 @@ const ELEMENT_DEFINITIONS: Record<string, Record<number, { name: string, codes?:
         "CK": "Check Number",
         "EO": "Submitter Identification Number",
         "F8": "Original Reference Number",
-        "EA": "Medical Record Identification Number"
+        "EA": "Medical Record Identification Number",
+        "BB": "Authorization Number",
+        "CE": "Class of Contract Code",
+        "CT": "Contract Number",
+        "EJ": "Patient Account Number",
+        "F6": "Health Insurance Claim (HIC) Number",
+        "GH": "Identification Card Serial Number",
+        "HJ": "Identity Card Number",
+        "IF": "Issue Number",
+        "N6": "Plan Network Identification Number",
+        "NQ": "Medicaid Provider Identifier",
+        "X4": "Clinical Laboratory Improvement Amendment Number",
+        "Y4": "Agency Claim Number",
+        "F5": "Medicare Claim Number",
+        "0B": "State License Number",
+        "LU": "Location Number"
     } }
   },
   DMG: {
@@ -192,22 +277,38 @@ const ELEMENT_DEFINITIONS: Record<string, Record<number, { name: string, codes?:
     1: { 
       name: "Date/Time Qualifier", 
       codes: { 
+        "007": "Effective",
+        "050": "Received",
+        "090": "Report Start",
+        "091": "Report End",
+        "102": "Issue",
+        "150": "Service Period Start",
+        "151": "Service Period End",
+        "193": "Period Start",
+        "194": "Period End",
+        "198": "Completion",
+        "290": "Coordination of Benefits",
         "291": "Plan", 
+        "292": "Benefit",
+        "295": "Primary Care Provider",
         "307": "Eligibility", 
-        "435": "Admission", 
+        "318": "Added",
+        "346": "Plan Begin",
         "348": "Benefit Begin",
         "349": "Benefit End",
         "356": "Service",
         "357": "Eligibility Begin",
         "382": "Enrollment",
-        "102": "Issue",
-        "290": "Coordination of Benefits",
+        "435": "Admission", 
         "472": "Service Date",
-        "050": "Received Date",
-        "576": "Check Date"
+        "539": "Policy Effective",
+        "540": "Policy Expiration",
+        "576": "Check Date",
+        "636": "Date of Last Update",
+        "771": "Status"
       } 
     },
-    2: { name: "Format", codes: { "D8": "Date", "RD8": "Date Range (start-end)" } }
+    2: { name: "Format", codes: { "D8": "Date", "RD8": "Date Range (start-end)", "DTS": "Date Time range" } }
   },
   EB: {
     1: {
@@ -216,8 +317,8 @@ const ELEMENT_DEFINITIONS: Record<string, Record<number, { name: string, codes?:
           "1": "Active Coverage", 
           "2": "Active - Full Risk Capitation", 
           "3": "Active - Services Capitated", 
-          "4": "Active - Services Capitated to Primary Care Physician", 
-          "5": "Active - Services Capitated to Primary Care Physician",
+          "4": "Active - Services Capitated to PCP", 
+          "5": "Active - Services Capitated to PCP",
           "6": "Inactive", 
           "7": "Inactive - Pending Eligibility Update",
           "8": "Inactive - Pending Query",
@@ -245,40 +346,129 @@ const ELEMENT_DEFINITIONS: Record<string, Record<number, { name: string, codes?:
           "V": "Cannot Process",
           "W": "Comprehensive",
           "X": "Other",
-          "Y": "Spend Down"
+          "Y": "Spend Down",
+          "Z": "Off-Site Service",
+          "CB": "Coverage Basis",
+          "MC": "Managed Care",
+          "SD": "Same Day"
         }
     },
     2: {
         name: "Coverage Level",
-        codes: { "CHD": "Children Only", "DEP": "Dependents Only", "FAM": "Family", "IND": "Individual", "SPC": "Spouse and Children", "SPO": "Spouse Only" }
+        codes: { 
+            "CHD": "Children Only", 
+            "DEP": "Dependents Only", 
+            "FAM": "Family", 
+            "IND": "Individual", 
+            "SPC": "Spouse and Children", 
+            "SPO": "Spouse Only",
+            "ECH": "Employee and Children",
+            "EMP": "Employee",
+            "ESP": "Employee and Spouse" 
+        }
     },
     3: {
         name: "Service Type",
         codes: { 
           "1": "Medical Care", 
+          "2": "Surgical",
+          "3": "Consultation",
+          "4": "Diagnostic X-Ray",
+          "5": "Diagnostic Lab",
+          "6": "Radiation Therapy",
+          "7": "Anesthesia",
+          "8": "Surgical Assistance",
+          "12": "Durable Medical Equipment",
+          "13": "Hearing",
+          "14": "Renal Supplies",
+          "18": "Durable Medical Equipment - Rental",
+          "20": "Second Surgical Opinion",
           "30": "Health Benefit Plan Coverage", 
           "33": "Chiropractic", 
           "35": "Dental Care", 
+          "40": "Oral Surgery",
+          "42": "Psychiatric - Inpatient",
+          "45": "Hospice",
           "47": "Hospital", 
           "48": "Hospital - Inpatient", 
           "50": "Hospital - Outpatient", 
+          "51": "Hospital - Emergency Accident",
+          "52": "Hospital - Emergency Medical",
+          "53": "Hospital - Ambulatory Surgical",
+          "54": "Long Term Care",
+          "60": "Home Health Care",
+          "62": "MRI/CAT Scan",
+          "65": "Newborn Care",
+          "67": "Smoking Cessation",
+          "81": "Routine Physical",
+          "82": "Family Planning",
           "86": "Emergency Services", 
           "88": "Pharmacy", 
+          "93": "Podiatry",
           "98": "Professional Visit - Office",
+          "99": "Shift Nursing",
+          "A0": "Specialty",
+          "A3": "Professional (Physician)",
+          "A4": "Psychiatric",
+          "A6": "Psychotherapy",
+          "A7": "Psychiatric - Inpatient",
+          "A8": "Psychiatric - Outpatient",
+          "AD": "Occupational Therapy",
+          "AE": "Physical Medicine",
+          "AF": "Speech Therapy",
+          "AG": "Skilled Nursing Care",
+          "AI": "Substance Abuse",
+          "AJ": "Alcoholism",
+          "AK": "Drug Addiction",
           "AL": "Vision (Optometry)",
+          "AM": "Frames",
+          "AN": "Lenses",
+          "AQ": "Mammogram/Pap Smear",
+          "AR": "Experimental Drug Therapy",
+          "B1": "Burn Care",
+          "B2": "Brand Name Prescription Drug",
+          "B3": "Generic Prescription Drug",
+          "BA": "Independent Medical Exam",
+          "BB": "Partial Hospitalization (Psychiatric)",
+          "BC": "Day Care (Psychiatric)",
+          "BF": "Pulmonary Rehabilitation",
+          "BG": "Cardiac Rehabilitation",
+          "BH": "Pediatric",
+          "BI": "Nursery",
+          "BJ": "Skin",
+          "BK": "Orthopedic",
+          "BL": "Cardiac",
+          "BM": "Lymphatic",
+          "BN": "Gastrointestinal",
+          "BP": "Endocrine",
+          "BQ": "Neurology",
+          "BR": "Eye",
+          "BS": "Invasive Procedures",
+          "BT": "Gynecological",
+          "BU": "Obstetrical",
+          "BV": "Obstetrical/Gynecological",
+          "BW": "Mail Order Prescription Drug",
+          "BY": "Physician Care - 24hr",
+          "BZ": "Nursing Service - 24hr",
+          "C1": "Gynecological",
+          "CA": "Rehabilitation",
+          "CB": "Rehabilitation - Inpatient",
+          "CC": "Rehabilitation - Outpatient",
+          "CD": "Occupational Therapy",
+          "CE": "Physical Therapy",
+          "CF": "Speech Therapy",
+          "CG": "Hospice",
+          "CH": "Outpatient Hospital Facility",
+          "DM": "DME",
           "MH": "Mental Health",
           "UC": "Urgent Care",
           "PT": "Physical Therapy",
-          "AE": "Physical Medicine",
-          "AK": "Psychotherapy",
-          "BY": "Physician Care - 24hr",
-          "DM": "DME",
-          "A0": "Specialty"
+          "RT": "Residential Treatment"
         }
     },
-    4: { name: "Insurance Type", codes: { "MA": "Medicare A", "MB": "Medicare B", "MC": "Medicaid", "CI": "Commercial", "HM": "HMO", "PO": "PPO" } },
-    6: { name: "Time Period", codes: { "26": "Total", "29": "Remaining", "6": "Hour", "7": "Day", "21": "Years", "22": "Service Year", "23": "Calendar Year", "24": "Year to Date", "25": "Contract", "32": "Lifetime" } },
-    9: { name: "Quantity Qualifier", codes: { "99": "Quantity Used", "CA": "Covered - Actual", "CE": "Covered - Estimated" } },
+    4: { name: "Insurance Type", codes: { "MA": "Medicare A", "MB": "Medicare B", "MC": "Medicaid", "CI": "Commercial", "HM": "HMO", "PO": "PPO", "QM": "Qualified Medicare Beneficiary", "TV": "Title V" } },
+    6: { name: "Time Period", codes: { "6": "Hour", "7": "Day", "13": "24 Hours", "21": "Years", "22": "Service Year", "23": "Calendar Year", "24": "Year to Date", "25": "Contract", "26": "Total", "27": "Visit", "29": "Remaining", "32": "Lifetime", "34": "Month", "35": "Week", "36": "Admission" } },
+    9: { name: "Quantity Qualifier", codes: { "99": "Quantity Used", "CA": "Covered - Actual", "CE": "Covered - Estimated", "DB": "Deductible Billed", "DY": "Days", "HS": "Hours", "VS": "Visits" } },
     11: { name: "Auth/Cert Required", codes: YES_NO },
     12: { name: "In Plan Network", codes: YES_NO }
   },
@@ -286,13 +476,21 @@ const ELEMENT_DEFINITIONS: Record<string, Record<number, { name: string, codes?:
      1: {
          name: "Service Type",
          codes: { 
-          "30": "Health Benefit Plan Coverage", 
           "1": "Medical Care",
+          "2": "Surgical",
+          "30": "Health Benefit Plan Coverage", 
           "33": "Chiropractic", 
           "35": "Dental Care", 
           "47": "Hospital", 
+          "48": "Hospital - Inpatient",
+          "50": "Hospital - Outpatient",
+          "86": "Emergency Services",
           "88": "Pharmacy", 
-          "98": "Professional Visit - Office"
+          "98": "Professional Visit - Office",
+          "AL": "Vision",
+          "MH": "Mental Health",
+          "UC": "Urgent Care",
+          "PT": "Physical Therapy"
          }
      }
   },
@@ -313,15 +511,25 @@ const ELEMENT_DEFINITIONS: Record<string, Record<number, { name: string, codes?:
           "41": "Authorization/Access Restrictions",
           "42": "Unable to Respond at Current Time",
           "43": "Invalid/Missing Provider ID",
+          "49": "Provider not enrolled",
+          "50": "Provider not active",
+          "51": "Provider not authorized",
           "62": "Patient Not Found",
-          "75": "Subscriber/Insured Not Found"
+          "64": "Invalid Patient ID",
+          "71": "Date of Birth does not match",
+          "72": "Invalid Subscriber/Insured ID",
+          "73": "Invalid/Missing Subscriber/Insured Name",
+          "74": "Invalid/Missing Subscriber/Insured Gender",
+          "75": "Subscriber/Insured Not Found",
+          "76": "Duplicate Subscriber/Insured",
+          "97": "Invalid/Missing Patient Gender"
       }}
   },
   MSG: {
       1: { name: "Free Form Message Text" }
   },
   III: {
-      1: { name: "Code List Qualifier", codes: { "ZZ": "Mutually Defined" } },
+      1: { name: "Code List Qualifier", codes: { "ZZ": "Mutually Defined", "LQ": "LOINC" } },
       2: { name: "Industry Code" }
   },
   HI: {
@@ -338,6 +546,10 @@ const ELEMENT_DEFINITIONS: Record<string, Record<number, { name: string, codes?:
       10: { name: "Health Care Code Information" },
       11: { name: "Health Care Code Information" },
       12: { name: "Health Care Code Information" }
+  },
+  PRV: {
+      1: { name: "Provider Code", codes: { "PE": "Performing", "BI": "Billing", "AT": "Attending", "RF": "Referring" } },
+      2: { name: "Reference ID Qualifier", codes: { "PXC": "Taxonomy Code" } }
   }
 };
 
