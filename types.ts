@@ -25,7 +25,7 @@ export interface EdiDocument {
   segmentTerminator: string;
   componentSeparator: string;
   raw: string;
-  transactionType: '270' | '271' | '276' | '277' | 'Unknown';
+  transactionType: '270' | '271' | '276' | '277' | '837' | 'Unknown';
 }
 
 export interface SegmentAnalysis {

@@ -4,11 +4,8 @@ interface Props {
   onProcess: (edi: string) => void;
 }
 
-export const DragDropInput: React.FC<Props> = ({ onProcess }) => {
-  const [text, setText] = useState('');
-
-  // Production-grade 270 Eligibility Inquiry
-  const sample270 = `ISA*00*          *00*          *ZZ*SUBMITTERID    *ZZ*PAYERID        *240228*1430*^*00501*100000001*0*T*:~
+// Production-grade 270 Eligibility Inquiry
+const sample270 = `ISA*00*          *00*          *ZZ*SUBMITTERID    *ZZ*PAYERID        *240228*1430*^*00501*100000001*0*T*:~
 GS*HS*SUBMITTERID*PAYERID*20240228*1430*1*X*005010X279A1~
 ST*270*0001*005010X279A1~
 BHT*0022*13*REQ1234567*20240228*143000~
@@ -32,8 +29,8 @@ SE*19*0001~
 GE*1*1~
 IEA*1*100000001~`;
 
-  // Production-grade 271 Eligibility Response
-  const sample271 = `ISA*00*          *00*          *ZZ*PAYERID        *ZZ*SUBMITTERID    *240228*1431*^*00501*200000001*0*T*:~
+// Production-grade 271 Eligibility Response
+const sample271 = `ISA*00*          *00*          *ZZ*PAYERID        *ZZ*SUBMITTERID    *240228*1431*^*00501*200000001*0*T*:~
 GS*HB*PAYERID*SUBMITTERID*20240228*1431*1*X*005010X279A1~
 ST*271*0001*005010X279A1~
 BHT*0022*11*RESP987654*20240228*143100~
@@ -84,8 +81,8 @@ SE*36*0001~
 GE*1*1~
 IEA*1*200000001~`;
 
-  // Production-grade 276 Claim Status Request
-  const sample276 = `ISA*00*          *00*          *ZZ*SUBMITTERID    *ZZ*PAYERID        *240315*0900*^*00501*300000001*0*T*:~
+// Production-grade 276 Claim Status Request
+const sample276 = `ISA*00*          *00*          *ZZ*SUBMITTERID    *ZZ*PAYERID        *240315*0900*^*00501*300000001*0*T*:~
 GS*HR*SUBMITTERID*PAYERID*20240315*0900*1*X*005010X212~
 ST*276*0001*005010X212~
 BHT*0010*13*CLMREQ001*20240315*090000~
@@ -111,8 +108,8 @@ SE*20*0001~
 GE*1*1~
 IEA*1*300000001~`;
 
-  // Production-grade 277 Claim Status Response (Complex)
-  const sample277 = `ISA*00*          *00*          *ZZ*PAYERID        *ZZ*SUBMITTERID    *240315*0905*^*00501*400000001*0*T*:~
+// Production-grade 277 Claim Status Response (Complex)
+const sample277 = `ISA*00*          *00*          *ZZ*PAYERID        *ZZ*SUBMITTERID    *240315*0905*^*00501*400000001*0*T*:~
 GS*HN*PAYERID*SUBMITTERID*20240315*0905*1*X*005010X212~
 ST*277*0001*005010X212~
 BHT*0010*08*CLMRESP001*20240315*090500*RP~
@@ -147,38 +144,133 @@ SE*34*0001~
 GE*1*1~
 IEA*1*400000001~`;
 
+// 837 Professional Sample
+const sample837Prof = `ISA*00*          *00*          *ZZ*SUBMITTERID    *ZZ*PAYERID        *240320*1000*^*00501*500000001*0*P*:~
+GS*HC*SUBMITTERID*PAYERID*20240320*1000*1*X*005010X222A1~
+ST*837*0001*005010X222A1~
+BHT*0019*00*CLM2024001*20240320*1000*CH~
+NM1*41*2*DR SMITH MEDICAL*****46*SUBMITTER01~
+PER*IC*BILLING DEPT*TE*5551234567~
+NM1*40*2*BLUE SHIELD*****46*PAYER01~
+HL*1**20*1~
+NM1*85*2*DR SMITH MEDICAL*****XX*1234567890~
+N3*100 MAIN ST~
+N4*ANYTOWN*CA*90210~
+REF*EI*998877665~
+HL*2*1*22*0~
+SBR*P*18*******CI~
+NM1*IL*1*JOHNSON*ROBERT****MI*MBI123456789~
+N3*500 OAK AVE~
+N4*ANYTOWN*CA*90210~
+DMG*D8*19750615*M~
+NM1*PR*2*BLUE SHIELD*****PI*PAYER01~
+CLM*CLAIM24001*150.00***11:B:1*Y*A*Y*Y~
+HI*ABK:R05~
+LX*1~
+SV1*HC:99213*150.00*UN*1***1~
+DTP*472*D8*20240315~
+SE*23*0001~
+GE*1*1~
+IEA*1*500000001~`;
+
+// 837 Institutional Sample
+const sample837Inst = `ISA*00*          *00*          *ZZ*SUBMITTERID    *ZZ*PAYERID        *240320*1005*^*00501*600000001*0*P*:~
+GS*HC*SUBMITTERID*PAYERID*20240320*1005*1*X*005010X223A2~
+ST*837*0001*005010X223A2~
+BHT*0019*00*CLM2024002*20240320*1005*CH~
+NM1*41*2*GENERAL HOSPITAL*****46*SUBMITTER02~
+PER*IC*BUSINESS OFFICE*TE*5559876543~
+NM1*40*2*MEDICARE*****46*CMS001~
+HL*1**20*1~
+NM1*85*2*GENERAL HOSPITAL*****XX*1987654321~
+N3*200 HOSPITAL WAY~
+N4*METROPOLIS*NY*10001~
+REF*EI*112233445~
+HL*2*1*22*0~
+SBR*P*18*******MB~
+NM1*IL*1*WILLIAMS*MARY****MI*MBI987654321~
+N3*300 ELM ST~
+N4*METROPOLIS*NY*10001~
+DMG*D8*19500101*F~
+NM1*PR*2*MEDICARE*****PI*CMS001~
+CLM*CLAIM24002*2500.00***111*Y*A*Y*Y~
+HI*ABK:A09~
+LX*1~
+SV2*0450*HC:99283*2500.00*UN*1~
+DTP*472*D8*20240318~
+SE*23*0001~
+GE*1*1~
+IEA*1*600000001~`;
+
+const ButtonGroup = ({ title, children }: { title: string, children?: React.ReactNode }) => (
+  <div className="flex flex-col items-center gap-2 w-full">
+      <span className="text-[10px] font-bold text-gray-400 dark:text-slate-600 uppercase tracking-wider">{title}</span>
+      <div className="flex flex-wrap justify-center gap-2">
+          {children}
+      </div>
+  </div>
+);
+
+const SampleButton = ({ label, code, onClick }: { label: string, code: string, onClick: () => void }) => (
+    <button 
+      onClick={onClick} 
+      className="group relative px-3 py-2 border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-900 rounded hover:bg-white dark:hover:bg-slate-800 text-gray-600 dark:text-slate-400 dark:hover:text-slate-200 text-xs font-medium transition-all shadow-sm hover:shadow-md hover:-translate-y-0.5"
+    >
+      <span className="font-mono font-bold text-gray-900 dark:text-slate-300 mr-1.5">{code}</span>
+      {label}
+    </button>
+);
+
+export const DragDropInput: React.FC<Props> = ({ onProcess }) => {
+  const [text, setText] = useState('');
+
   return (
-    <div className="flex flex-col items-center justify-center h-full p-6 w-full bg-white dark:bg-slate-950 transition-colors duration-200">
-      <div className="w-full text-center mb-8">
-        <h1 className="text-xl font-semibold text-gray-900 dark:text-white mb-2 tracking-tight">Inspect EDI</h1>
-        <p className="text-sm text-gray-400 dark:text-slate-500">
-          Supported Formats: 270, 271, 276, 277
+    <div className="flex flex-col items-center justify-center h-full p-6 w-full bg-white dark:bg-slate-950 transition-colors duration-200 overflow-y-auto">
+      <div className="w-full text-center mb-8 max-w-2xl">
+        <h1 className="text-2xl font-semibold text-gray-900 dark:text-white mb-3 tracking-tight">EDI Inspector</h1>
+        <p className="text-sm text-gray-500 dark:text-slate-400 leading-relaxed">
+          Paste any standard X12 transaction (270, 271, 276, 277, 837) below to visualize, validate, and analyze the data structure. All processing is done locally in your browser.
         </p>
       </div>
 
-      <div className="w-full flex-1 max-w-2xl mb-6">
+      <div className="w-full flex-1 max-w-3xl mb-8 min-h-[200px]">
         <textarea 
-          className="w-full h-full p-6 rounded border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 font-mono text-xs focus:outline-none focus:border-black dark:focus:border-brand-500 focus:ring-0 resize-none text-gray-800 dark:text-slate-200 placeholder-gray-300 dark:placeholder-slate-700 transition-colors custom-scrollbar shadow-sm dark:shadow-none"
-          placeholder="Paste X12 content here..."
+          className="w-full h-full p-6 rounded-lg border border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 font-mono text-xs focus:outline-none focus:border-brand-500 dark:focus:border-brand-500 focus:ring-1 focus:ring-brand-500 resize-none text-gray-800 dark:text-slate-200 placeholder-gray-300 dark:placeholder-slate-700 transition-all shadow-sm dark:shadow-none"
+          placeholder="ISA*00*          *00*          *ZZ*SUBMITTER..."
           value={text}
           onChange={(e) => setText(e.target.value)}
+          spellCheck={false}
         />
       </div>
 
-      <div className="flex flex-col items-center gap-4 w-full max-w-2xl">
+      <div className="w-full max-w-3xl space-y-8">
         <button 
           onClick={() => onProcess(text)}
           disabled={!text.trim()}
-          className="w-full py-3 bg-black dark:bg-brand-600 hover:bg-gray-800 dark:hover:bg-brand-500 disabled:bg-gray-200 dark:disabled:bg-slate-800 disabled:text-gray-400 dark:disabled:text-slate-600 text-white rounded text-sm font-medium transition-colors shadow-sm"
+          className="w-full py-3.5 bg-black dark:bg-brand-600 hover:bg-gray-800 dark:hover:bg-brand-500 disabled:bg-gray-100 dark:disabled:bg-slate-800 disabled:text-gray-400 dark:disabled:text-slate-600 text-white rounded-lg text-sm font-medium transition-all shadow-md transform active:scale-[0.99]"
         >
           Analyze Transaction
         </button>
         
-        <div className="flex flex-wrap justify-center gap-2 w-full">
-            <button onClick={() => setText(sample270)} className="px-3 py-1.5 border border-gray-200 dark:border-slate-700 rounded hover:bg-gray-50 dark:hover:bg-slate-800 text-gray-600 dark:text-slate-400 dark:hover:text-slate-200 text-xs font-medium transition-colors">Load 270</button>
-            <button onClick={() => setText(sample271)} className="px-3 py-1.5 border border-gray-200 dark:border-slate-700 rounded hover:bg-gray-50 dark:hover:bg-slate-800 text-gray-600 dark:text-slate-400 dark:hover:text-slate-200 text-xs font-medium transition-colors">Load 271</button>
-            <button onClick={() => setText(sample276)} className="px-3 py-1.5 border border-gray-200 dark:border-slate-700 rounded hover:bg-gray-50 dark:hover:bg-slate-800 text-gray-600 dark:text-slate-400 dark:hover:text-slate-200 text-xs font-medium transition-colors">Load 276</button>
-            <button onClick={() => setText(sample277)} className="px-3 py-1.5 border border-gray-200 dark:border-slate-700 rounded hover:bg-gray-50 dark:hover:bg-slate-800 text-gray-600 dark:text-slate-400 dark:hover:text-slate-200 text-xs font-medium transition-colors">Load 277</button>
+        <div className="border-t border-gray-100 dark:border-slate-800 pt-8">
+            <p className="text-center text-xs text-gray-400 dark:text-slate-500 mb-6">Or load a sample transaction to explore:</p>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <ButtonGroup title="Eligibility">
+                    <SampleButton code="270" label="Inquiry" onClick={() => setText(sample270)} />
+                    <SampleButton code="271" label="Response" onClick={() => setText(sample271)} />
+                </ButtonGroup>
+
+                <ButtonGroup title="File Claims">
+                    <SampleButton code="837P" label="Professional" onClick={() => setText(sample837Prof)} />
+                    <SampleButton code="837I" label="Institutional" onClick={() => setText(sample837Inst)} />
+                </ButtonGroup>
+                
+                <ButtonGroup title="Claims Status">
+                    <SampleButton code="276" label="Request" onClick={() => setText(sample276)} />
+                    <SampleButton code="277" label="Response" onClick={() => setText(sample277)} />
+                </ButtonGroup>
+            </div>
         </div>
       </div>
     </div>

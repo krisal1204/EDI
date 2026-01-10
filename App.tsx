@@ -8,8 +8,8 @@ import { CodeSearch } from './components/CodeSearch';
 import { Settings } from './components/Settings';
 import { parseEdi, flattenTree } from './services/ediParser';
 import { EdiDocument, EdiSegment } from './types';
-import { FormData270, FormData276, build270, build276 } from './services/ediBuilder';
-import { mapEdiToForm, mapEdiToForm276, mapEdiToBenefits, BenefitRow, mapEdiToClaimStatus, ClaimStatusRow } from './services/ediMapper';
+import { FormData270, FormData276, FormData837, build270, build276, build837 } from './services/ediBuilder';
+import { mapEdiToForm, mapEdiToForm276, mapEdiToForm837, mapEdiToBenefits, BenefitRow, mapEdiToClaimStatus, ClaimStatusRow } from './services/ediMapper';
 import { analyzeSegmentOffline } from './services/offlineAnalyzer';
 import { useAppStore } from './store/useAppStore';
 
@@ -24,7 +24,7 @@ const INITIAL_FORM_DATA: FormData270 = {
     subscriberId: 'MBI123456789',
     subscriberDob: '1955-05-12',
     serviceDate: new Date().toISOString().slice(0, 10),
-    serviceTypeCode: '30',
+    serviceTypeCodes: ['30'],
     hasDependent: false,
     dependentFirstName: 'JANE',
     dependentLastName: 'DOE',
@@ -49,6 +49,38 @@ const INITIAL_FORM_DATA_276: FormData276 = {
     serviceDate: new Date().toISOString().slice(0, 10)
 };
 
+const INITIAL_FORM_DATA_837: FormData837 = {
+    type: 'Professional',
+    billingProviderName: 'MEDICAL GROUP LLC',
+    billingProviderNpi: '1234567890',
+    billingProviderAddress: '123 HEALTH WAY',
+    billingProviderCity: 'AUSTIN',
+    billingProviderState: 'TX',
+    billingProviderZip: '78701',
+    billingTaxId: '741234567',
+    subscriberFirstName: 'JOHN',
+    subscriberLastName: 'DOE',
+    subscriberId: 'MBI123456789',
+    subscriberDob: '1980-01-01',
+    subscriberGender: 'M',
+    payerName: 'UNITED HEALTHCARE',
+    payerId: '87726',
+    claimId: 'CLM2024001',
+    totalCharge: '150.00',
+    placeOfService: '11',
+    typeOfBill: '111',
+    diagnosisCode1: 'R05',
+    diagnosisCode2: '',
+    serviceLines: [
+        {
+            procedureCode: '99213',
+            lineCharge: '150.00',
+            units: '1',
+            serviceDate: new Date().toISOString().slice(0, 10)
+        }
+    ]
+};
+
 // Empty State 270 (For Resetting on Load)
 const EMPTY_FORM_DATA_270: FormData270 = {
     payerName: '',
@@ -60,7 +92,7 @@ const EMPTY_FORM_DATA_270: FormData270 = {
     subscriberId: '',
     subscriberDob: '',
     serviceDate: '',
-    serviceTypeCode: '',
+    serviceTypeCodes: [],
     hasDependent: false,
     dependentFirstName: '',
     dependentLastName: '',
@@ -109,6 +141,7 @@ function App() {
 
   const [formData, setFormData] = useState<FormData270>(INITIAL_FORM_DATA);
   const [formData276, setFormData276] = useState<FormData276>(INITIAL_FORM_DATA_276);
+  const [formData837, setFormData837] = useState<FormData837>(INITIAL_FORM_DATA_837);
   
   const [rawEdi, setRawEdi] = useState<string>('');
   const [doc, setDoc] = useState<EdiDocument | null>(null);
@@ -119,7 +152,7 @@ function App() {
   const [copyFeedback, setCopyFeedback] = useState(false);
   
   // Track which generator is currently active (if not viewing a parsed file)
-  const [generatorMode, setGeneratorMode] = useState<'270' | '276'>('270');
+  const [generatorMode, setGeneratorMode] = useState<'270' | '276' | '837'>('270');
 
   // Resizable Sidebar State
   const [sidebarWidth, setSidebarWidth] = useState(350);
@@ -206,14 +239,16 @@ function App() {
       if (shouldMapToForm) {
         if (parsed.transactionType === '270') {
             const mappedData = mapEdiToForm(parsed);
-            // Merge mapped data with EMPTY state to avoid stale defaults
             setFormData({ ...EMPTY_FORM_DATA_270, ...mappedData });
             setGeneratorMode('270');
         } else if (parsed.transactionType === '276') {
              const mappedData = mapEdiToForm276(parsed);
-             // Merge mapped data with EMPTY state to avoid stale defaults
              setFormData276({ ...EMPTY_FORM_DATA_276, ...mappedData });
              setGeneratorMode('276');
+        } else if (parsed.transactionType === '837') {
+             const mappedData = mapEdiToForm837(parsed);
+             setFormData837({ ...INITIAL_FORM_DATA_837, ...mappedData }); // Merge with defaults to ensure valid initial state
+             setGeneratorMode('837');
         }
       }
     } catch (e) {
@@ -235,14 +270,23 @@ function App() {
     processEdi(newEdi, false);
   }
 
+  const handleForm837Change = (newData: FormData837) => {
+    setFormData837(newData);
+    const newEdi = build837(newData);
+    setRawEdi(newEdi);
+    processEdi(newEdi, false);
+  }
+
   // Handle manual switching of generator mode
-  const handleGeneratorModeChange = (mode: '270' | '276') => {
+  const handleGeneratorModeChange = (mode: '270' | '276' | '837') => {
       setGeneratorMode(mode);
       let newEdi = '';
       if (mode === '270') {
           newEdi = build270(formData);
-      } else {
+      } else if (mode === '276') {
           newEdi = build276(formData276);
+      } else {
+          newEdi = build837(formData837);
       }
       setRawEdi(newEdi);
       processEdi(newEdi, false);
@@ -251,6 +295,7 @@ function App() {
   const handleClear = () => {
     setFormData(INITIAL_FORM_DATA);
     setFormData276(INITIAL_FORM_DATA_276);
+    setFormData837(INITIAL_FORM_DATA_837);
     setRawEdi('');
     setDoc(null);
     setBenefits([]);
@@ -274,39 +319,80 @@ function App() {
   const handleFieldFocus = (fieldName: string) => {
     if (!doc) return;
     const flat = flattenTree(doc.segments);
-    
     let found: EdiSegment | undefined;
 
+    // Common NM1s
     if (['payerName', 'payerId'].includes(fieldName)) {
         found = flat.find(s => s.tag === 'NM1' && s.elements[0]?.value === 'PR');
-    } else if (['providerName', 'providerNpi'].includes(fieldName)) {
-        found = flat.find(s => s.tag === 'NM1' && (s.elements[0]?.value === '1P' || s.elements[0]?.value === '41'));
-    } else if (fieldName.startsWith('subscriber')) {
-        if (fieldName === 'subscriberDob') {
-             const subNm1Index = flat.findIndex(s => s.tag === 'NM1' && s.elements[0]?.value === 'IL');
-             if (subNm1Index !== -1) {
-                 found = flat.slice(subNm1Index).find(s => s.tag === 'DMG');
-             }
-        } else {
-            found = flat.find(s => s.tag === 'NM1' && s.elements[0]?.value === 'IL');
+    }
+    else if (['providerName', 'providerNpi'].includes(fieldName)) {
+        // 270 uses 1P, 276 uses 1P or 41, 837 uses 85 usually
+        found = flat.find(s => s.tag === 'NM1' && ['1P', '85', '41'].includes(s.elements[0]?.value));
+    }
+    else if (['billingProviderName', 'billingProviderNpi', 'billingTaxId', 'billingProviderAddress', 'billingProviderCity', 'billingProviderState'].includes(fieldName)) {
+        found = flat.find(s => s.tag === 'NM1' && s.elements[0]?.value === '85');
+        // If tax id, might be REF*EI following it
+        if (fieldName === 'billingTaxId' && found) {
+             const idx = flat.indexOf(found);
+             const ref = flat.slice(idx, idx+5).find(s => s.tag === 'REF' && s.elements[0]?.value === 'EI');
+             if (ref) found = ref;
         }
-    } else if (fieldName.startsWith('dependent')) {
-        if (['dependentDob', 'dependentGender'].includes(fieldName)) {
-             const depNm1Index = flat.findIndex(s => s.tag === 'NM1' && s.elements[0]?.value === '03');
-             if (depNm1Index !== -1) {
-                 found = flat.slice(depNm1Index).find(s => s.tag === 'DMG');
-             }
-        } else {
-            found = flat.find(s => s.tag === 'NM1' && s.elements[0]?.value === '03');
+        // Address N3
+        if (fieldName === 'billingProviderAddress' && found) {
+            const idx = flat.indexOf(found);
+            const n3 = flat.slice(idx, idx+5).find(s => s.tag === 'N3');
+            if (n3) found = n3;
         }
-    } else if (fieldName === 'serviceDate') {
-        found = flat.find(s => s.tag === 'DTP' && (s.elements[0]?.value === '291' || s.elements[0]?.value === '472'));
-    } else if (fieldName === 'claimId') {
-        found = flat.find(s => s.tag === 'TRN' && s.elements[0]?.value === '1');
-    } else if (fieldName === 'chargeAmount') {
+        // City/State N4
+        if ((fieldName === 'billingProviderCity' || fieldName === 'billingProviderState') && found) {
+            const idx = flat.indexOf(found);
+            const n4 = flat.slice(idx, idx+5).find(s => s.tag === 'N4');
+            if (n4) found = n4;
+        }
+    }
+    else if (fieldName.startsWith('subscriber')) {
+        found = flat.find(s => s.tag === 'NM1' && s.elements[0]?.value === 'IL');
+        if (fieldName === 'subscriberDob' && found) {
+             const idx = flat.indexOf(found);
+             const dmg = flat.slice(idx, idx+5).find(s => s.tag === 'DMG');
+             if (dmg) found = dmg;
+        }
+    }
+    else if (fieldName.startsWith('dependent')) {
+        found = flat.find(s => s.tag === 'NM1' && s.elements[0]?.value === '03');
+        if (fieldName === 'dependentDob' && found) {
+             const idx = flat.indexOf(found);
+             const dmg = flat.slice(idx, idx+5).find(s => s.tag === 'DMG');
+             if (dmg) found = dmg;
+        }
+    }
+    // Dates
+    else if (fieldName === 'serviceDate') {
+        // 270 (291), 276 (472)
+        found = flat.find(s => s.tag === 'DTP' && ['291', '472'].includes(s.elements[0]?.value));
+    }
+    // Claim Specific
+    else if (fieldName === 'claimId') {
+        // 276 (TRN), 837 (CLM)
+        found = flat.find(s => (s.tag === 'TRN' && s.elements[0]?.value === '1') || s.tag === 'CLM');
+    }
+    else if (fieldName === 'chargeAmount') {
         found = flat.find(s => s.tag === 'AMT' && s.elements[0]?.value === 'T3');
-    } else if (fieldName === 'serviceTypeCode') {
+    }
+    else if (fieldName === 'totalCharge') {
+        found = flat.find(s => s.tag === 'CLM');
+    }
+    else if (fieldName.startsWith('diagnosis')) {
+        found = flat.find(s => s.tag === 'HI');
+    }
+    else if (fieldName === 'serviceTypeCodes') {
         found = flat.find(s => s.tag === 'EQ');
+    }
+    else if (['placeOfService', 'typeOfBill'].includes(fieldName)) {
+        found = flat.find(s => s.tag === 'CLM');
+    }
+    else if (['procedureCode', 'lineCharge', 'units'].includes(fieldName)) {
+        found = flat.find(s => ['SV1', 'SV2'].includes(s.tag));
     }
 
     if (found) {
@@ -424,6 +510,8 @@ function App() {
                 onChange={handleFormChange}
                 formData276={formData276}
                 onChange276={handleForm276Change}
+                formData837={formData837}
+                onChange837={handleForm837Change}
                 transactionType={doc?.transactionType} 
                 generatorMode={generatorMode}
                 onSetGeneratorMode={handleGeneratorModeChange}

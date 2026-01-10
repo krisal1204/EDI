@@ -1,5 +1,5 @@
 import { EdiDocument, EdiSegment } from '../types';
-import { FormData270, FormData276 } from './ediBuilder';
+import { FormData270, FormData276, FormData837, ServiceLine837 } from './ediBuilder';
 import { getElementDefinition, getProcedureDefinition } from './offlineAnalyzer';
 
 /**
@@ -135,9 +135,9 @@ export const mapEdiToForm = (doc: EdiDocument): Partial<FormData270> => {
     data.serviceDate = formatDate(dtpSeg.elements[2]?.value);
   }
 
-  const eqSeg = segments.find(s => s.tag === 'EQ');
-  if (eqSeg) {
-    data.serviceTypeCode = eqSeg.elements[0]?.value || '30';
+  const eqSegs = segments.filter(s => s.tag === 'EQ');
+  if (eqSegs.length > 0) {
+    data.serviceTypeCodes = eqSegs.map(s => s.elements[0]?.value || '30');
   }
 
   return data;
@@ -191,6 +191,127 @@ export const mapEdiToForm276 = (doc: EdiDocument): Partial<FormData276> => {
   }
 
   return data;
+};
+
+export const mapEdiToForm837 = (doc: EdiDocument): Partial<FormData837> => {
+    const segments = flattenSegments(doc.segments);
+    const data: Partial<FormData837> = {};
+    
+    // Attempt to detect type
+    const gs = segments.find(s => s.tag === 'GS');
+    const version = gs?.elements[7]?.value;
+    if (version?.includes('223')) data.type = 'Institutional';
+    else data.type = 'Professional';
+
+    // Billing Provider (NM1*85)
+    const billing = segments.find(s => s.tag === 'NM1' && s.elements[0]?.value === '85');
+    if (billing) {
+        data.billingProviderName = billing.elements[2]?.value || '';
+        data.billingProviderNpi = billing.elements[8]?.value || '';
+        
+        const idx = segments.indexOf(billing);
+        const n3 = segments[idx + 1];
+        if (n3 && n3.tag === 'N3') data.billingProviderAddress = n3.elements[0]?.value || '';
+        const n4 = segments[idx + 2];
+        if (n4 && n4.tag === 'N4') {
+            data.billingProviderCity = n4.elements[0]?.value || '';
+            data.billingProviderState = n4.elements[1]?.value || '';
+            data.billingProviderZip = n4.elements[2]?.value || '';
+        }
+        const ref = segments.slice(idx, idx+5).find(s => s.tag === 'REF' && s.elements[0]?.value === 'EI');
+        if (ref) data.billingTaxId = ref.elements[1]?.value || '';
+    }
+
+    // Subscriber (NM1*IL)
+    const sub = segments.find(s => s.tag === 'NM1' && s.elements[0]?.value === 'IL');
+    if (sub) {
+        data.subscriberLastName = sub.elements[2]?.value || '';
+        data.subscriberFirstName = sub.elements[3]?.value || '';
+        data.subscriberId = sub.elements[8]?.value || '';
+        
+        const idx = segments.indexOf(sub);
+        const dmg = segments.slice(idx, idx+5).find(s => s.tag === 'DMG');
+        if (dmg) {
+            data.subscriberDob = formatDate(dmg.elements[1]?.value);
+            data.subscriberGender = dmg.elements[2]?.value || '';
+        }
+    }
+
+    // Payer (NM1*PR) - usually inside Loop 2010BB (after Subscriber)
+    // Finding second PR NM1 or one after subscriber
+    const subIndex = sub ? segments.indexOf(sub) : 0;
+    const payer = segments.slice(subIndex).find(s => s.tag === 'NM1' && s.elements[0]?.value === 'PR');
+    if (payer) {
+        data.payerName = payer.elements[2]?.value || '';
+        data.payerId = payer.elements[8]?.value || '';
+    }
+
+    // Claim (CLM)
+    const clm = segments.find(s => s.tag === 'CLM');
+    if (clm) {
+        data.claimId = clm.elements[0]?.value || '';
+        data.totalCharge = clm.elements[1]?.value || '';
+        
+        // CLM05 is composite
+        const comp = clm.elements[4]?.value || '';
+        const parts = comp.split(':');
+        
+        if (data.type === 'Professional') {
+            data.placeOfService = parts[0] || '';
+        } else {
+            data.typeOfBill = parts[0] || '';
+        }
+    }
+
+    // HI (Diagnosis)
+    const hi = segments.find(s => s.tag === 'HI');
+    if (hi) {
+        const diag1 = hi.elements[0]?.value || ''; // e.g., ABK:I10
+        data.diagnosisCode1 = diag1.split(':')[1] || '';
+        const diag2 = hi.elements[1]?.value;
+        if (diag2) data.diagnosisCode2 = diag2.split(':')[1] || '';
+    }
+
+    // Service Lines (Loop 2400)
+    data.serviceLines = [];
+    
+    // Simple Loop finding: iterate all segments, if LX found, read next SV1/SV2/DTP
+    for (let i = 0; i < segments.length; i++) {
+        const seg = segments[i];
+        if (seg.tag === 'LX') {
+            const line: ServiceLine837 = {
+                procedureCode: '',
+                lineCharge: '',
+                units: '',
+                serviceDate: ''
+            };
+            
+            // Scan forward until next LX or SE
+            let j = i + 1;
+            while(j < segments.length) {
+                const next = segments[j];
+                if (next.tag === 'LX' || next.tag === 'SE') break;
+                
+                if (next.tag === 'SV1') {
+                    const comp = next.elements[0]?.value || ''; // HC:99213
+                    line.procedureCode = comp.split(':')[1] || comp;
+                    line.lineCharge = next.elements[1]?.value || '';
+                    line.units = next.elements[3]?.value || '';
+                } else if (next.tag === 'SV2') {
+                    line.procedureCode = next.elements[0]?.value || '';
+                    line.lineCharge = next.elements[2]?.value || '';
+                    line.units = next.elements[4]?.value || '';
+                } else if (next.tag === 'DTP' && next.elements[0]?.value === '472') {
+                    line.serviceDate = formatDate(next.elements[2]?.value);
+                }
+                
+                j++;
+            }
+            data.serviceLines.push(line);
+        }
+    }
+
+    return data;
 };
 
 export const mapEdiToBenefits = (doc: EdiDocument): BenefitRow[] => {

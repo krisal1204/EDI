@@ -35,7 +35,14 @@ const SEGMENT_DESCRIPTIONS: Record<string, string> = {
   LS: "Loop Header",
   LE: "Loop Trailer",
   MPI: "Military Personnel Information",
-  CN1: "Contract Information"
+  CN1: "Contract Information",
+  CLM: "Claim Information",
+  SV1: "Professional Service",
+  SV2: "Institutional Service",
+  SBR: "Subscriber Information",
+  PAT: "Patient Information",
+  LX: "Service Line Number",
+  CUR: "Foreign Currency Information"
 };
 
 const YES_NO = { "Y": "Yes", "N": "No", "U": "Unknown" };
@@ -116,9 +123,9 @@ const ELEMENT_DEFINITIONS: Record<string, Record<number, { name: string, codes?:
     8: { name: "Version Code", codes: { "005010X279A1": "HIPAA 5010 270/271", "005010X212": "HIPAA 5010 276/277" } }
   },
   BHT: {
-    1: { name: "Hierarchical Structure Code", codes: { "0022": "Info Source -> Info Receiver -> Subscriber -> Dependent", "0010": "Information Source, Receiver, Provider, Subscriber, Dependent" } },
+    1: { name: "Hierarchical Structure Code", codes: { "0022": "Info Source -> Info Receiver -> Subscriber -> Dependent", "0010": "Information Source, Receiver, Provider, Subscriber, Dependent", "0019": "Info Source, Receiver, Provider, Subscriber, Dependent (Claim)" } },
     2: { name: "Purpose Code", codes: { "13": "Request", "11": "Response", "01": "Cancellation", "00": "Original", "08": "Status" } },
-    6: { name: "Transaction Type Code", codes: { "RT": "Real Time", "RP": "Reporting" } }
+    6: { name: "Transaction Type Code", codes: { "RT": "Real Time", "RP": "Reporting", "CH": "Chargeable" } }
   },
   HL: {
     3: { 
@@ -550,6 +557,39 @@ const ELEMENT_DEFINITIONS: Record<string, Record<number, { name: string, codes?:
   PRV: {
       1: { name: "Provider Code", codes: { "PE": "Performing", "BI": "Billing", "AT": "Attending", "RF": "Referring" } },
       2: { name: "Reference ID Qualifier", codes: { "PXC": "Taxonomy Code" } }
+  },
+  CLM: {
+      1: { name: "Claim Submitter Identifier" },
+      2: { name: "Total Claim Charge Amount" },
+      5: { name: "Place of Service / Type of Bill" }, // Composite
+      6: { name: "Provider Signature on File", codes: YES_NO },
+      7: { name: "Assignment Accept", codes: { "A": "Assigned", "B": "Assigned on Clinical Lab", "C": "Not Assigned" } },
+      8: { name: "Benefits Assignment Cert", codes: YES_NO },
+      9: { name: "Release of Information", codes: YES_NO }
+  },
+  SV1: {
+      1: { name: "Composite Medical Procedure" },
+      2: { name: "Line Item Charge Amount" },
+      3: { name: "Unit Qualifier", codes: { "UN": "Units", "MJ": "Minutes" } },
+      4: { name: "Service Unit Count" }
+  },
+  SV2: {
+      1: { name: "Revenue Code" },
+      2: { name: "Composite Medical Procedure" },
+      3: { name: "Line Item Charge Amount" },
+      4: { name: "Unit Qualifier", codes: { "UN": "Units", "DA": "Days" } },
+      5: { name: "Service Unit Count" }
+  },
+  SBR: {
+      1: { name: "Payer Responsibility Code", codes: { "P": "Primary", "S": "Secondary", "T": "Tertiary" } },
+      2: { name: "Individual Relationship Code", codes: { "18": "Self", "01": "Spouse", "19": "Child" } },
+      9: { name: "Claim Filing Indicator Code", codes: { "CI": "Commercial Insurance", "MB": "Medicare Part B", "MA": "Medicare Part A", "MC": "Medicaid" } }
+  },
+  PAT: {
+      1: { name: "Individual Relationship Code" }
+  },
+  LX: {
+      1: { name: "Assigned Number" }
   }
 };
 
@@ -618,6 +658,20 @@ export const analyzeSegmentOffline = (segment: EdiSegment): SegmentAnalysis => {
               definition = getProcedureDefinition(parts[1]);
           }
       }
+      // SV1 Procedure Code lookup (Prof)
+      else if (segment.tag === 'SV1' && el.index === 1) {
+          const parts = el.value.split(':');
+          // SV1:01 is Composite (HC:Code)
+          const code = parts.length > 1 ? parts[1] : parts[0];
+          definition = getProcedureDefinition(code);
+      }
+      // SV2 Procedure Code lookup (Inst)
+      else if (segment.tag === 'SV2' && el.index === 2) {
+          // SV2:02 is Composite
+          const parts = el.value.split(':');
+          const code = parts.length > 1 ? parts[1] : parts[0];
+          definition = getProcedureDefinition(code);
+      }
 
       // HI Diagnosis Code Lookup (Composite Element)
       else if (segment.tag === 'HI') {
@@ -634,6 +688,15 @@ export const analyzeSegmentOffline = (segment: EdiSegment): SegmentAnalysis => {
               else if (qual === 'BJ') qualDesc = 'Admitting Diag';
               
               definition = `${qualDesc}: ${diagDesc}`;
+          }
+      }
+      // CLM05 Place of Service (Prof) or Type of Bill (Inst)
+      else if (segment.tag === 'CLM' && el.index === 5) {
+          const parts = el.value.split(':');
+          if (parts[0]) {
+             // Heuristic: If 3 digits, probably TOB. If 2, probably POS.
+             if (parts[0].length === 3) definition = `Type of Bill: ${parts[0]}`;
+             else definition = `Place of Service: ${parts[0]}`;
           }
       }
     }
@@ -714,6 +777,11 @@ export const analyzeSegmentOffline = (segment: EdiSegment): SegmentAnalysis => {
       const diag1 = fields[0]?.definition;
       if (diag1 && diag1 !== '-') summary = `Diagnoses: ${diag1.split(':')[1]}...`;
       else summary = "Diagnoses Information";
+  }
+  else if (segment.tag === 'CLM') {
+      const id = fields.find(f => f.code === 'CLM01')?.value;
+      const amt = fields.find(f => f.code === 'CLM02')?.value;
+      summary = `Claim ${id} ($${amt})`;
   }
 
   return {
