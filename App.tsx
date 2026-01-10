@@ -189,7 +189,7 @@ function App() {
   const [generatorMode, setGeneratorMode] = useState<'270' | '276' | '837' | '834'>('270');
 
   // Resizable Sidebar State
-  const [sidebarWidth, setSidebarWidth] = useState(350);
+  const [sidebarWidth, setSidebarWidth] = useState(450);
   const [isResizing, setIsResizing] = useState(false);
   const [lastTransactionType, setLastTransactionType] = useState<string>('Unknown');
 
@@ -249,7 +249,7 @@ function App() {
           if (parsed.transactionType === '271' || parsed.transactionType === '277') {
               setSidebarWidth(Math.min(550, maxWidth)); 
           } else {
-              setSidebarWidth(Math.min(350, maxWidth)); 
+              setSidebarWidth(Math.min(450, maxWidth)); 
           }
           setLastTransactionType(parsed.transactionType);
       }
@@ -349,7 +349,7 @@ function App() {
     setBenefits([]);
     setClaims([]);
     setViewMode('inspector');
-    setSidebarWidth(350); 
+    setSidebarWidth(450); 
     setLastTransactionType('Unknown');
     setGeneratorMode('270');
     setJsonExpandMode('auto');
