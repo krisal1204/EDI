@@ -346,6 +346,44 @@ export const EdiGenerator: React.FC<Props> = ({
                     </div>
                     )}
                 </div>
+
+                <div>
+                    <h3 className="text-xs font-semibold text-gray-900 dark:text-slate-200 mb-4 pb-2 border-b border-gray-100 dark:border-slate-800">Inquiry Details</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                        <InputGroup label="Service Date">
+                            <TextInput type="date" name="serviceDate" ref={setRef('serviceDate')} onFocus={() => handleFocus('serviceDate')} value={formData.serviceDate} onChange={handleChange270} isActive={activeFields.includes('serviceDate')} />
+                        </InputGroup>
+                        <InputGroup label="Service Type">
+                            <select 
+                                name="serviceTypeCode"
+                                value={formData.serviceTypeCode}
+                                onChange={handleChange270}
+                                ref={setRef('serviceTypeCode')}
+                                onFocus={() => handleFocus('serviceTypeCode')}
+                                className={`w-full px-3 py-2 border rounded-sm text-sm focus:outline-none transition-colors dark:bg-slate-900 dark:text-white
+                                  ${activeFields.includes('serviceTypeCode') 
+                                    ? 'bg-blue-50 border-blue-500 ring-1 ring-blue-500 shadow-sm dark:bg-blue-900/30 dark:border-blue-500' 
+                                    : 'bg-white border-gray-200 focus:border-black dark:border-slate-700 dark:focus:border-slate-500'}
+                                `}
+                            >
+                                <option value="30">30 - Health Benefit Plan Coverage</option>
+                                <option value="1">1 - Medical Care</option>
+                                <option value="33">33 - Chiropractic</option>
+                                <option value="35">35 - Dental Care</option>
+                                <option value="47">47 - Hospital</option>
+                                <option value="48">48 - Hospital - Inpatient</option>
+                                <option value="50">50 - Hospital - Outpatient</option>
+                                <option value="86">86 - Emergency Services</option>
+                                <option value="88">88 - Pharmacy</option>
+                                <option value="98">98 - Professional Visit - Office</option>
+                                <option value="AL">AL - Vision (Optometry)</option>
+                                <option value="MH">MH - Mental Health</option>
+                                <option value="UC">UC - Urgent Care</option>
+                                <option value="PT">PT - Physical Therapy</option>
+                            </select>
+                        </InputGroup>
+                    </div>
+                </div>
                 </>
             )}
 
