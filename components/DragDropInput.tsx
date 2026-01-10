@@ -202,6 +202,36 @@ SE*23*0001~
 GE*1*1~
 IEA*1*600000001~`;
 
+// 834 Enrollment Sample
+const sample834 = `ISA*00*          *00*          *ZZ*SUBMITTERID    *ZZ*PAYERID        *240401*1000*^*00501*700000001*0*P*:~
+GS*BE*SUBMITTERID*PAYERID*20240401*1000*1*X*005010X220A1~
+ST*834*0001*005010X220A1~
+BGN*00*700000001*20240401*1000***2~
+N1*P5*ACME CORP*FI*998877665~
+N1*IN*AETNA*XV*60054~
+INS*Y*18*021*01*A***FT~
+REF*0F*SUB123456~
+REF*SY*123456789~
+DTP*356*D8*20240401~
+NM1*IL*1*DOE*JOHN****34*123456789~
+PER*IP**TE*5551234567~
+N3*123 MAIN ST~
+N4*AUSTIN*TX*78701~
+DMG*D8*19800101*M~
+HD*024**HLT~
+DTP*348*D8*20240401~
+INS*N*19*021*01*A***FT~
+REF*0F*SUB123456~
+REF*SY*987654321~
+DTP*356*D8*20240401~
+NM1*IL*1*DOE*JANE~
+DMG*D8*20100515*F~
+HD*024**HLT~
+DTP*348*D8*20240401~
+SE*24*0001~
+GE*1*1~
+IEA*1*700000001~`;
+
 const ButtonGroup = ({ title, children }: { title: string, children?: React.ReactNode }) => (
   <div className="flex flex-col items-center gap-2 w-full">
       <span className="text-[10px] font-bold text-gray-400 dark:text-slate-600 uppercase tracking-wider">{title}</span>
@@ -255,7 +285,7 @@ export const DragDropInput: React.FC<Props> = ({ onProcess }) => {
         <div className="border-t border-gray-100 dark:border-slate-800 pt-8">
             <p className="text-center text-xs text-gray-400 dark:text-slate-500 mb-6">Or load a sample transaction to explore:</p>
             
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 <ButtonGroup title="Eligibility">
                     <SampleButton code="270" label="Inquiry" onClick={() => setText(sample270)} />
                     <SampleButton code="271" label="Response" onClick={() => setText(sample271)} />
@@ -269,6 +299,10 @@ export const DragDropInput: React.FC<Props> = ({ onProcess }) => {
                 <ButtonGroup title="Claims Status">
                     <SampleButton code="276" label="Request" onClick={() => setText(sample276)} />
                     <SampleButton code="277" label="Response" onClick={() => setText(sample277)} />
+                </ButtonGroup>
+
+                <ButtonGroup title="Enrollment">
+                    <SampleButton code="834" label="Maintenance" onClick={() => setText(sample834)} />
                 </ButtonGroup>
             </div>
         </div>

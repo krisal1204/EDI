@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { FormData270, FormData276, FormData837, ServiceLine837 } from '../services/ediBuilder';
+import { FormData270, FormData276, FormData837, FormData834, ServiceLine837, Member834 } from '../services/ediBuilder';
 import { BenefitRow, ClaimStatusRow } from '../services/ediMapper';
 import { EdiSegment } from '../types';
 import { BenefitTable } from './BenefitTable';
@@ -17,11 +17,14 @@ interface Props {
   formData837: FormData837;
   onChange837: (data: FormData837) => void;
 
+  formData834: FormData834;
+  onChange834: (data: FormData834) => void;
+
   transactionType?: string; // from parser (270, 271, 276, 277, 837)
   
   // For forcing generator mode when manual
-  generatorMode: '270' | '276' | '837';
-  onSetGeneratorMode: (mode: '270' | '276' | '837') => void;
+  generatorMode: '270' | '276' | '837' | '834';
+  onSetGeneratorMode: (mode: '270' | '276' | '837' | '834') => void;
 
   benefits?: BenefitRow[];
   claims?: ClaimStatusRow[];
@@ -158,6 +161,8 @@ export const EdiGenerator: React.FC<Props> = ({
     onChange276,
     formData837,
     onChange837,
+    formData834,
+    onChange834,
     transactionType, 
     generatorMode,
     onSetGeneratorMode,
@@ -173,7 +178,7 @@ export const EdiGenerator: React.FC<Props> = ({
   const isResponse = is271 || is277;
 
   // If parsed type exists and matches a generator, use it, otherwise use manual mode
-  const activeMode = (['270', '276', '837'].includes(transactionType || '')) ? transactionType as '270' | '276' | '837' : generatorMode;
+  const activeMode = (['270', '276', '837', '834'].includes(transactionType || '')) ? transactionType as '270' | '276' | '837' | '834' : generatorMode;
 
   const [view, setView] = useState<'form' | 'table'>('table');
   const [isAiLoading, setIsAiLoading] = useState(false);
@@ -270,9 +275,44 @@ export const EdiGenerator: React.FC<Props> = ({
     }
   };
 
+  // 834 Handlers
+  const handleChange834 = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+      const { name, value } = e.target;
+      onChange834({ ...formData834, [name]: value });
+  };
+
+  const handleChangeSubscriber834 = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+      const { name, value } = e.target;
+      onChange834({ ...formData834, subscriber: { ...formData834.subscriber, [name]: value } });
+  };
+
+  const handleAddDependent834 = () => {
+      const newDep: Member834 = {
+          id: '',
+          firstName: '',
+          lastName: formData834.subscriber.lastName,
+          ssn: '',
+          dob: '',
+          gender: '',
+          relationship: '19' // Child
+      };
+      onChange834({ ...formData834, dependents: [...formData834.dependents, newDep] });
+  };
+
+  const handleRemoveDependent834 = (index: number) => {
+      const newDeps = formData834.dependents.filter((_, i) => i !== index);
+      onChange834({ ...formData834, dependents: newDeps });
+  };
+
+  const handleChangeDependent834 = (index: number, field: keyof Member834, value: string) => {
+      const newDeps = [...formData834.dependents];
+      newDeps[index] = { ...newDeps[index], [field]: value };
+      onChange834({ ...formData834, dependents: newDeps });
+  };
+
   const handleAiAutofill = async () => {
-    if (activeMode === '837') {
-        alert("AI Generation for 837 is coming soon.");
+    if (activeMode === '837' || activeMode === '834') {
+        alert(`AI Generation for ${activeMode} is coming soon.`);
         return;
     }
 
@@ -338,6 +378,14 @@ export const EdiGenerator: React.FC<Props> = ({
     if (tag === 'N3') return ['billingProviderAddress'];
     if (tag === 'N4') return ['billingProviderCity', 'billingProviderState'];
     if (tag === 'SV1' || tag === 'SV2' || tag === 'LX') return ['procedureCode', 'lineCharge', 'units'];
+    
+    // 834 Specific Mappings
+    if (tag === 'INS') return ['maintenanceType', 'maintenanceReason'];
+    if (tag === 'HD') return ['benefitStatus'];
+    if (tag === 'N1') {
+        if (el1 === 'P5') return ['sponsorName', 'sponsorTaxId'];
+        if (el1 === 'IN') return ['payerName', 'payerId'];
+    }
 
     return [];
   }, [selectedSegment]);
@@ -368,15 +416,16 @@ export const EdiGenerator: React.FC<Props> = ({
                     <>
                         <select 
                             value={activeMode}
-                            onChange={(e) => onSetGeneratorMode(e.target.value as '270' | '276' | '837')}
+                            onChange={(e) => onSetGeneratorMode(e.target.value as '270' | '276' | '837' | '834')}
                             className="text-sm font-semibold text-gray-900 dark:text-white bg-transparent border-none focus:ring-0 cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-800 rounded px-1 -ml-1 py-1"
                         >
                             <option value="270" className="text-black dark:text-white dark:bg-slate-900">Eligibility (270)</option>
                             <option value="837" className="text-black dark:text-white dark:bg-slate-900">File Claim (837)</option>
                             <option value="276" className="text-black dark:text-white dark:bg-slate-900">Claim Status (276)</option>
+                            <option value="834" className="text-black dark:text-white dark:bg-slate-900">Enrollment (834)</option>
                         </select>
                         
-                        {activeMode !== '837' && (
+                        {(activeMode !== '837' && activeMode !== '834') && (
                             <button 
                                 onClick={handleAiAutofill}
                                 disabled={isAiLoading}
@@ -421,6 +470,160 @@ export const EdiGenerator: React.FC<Props> = ({
 
             <div className={`space-y-8 ${isResponse ? 'opacity-60 pointer-events-none' : ''}`}>
             
+            {/* 834 Generator Form */}
+            {activeMode === '834' && (
+                <>
+                <div>
+                    <h3 className="text-xs font-semibold text-gray-900 dark:text-slate-200 mb-4 pb-2 border-b border-gray-100 dark:border-slate-800">Sponsor & Payer</h3>
+                    <InputGroup label="Plan Sponsor (Employer)">
+                        <TextInput name="sponsorName" ref={setRef('sponsorName')} onFocus={() => handleFocus('sponsorName')} value={formData834.sponsorName} onChange={handleChange834} isActive={activeFields.includes('sponsorName')} />
+                    </InputGroup>
+                    <div className="grid grid-cols-2 gap-4">
+                        <InputGroup label="Sponsor Tax ID">
+                            <TextInput name="sponsorTaxId" ref={setRef('sponsorTaxId')} onFocus={() => handleFocus('sponsorTaxId')} value={formData834.sponsorTaxId} onChange={handleChange834} isActive={activeFields.includes('sponsorTaxId')} />
+                        </InputGroup>
+                        <InputGroup label="Payer Name">
+                            <TextInput name="payerName" ref={setRef('payerName')} onFocus={() => handleFocus('payerName')} value={formData834.payerName} onChange={handleChange834} isActive={activeFields.includes('payerName')} />
+                        </InputGroup>
+                    </div>
+                </div>
+
+                <div>
+                    <h3 className="text-xs font-semibold text-gray-900 dark:text-slate-200 mb-4 pb-2 border-b border-gray-100 dark:border-slate-800">Enrollment Details</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                        <InputGroup label="Maintenance Type">
+                            <select 
+                                name="maintenanceType" 
+                                value={formData834.maintenanceType} 
+                                onChange={handleChange834}
+                                className={`w-full px-3 py-2 border rounded-sm text-sm dark:bg-slate-900 dark:text-white dark:border-slate-700
+                                    ${activeFields.includes('maintenanceType') ? 'ring-1 ring-blue-500 border-blue-500' : 'border-gray-200'}
+                                `}
+                                ref={setRef('maintenanceType')}
+                                onFocus={() => handleFocus('maintenanceType')}
+                            >
+                                <option value="021">021 - Add</option>
+                                <option value="001">001 - Change</option>
+                                <option value="024">024 - Terminate</option>
+                                <option value="030">030 - Audit</option>
+                            </select>
+                        </InputGroup>
+                        <InputGroup label="Reason">
+                            <select 
+                                name="maintenanceReason" 
+                                value={formData834.maintenanceReason} 
+                                onChange={handleChange834}
+                                className={`w-full px-3 py-2 border rounded-sm text-sm dark:bg-slate-900 dark:text-white dark:border-slate-700
+                                    ${activeFields.includes('maintenanceReason') ? 'ring-1 ring-blue-500 border-blue-500' : 'border-gray-200'}
+                                `}
+                                ref={setRef('maintenanceReason')}
+                                onFocus={() => handleFocus('maintenanceReason')}
+                            >
+                                <option value="01">01 - Divorce</option>
+                                <option value="02">02 - Birth</option>
+                                <option value="03">03 - Death</option>
+                                <option value="07">07 - Termination of Employment</option>
+                                <option value="28">28 - Initial Enrollment</option>
+                            </select>
+                        </InputGroup>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <InputGroup label="Benefit Status">
+                             <select 
+                                name="benefitStatus" 
+                                value={formData834.benefitStatus} 
+                                onChange={handleChange834}
+                                className={`w-full px-3 py-2 border rounded-sm text-sm dark:bg-slate-900 dark:text-white dark:border-slate-700
+                                    ${activeFields.includes('benefitStatus') ? 'ring-1 ring-blue-500 border-blue-500' : 'border-gray-200'}
+                                `}
+                                ref={setRef('benefitStatus')}
+                                onFocus={() => handleFocus('benefitStatus')}
+                            >
+                                <option value="024">024 - Active</option>
+                                <option value="001">001 - Cancelled</option>
+                            </select>
+                        </InputGroup>
+                        <InputGroup label="Effective Date">
+                            <TextInput type="date" name="planEffectiveDate" value={formData834.planEffectiveDate} onChange={handleChange834} ref={setRef('planEffectiveDate')} onFocus={() => handleFocus('planEffectiveDate')} isActive={activeFields.includes('planEffectiveDate')} />
+                        </InputGroup>
+                    </div>
+                </div>
+
+                <div>
+                    <h3 className="text-xs font-semibold text-gray-900 dark:text-slate-200 mb-4 pb-2 border-b border-gray-100 dark:border-slate-800">Subscriber</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                        <InputGroup label="First Name">
+                            <TextInput name="firstName" value={formData834.subscriber.firstName} onChange={handleChangeSubscriber834} />
+                        </InputGroup>
+                        <InputGroup label="Last Name">
+                            <TextInput name="lastName" value={formData834.subscriber.lastName} onChange={handleChangeSubscriber834} />
+                        </InputGroup>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <InputGroup label="Member ID (Ref)">
+                            <TextInput name="id" value={formData834.subscriber.id} onChange={handleChangeSubscriber834} />
+                        </InputGroup>
+                        <InputGroup label="SSN">
+                            <TextInput name="ssn" value={formData834.subscriber.ssn} onChange={handleChangeSubscriber834} />
+                        </InputGroup>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <InputGroup label="DOB">
+                            <TextInput type="date" name="dob" value={formData834.subscriber.dob} onChange={handleChangeSubscriber834} />
+                        </InputGroup>
+                        <InputGroup label="Gender">
+                            <select 
+                                name="gender" 
+                                value={formData834.subscriber.gender} 
+                                onChange={handleChangeSubscriber834}
+                                className="w-full px-3 py-2 border border-gray-200 rounded-sm text-sm dark:bg-slate-900 dark:text-white dark:border-slate-700"
+                            >
+                                <option value="M">Male</option>
+                                <option value="F">Female</option>
+                                <option value="U">Unknown</option>
+                            </select>
+                        </InputGroup>
+                    </div>
+                </div>
+
+                <div>
+                     <div className="flex justify-between items-center mb-4 pb-2 border-b border-gray-100 dark:border-slate-800">
+                        <h3 className="text-xs font-semibold text-gray-900 dark:text-slate-200">Dependents</h3>
+                        <button onClick={handleAddDependent834} className="text-[10px] bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-gray-900 dark:text-white px-2 py-1 rounded transition-colors">+ Add Dependent</button>
+                     </div>
+                     
+                     <div className="space-y-4">
+                        {formData834.dependents.map((dep, idx) => (
+                            <div key={idx} className="bg-gray-50 dark:bg-slate-800/50 rounded-lg p-3 border border-gray-100 dark:border-slate-800 relative group">
+                                <button 
+                                    onClick={() => handleRemoveDependent834(idx)}
+                                    className="absolute top-2 right-2 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                >
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                </button>
+                                <div className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest mb-2">Dependent {idx + 1}</div>
+                                <div className="grid grid-cols-2 gap-3 mb-3">
+                                    <TextInput placeholder="First Name" value={dep.firstName} onChange={(e) => handleChangeDependent834(idx, 'firstName', e.target.value)} />
+                                    <TextInput placeholder="Last Name" value={dep.lastName} onChange={(e) => handleChangeDependent834(idx, 'lastName', e.target.value)} />
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <TextInput type="date" value={dep.dob} onChange={(e) => handleChangeDependent834(idx, 'dob', e.target.value)} />
+                                    <select 
+                                        value={dep.relationship} 
+                                        onChange={(e) => handleChangeDependent834(idx, 'relationship', e.target.value)}
+                                        className="w-full px-3 py-2 border border-gray-200 rounded-sm text-sm dark:bg-slate-900 dark:text-white dark:border-slate-700"
+                                    >
+                                        <option value="01">Spouse</option>
+                                        <option value="19">Child</option>
+                                    </select>
+                                </div>
+                            </div>
+                        ))}
+                     </div>
+                </div>
+                </>
+            )}
+
             {/* 837 Generator Form */}
             {activeMode === '837' && (
                 <>

@@ -8,8 +8,8 @@ import { CodeSearch } from './components/CodeSearch';
 import { Settings } from './components/Settings';
 import { parseEdi, flattenTree } from './services/ediParser';
 import { EdiDocument, EdiSegment } from './types';
-import { FormData270, FormData276, FormData837, build270, build276, build837 } from './services/ediBuilder';
-import { mapEdiToForm, mapEdiToForm276, mapEdiToForm837, mapEdiToBenefits, BenefitRow, mapEdiToClaimStatus, ClaimStatusRow } from './services/ediMapper';
+import { FormData270, FormData276, FormData837, FormData834, build270, build276, build837, build834 } from './services/ediBuilder';
+import { mapEdiToForm, mapEdiToForm276, mapEdiToForm837, mapEdiToForm834, mapEdiToBenefits, BenefitRow, mapEdiToClaimStatus, ClaimStatusRow } from './services/ediMapper';
 import { analyzeSegmentOffline } from './services/offlineAnalyzer';
 import { useAppStore } from './store/useAppStore';
 
@@ -81,6 +81,27 @@ const INITIAL_FORM_DATA_837: FormData837 = {
     ]
 };
 
+const INITIAL_FORM_DATA_834: FormData834 = {
+    sponsorName: 'ACME CORP',
+    sponsorTaxId: '998877665',
+    payerName: 'AETNA',
+    payerId: '60054',
+    maintenanceType: '021', // Add
+    maintenanceReason: '01', // New Hire
+    benefitStatus: '024', // Active
+    planEffectiveDate: new Date().toISOString().slice(0, 10),
+    subscriber: {
+        id: 'SUB123456',
+        firstName: 'JOHN',
+        lastName: 'DOE',
+        ssn: '123456789',
+        dob: '1980-01-01',
+        gender: 'M',
+        relationship: '18'
+    },
+    dependents: []
+};
+
 // Empty State 270 (For Resetting on Load)
 const EMPTY_FORM_DATA_270: FormData270 = {
     payerName: '',
@@ -142,6 +163,7 @@ function App() {
   const [formData, setFormData] = useState<FormData270>(INITIAL_FORM_DATA);
   const [formData276, setFormData276] = useState<FormData276>(INITIAL_FORM_DATA_276);
   const [formData837, setFormData837] = useState<FormData837>(INITIAL_FORM_DATA_837);
+  const [formData834, setFormData834] = useState<FormData834>(INITIAL_FORM_DATA_834);
   
   const [rawEdi, setRawEdi] = useState<string>('');
   const [doc, setDoc] = useState<EdiDocument | null>(null);
@@ -152,7 +174,7 @@ function App() {
   const [copyFeedback, setCopyFeedback] = useState(false);
   
   // Track which generator is currently active (if not viewing a parsed file)
-  const [generatorMode, setGeneratorMode] = useState<'270' | '276' | '837'>('270');
+  const [generatorMode, setGeneratorMode] = useState<'270' | '276' | '837' | '834'>('270');
 
   // Resizable Sidebar State
   const [sidebarWidth, setSidebarWidth] = useState(350);
@@ -247,8 +269,12 @@ function App() {
              setGeneratorMode('276');
         } else if (parsed.transactionType === '837') {
              const mappedData = mapEdiToForm837(parsed);
-             setFormData837({ ...INITIAL_FORM_DATA_837, ...mappedData }); // Merge with defaults to ensure valid initial state
+             setFormData837({ ...INITIAL_FORM_DATA_837, ...mappedData });
              setGeneratorMode('837');
+        } else if (parsed.transactionType === '834') {
+             const mappedData = mapEdiToForm834(parsed);
+             setFormData834({ ...INITIAL_FORM_DATA_834, ...mappedData });
+             setGeneratorMode('834');
         }
       }
     } catch (e) {
@@ -277,16 +303,25 @@ function App() {
     processEdi(newEdi, false);
   }
 
+  const handleForm834Change = (newData: FormData834) => {
+    setFormData834(newData);
+    const newEdi = build834(newData);
+    setRawEdi(newEdi);
+    processEdi(newEdi, false);
+  }
+
   // Handle manual switching of generator mode
-  const handleGeneratorModeChange = (mode: '270' | '276' | '837') => {
+  const handleGeneratorModeChange = (mode: '270' | '276' | '837' | '834') => {
       setGeneratorMode(mode);
       let newEdi = '';
       if (mode === '270') {
           newEdi = build270(formData);
       } else if (mode === '276') {
           newEdi = build276(formData276);
-      } else {
+      } else if (mode === '837') {
           newEdi = build837(formData837);
+      } else {
+          newEdi = build834(formData834);
       }
       setRawEdi(newEdi);
       processEdi(newEdi, false);
@@ -296,6 +331,7 @@ function App() {
     setFormData(INITIAL_FORM_DATA);
     setFormData276(INITIAL_FORM_DATA_276);
     setFormData837(INITIAL_FORM_DATA_837);
+    setFormData834(INITIAL_FORM_DATA_834);
     setRawEdi('');
     setDoc(null);
     setBenefits([]);
@@ -323,7 +359,11 @@ function App() {
 
     // Common NM1s
     if (['payerName', 'payerId'].includes(fieldName)) {
-        found = flat.find(s => s.tag === 'NM1' && s.elements[0]?.value === 'PR');
+        found = flat.find(s => s.tag === 'NM1' && s.elements[0]?.value === 'PR') ||
+                flat.find(s => s.tag === 'N1' && s.elements[0]?.value === 'IN'); // 834 Payer
+    }
+    else if (['sponsorName', 'sponsorTaxId'].includes(fieldName)) {
+        found = flat.find(s => s.tag === 'N1' && s.elements[0]?.value === 'P5');
     }
     else if (['providerName', 'providerNpi'].includes(fieldName)) {
         // 270 uses 1P, 276 uses 1P or 41, 837 uses 85 usually
@@ -393,6 +433,18 @@ function App() {
     }
     else if (['procedureCode', 'lineCharge', 'units'].includes(fieldName)) {
         found = flat.find(s => ['SV1', 'SV2'].includes(s.tag));
+    }
+    // 834 Fields
+    else if (['maintenanceType', 'maintenanceReason', 'benefitStatus'].includes(fieldName)) {
+        found = flat.find(s => s.tag === 'INS');
+        if (fieldName === 'benefitStatus' && found) {
+             const idx = flat.indexOf(found);
+             const hd = flat.slice(idx, idx+10).find(s => s.tag === 'HD');
+             if (hd) found = hd;
+        }
+    }
+    else if (fieldName === 'planEffectiveDate') {
+        found = flat.find(s => s.tag === 'DTP' && (s.elements[0]?.value === '348' || s.elements[0]?.value === '356'));
     }
 
     if (found) {
@@ -512,6 +564,8 @@ function App() {
                 onChange276={handleForm276Change}
                 formData837={formData837}
                 onChange837={handleForm837Change}
+                formData834={formData834}
+                onChange834={handleForm834Change}
                 transactionType={doc?.transactionType} 
                 generatorMode={generatorMode}
                 onSetGeneratorMode={handleGeneratorModeChange}

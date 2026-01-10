@@ -77,6 +77,32 @@ export interface FormData837 {
   serviceLines: ServiceLine837[];
 }
 
+export interface Member834 {
+    id: string; // REF*0F
+    firstName: string;
+    lastName: string;
+    ssn: string; // REF*SY
+    dob: string;
+    gender: string;
+    relationship: string; // 18=Self, 01=Spouse, 19=Child
+}
+
+export interface FormData834 {
+    sponsorName: string; // Plan Sponsor (Employer)
+    sponsorTaxId: string; 
+    payerName: string; // Insurer
+    payerId: string;
+    
+    maintenanceType: string; // INS03 (021=Add, 024=Term, 001=Change)
+    maintenanceReason: string; // INS04 (01=Divorce, 02=Birth, etc)
+    benefitStatus: string; // HD01 (024=Active coverage)
+    
+    planEffectiveDate: string; // DTP*348
+    
+    subscriber: Member834;
+    dependents: Member834[];
+}
+
 const getCurrentDate = () => new Date().toISOString().slice(0, 10).replace(/-/g, '');
 const getCurrentTime = () => new Date().toTimeString().slice(0, 5).replace(/:/g, '');
 
@@ -290,6 +316,81 @@ export const build837 = (data: FormData837): string => {
     // Footer
     // SE count includes ST through SE.
     // ISA (0), GS (1). Count = Total - 2 (for ISA/GS) + 1 (for SE itself) = Total - 1.
+    segments.push(`SE*${segments.length - 1}*0001`);
+    segments.push(`GE*1*${gsControl}`);
+    segments.push(`IEA*1*${isaControl}`);
+
+    return segments.join('~') + '~';
+};
+
+export const build834 = (data: FormData834): string => {
+    const date = getCurrentDate();
+    const time = getCurrentTime();
+    const isaControl = Math.floor(Math.random() * 900000000) + 100000000;
+    const gsControl = Math.floor(Math.random() * 900000000) + 100000000;
+    
+    const segments = [
+        `ISA*00*          *00*          *ZZ*${pad('SENDER', 15)}*ZZ*${pad('RECEIVER', 15)}*${date.slice(2)}*${time}*^*00501*${isaControl}*0*P*:`,
+        `GS*BE*SENDER*RECEIVER*${date}*${time}*${gsControl}*X*005010X220A1`,
+        `ST*834*0001*005010X220A1`,
+        `BGN*00*${isaControl}*${date}*${time}***2`, // 00=Original, 2=Change (often used)
+        
+        // Loop 1000A Sponsor
+        `N1*P5*${data.sponsorName}*FI*${data.sponsorTaxId}`,
+        
+        // Loop 1000B Payer
+        `N1*IN*${data.payerName}*XV*${data.payerId}`,
+    ];
+
+    // Helper to add Member Loop (Subscriber or Dependent)
+    const addMemberLoop = (member: Member834, isSubscriber: boolean) => {
+        // INS*Y/N*18/19*MaintenanceType*ReasonCode
+        // Y=Subscriber, N=Dependent
+        // 18=Self, 19=Child, 01=Spouse
+        const yn = isSubscriber ? 'Y' : 'N';
+        const rel = isSubscriber ? '18' : member.relationship || '19';
+        
+        segments.push(`INS*${yn}*${rel}*${data.maintenanceType}*${data.maintenanceReason}*A***FT`); // FT=FullTime
+        segments.push(`REF*0F*${member.id}`); // Subscriber/Member Policy ID
+        if (member.ssn) segments.push(`REF*SY*${member.ssn}`);
+        
+        // DTP*356*D8*Date (Eligibility Begin) - mapping from Effective Date
+        if (data.planEffectiveDate) {
+            segments.push(`DTP*356*D8*${data.planEffectiveDate.replace(/-/g, '')}`);
+        }
+
+        // Loop 2100A Member Name
+        // NM1*IL or 74 (Corrected Insured) usually IL is used for Subscriber in 2000 loop context
+        // 834 Spec: 2100A NM101 is IL (Insured/Subscriber) or 74.
+        segments.push(`NM1*IL*1*${member.lastName}*${member.firstName}`);
+        // PER segment could go here
+        // N3 Address
+        if (isSubscriber) { // Simplified: only subscriber has address in this generator
+             segments.push(`N3*123 MAIN ST`);
+             segments.push(`N4*CITY*ST*12345`);
+        }
+        
+        // DMG
+        if (member.dob || member.gender) {
+            segments.push(`DMG*D8*${(member.dob || date).replace(/-/g, '')}*${member.gender || 'U'}`);
+        }
+        
+        // Loop 2300 Health Coverage
+        // HD*024 (Insurance Line Code)
+        segments.push(`HD*${data.benefitStatus}**HLT`); // HLT=Health
+        if (data.planEffectiveDate) {
+             segments.push(`DTP*348*D8*${data.planEffectiveDate.replace(/-/g, '')}`);
+        }
+    };
+
+    // Add Subscriber
+    addMemberLoop(data.subscriber, true);
+
+    // Add Dependents
+    data.dependents.forEach(dep => {
+        addMemberLoop(dep, false);
+    });
+
     segments.push(`SE*${segments.length - 1}*0001`);
     segments.push(`GE*1*${gsControl}`);
     segments.push(`IEA*1*${isaControl}`);
