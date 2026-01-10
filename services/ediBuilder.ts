@@ -97,6 +97,10 @@ export interface FormData834 {
     maintenanceReason: string; // INS04 (01=Divorce, 02=Birth, etc)
     benefitStatus: string; // HD01 (024=Active coverage)
     
+    // Benefit Data
+    policyNumber: string; // REF*1L
+    coverageLevelCode: string; // HD05 (EMP, FAM, etc)
+    
     planEffectiveDate: string; // DTP*348
     
     subscriber: Member834;
@@ -376,10 +380,17 @@ export const build834 = (data: FormData834): string => {
         }
         
         // Loop 2300 Health Coverage
-        // HD*024 (Insurance Line Code)
-        segments.push(`HD*${data.benefitStatus}**HLT`); // HLT=Health
+        // HD*024 (Insurance Line Code) ** HLT (Health) ** Coverage Level
+        const covLevel = data.coverageLevelCode || 'IND';
+        segments.push(`HD*${data.benefitStatus}**HLT**${covLevel}`); 
+        
         if (data.planEffectiveDate) {
              segments.push(`DTP*348*D8*${data.planEffectiveDate.replace(/-/g, '')}`);
+        }
+        
+        // REF*1L Policy Number
+        if (data.policyNumber) {
+            segments.push(`REF*1L*${data.policyNumber}`);
         }
     };
 

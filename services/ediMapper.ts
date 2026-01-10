@@ -386,7 +386,15 @@ export const mapEdiToForm834 = (doc: EdiDocument): Partial<FormData834> => {
             data.maintenanceReason = maintReason;
             
             const hd = loopSegs.find(s => s.tag === 'HD');
-            if (hd) data.benefitStatus = hd.elements[0]?.value || '';
+            if (hd) {
+                data.benefitStatus = hd.elements[0]?.value || '';
+                data.coverageLevelCode = hd.elements[4]?.value || '';
+            }
+            
+            const ref1L = loopSegs.find(s => s.tag === 'REF' && s.elements[0]?.value === '1L');
+            if (ref1L) {
+                data.policyNumber = ref1L.elements[1]?.value || '';
+            }
             
             const dtp = loopSegs.find(s => s.tag === 'DTP' && s.elements[0]?.value === '348'); // Benefit Begin usually inside loop 2300 or 2000
             if (dtp) data.planEffectiveDate = formatDate(dtp.elements[2]?.value);
