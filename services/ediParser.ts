@@ -35,7 +35,7 @@ export const parseEdi = (rawEdi: string): EdiDocument => {
     .map(s => s.trim())
     .filter(s => s.length > 0);
 
-  let transactionType: '270' | '271' | '276' | '277' | 'Unknown' = 'Unknown';
+  let transactionType: '270' | '271' | '276' | '277' | '837' | 'Unknown' = 'Unknown';
 
   const segments: EdiSegment[] = rawSegments.map((rawSeg, index) => {
     // Split elements
@@ -49,6 +49,7 @@ export const parseEdi = (rawEdi: string): EdiDocument => {
         else if (typeCode === '271') transactionType = '271';
         else if (typeCode === '276') transactionType = '276';
         else if (typeCode === '277') transactionType = '277';
+        else if (typeCode === '837') transactionType = '837';
     }
 
     const elements = elementsRaw.slice(1).map((val, i) => ({

@@ -8,7 +8,7 @@ export interface FormData270 {
   subscriberId: string;
   subscriberDob: string; // YYYY-MM-DD
   serviceDate: string; // YYYY-MM-DD
-  serviceTypeCode: string;
+  serviceTypeCodes: string[]; // Changed to array
   
   // Dependent Data
   hasDependent: boolean;
@@ -36,6 +36,45 @@ export interface FormData276 {
   claimId: string; // Client Trace Number
   chargeAmount: string;
   serviceDate: string; // YYYY-MM-DD
+}
+
+export interface ServiceLine837 {
+    procedureCode: string;
+    lineCharge: string;
+    units: string;
+    serviceDate: string;
+}
+
+export interface FormData837 {
+  type: 'Professional' | 'Institutional';
+  // Billing Provider
+  billingProviderName: string;
+  billingProviderNpi: string;
+  billingProviderAddress: string;
+  billingProviderCity: string;
+  billingProviderState: string;
+  billingProviderZip: string;
+  billingTaxId: string;
+
+  // Subscriber
+  subscriberFirstName: string;
+  subscriberLastName: string;
+  subscriberId: string;
+  subscriberDob: string;
+  subscriberGender: string;
+  payerName: string;
+  payerId: string;
+
+  // Claim Info
+  claimId: string;
+  totalCharge: string;
+  placeOfService: string; // For Prof (e.g., 11)
+  typeOfBill: string; // For Inst (e.g., 111)
+  diagnosisCode1: string; // ICD-10 no dots
+  diagnosisCode2: string;
+  
+  // Service Lines
+  serviceLines: ServiceLine837[];
 }
 
 const getCurrentDate = () => new Date().toISOString().slice(0, 10).replace(/-/g, '');
@@ -85,13 +124,15 @@ export const build270 = (data: FormData270): string => {
     segments.push(`DMG*D8*${dobSub}`);
   }
   
-  // Logic: If dependent is present, the inquiry (EQ) is usually for the dependent.
-  // If no dependent, inquiry is for subscriber.
-  
+  // Service Types logic
+  const codes = data.serviceTypeCodes && data.serviceTypeCodes.length > 0 ? data.serviceTypeCodes : ['30'];
+
   if (!data.hasDependent) {
     // --- Subscriber is Patient ---
     segments.push(`DTP*291*D8*${svcDate}`);
-    segments.push(`EQ*${data.serviceTypeCode}`);
+    codes.forEach(code => {
+        segments.push(`EQ*${code}`);
+    });
   } else {
     // --- Dependent is Patient ---
     const dobDep = data.dependentDob.replace(/-/g, '');
@@ -105,7 +146,9 @@ export const build270 = (data: FormData270): string => {
     }
     
     segments.push(`DTP*291*D8*${svcDate}`);
-    segments.push(`EQ*${data.serviceTypeCode}`);
+    codes.forEach(code => {
+        segments.push(`EQ*${code}`);
+    });
   }
 
   // Trailers
@@ -143,12 +186,6 @@ export const build276 = (data: FormData276): string => {
     `NM1*41*2*${data.providerName}*****XX*${data.providerNpi}`,
     
     // Loop 2000C: Subscriber
-    // If hasDependent, Subscriber HL has children (1). If not, it is leaf (0) because Claim Loop is nested inside it in 2000C? 
-    // Wait, in 276, Claim Status Tracking Component (Loop 2200D) is child of 2000C Subscriber.
-    // If Dependent exists (Loop 2000E), it is child of 2000C Subscriber.
-    // So if dependent, HL*3 has children (1). If no dependent, HL*3 has children (0) or (1) depending on how you view the nested segments. 
-    // Actually, TRN/AMT/DTP are NOT HL segments, they are just segments in the loop.
-    // The Hierarchy is HL(Source) -> HL(Receiver) -> HL(Subscriber) -> [Optional HL(Dependent)].
     `HL*3*2*22*${data.hasDependent ? '1' : '0'}`,
     `NM1*IL*1*${data.subscriberLastName}*${data.subscriberFirstName}****MI*${data.subscriberId}`,
   ];
@@ -185,4 +222,77 @@ export const build276 = (data: FormData276): string => {
   segments.push(`IEA*1*${isaControl}`);
 
   return segments.join('~') + '~';
+};
+
+export const build837 = (data: FormData837): string => {
+    const date = getCurrentDate();
+    const time = getCurrentTime();
+    const isaControl = Math.floor(Math.random() * 900000000) + 100000000;
+    const gsControl = Math.floor(Math.random() * 900000000) + 100000000;
+    
+    const isProf = data.type === 'Professional';
+    const version = isProf ? '005010X222A1' : '005010X223A2';
+    const subDob = data.subscriberDob.replace(/-/g, '');
+    
+    const segments = [
+        `ISA*00*          *00*          *ZZ*${pad('SENDER', 15)}*ZZ*${pad('RECEIVER', 15)}*${date.slice(2)}*${time}*^*00501*${isaControl}*0*P*:`,
+        `GS*HC*SENDER*RECEIVER*${date}*${time}*${gsControl}*X*${version}`,
+        `ST*837*0001*${version}`,
+        `BHT*0019*00*${isaControl}*${date}*${time}*CH`,
+        
+        // Loop 1000A Submitter
+        `NM1*41*2*SUBMITTER NAME*****46*SUBMITTERID`,
+        `PER*IC*CONTACT NAME*TE*8005551234`,
+        
+        // Loop 1000B Receiver
+        `NM1*40*2*${data.payerName}*****46*${data.payerId}`,
+        
+        // Loop 2000A Billing Provider
+        `HL*1**20*1`,
+        `NM1*85*2*${data.billingProviderName}*****XX*${data.billingProviderNpi}`,
+        `N3*${data.billingProviderAddress}`,
+        `N4*${data.billingProviderCity}*${data.billingProviderState}*${data.billingProviderZip}`,
+        `REF*EI*${data.billingTaxId}`,
+        
+        // Loop 2000B Subscriber
+        `HL*2*1*22*0`, // Assuming Subscriber is Patient for simple form
+        `SBR*P*18*******CI`,
+        `NM1*IL*1*${data.subscriberLastName}*${data.subscriberFirstName}****MI*${data.subscriberId}`,
+        `DMG*D8*${subDob}*${data.subscriberGender}`,
+        `NM1*PR*2*${data.payerName}*****PI*${data.payerId}`,
+        
+        // Loop 2300 Claim Information
+        // CLM*ClaimID*TotalCharge***Type:Freq:YN*Y*A*Y*Y
+        isProf 
+            ? `CLM*${data.claimId}*${data.totalCharge}***${data.placeOfService}:B:1*Y*A*Y*Y`
+            : `CLM*${data.claimId}*${data.totalCharge}***${data.typeOfBill || '111'}*Y*A*Y*Y`,
+        
+        // HI Segment (Diagnoses)
+        // ABK = ICD-10 Principal
+        `HI*ABK:${data.diagnosisCode1}${data.diagnosisCode2 ? '*ABF:' + data.diagnosisCode2 : ''}`
+    ];
+
+    // Loop 2400 Service Lines
+    data.serviceLines.forEach((line, index) => {
+        const lineDate = line.serviceDate ? line.serviceDate.replace(/-/g, '') : date;
+        
+        segments.push(`LX*${index + 1}`);
+        
+        if (isProf) {
+            segments.push(`SV1*HC:${line.procedureCode}*${line.lineCharge}*UN*${line.units || 1}***1`);
+        } else {
+            segments.push(`SV2*${line.procedureCode}*HC*${line.lineCharge}*UN*${line.units || 1}`);
+        }
+        
+        segments.push(`DTP*472*D8*${lineDate}`);
+    });
+    
+    // Footer
+    // SE count includes ST through SE.
+    // ISA (0), GS (1). Count = Total - 2 (for ISA/GS) + 1 (for SE itself) = Total - 1.
+    segments.push(`SE*${segments.length - 1}*0001`);
+    segments.push(`GE*1*${gsControl}`);
+    segments.push(`IEA*1*${isaControl}`);
+
+    return segments.join('~') + '~';
 };
