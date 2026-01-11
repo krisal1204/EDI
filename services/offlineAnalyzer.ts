@@ -1,4 +1,5 @@
 
+
 import { EdiSegment, SegmentAnalysis } from "../types";
 import { PROCEDURE_CODES, ICD10_CODES } from "./referenceData";
 
@@ -13,6 +14,7 @@ const SEGMENT_DESCRIPTIONS: Record<string, string> = {
   HL: "Hierarchical Level",
   NM1: "Individual or Organizational Name",
   N1: "Name",
+  N2: "Additional Name Information",
   N3: "Address Information",
   N4: "Geographic Location",
   PER: "Administrative Communications Contact",
@@ -42,11 +44,29 @@ const SEGMENT_DESCRIPTIONS: Record<string, string> = {
   CLM: "Claim Information",
   SV1: "Professional Service",
   SV2: "Institutional Service",
+  SV3: "Dental Service",
   SBR: "Subscriber Information",
   PAT: "Patient Information",
   LX: "Service Line Number",
   CUR: "Foreign Currency Information",
-  HD: "Health Coverage"
+  HD: "Health Coverage",
+  CAS: "Claim Adjustment",
+  MOA: "Medicare Outpatient Adjudication",
+  PLB: "Provider Level Adjustment",
+  K3: "File Information",
+  NTE: "Note/Special Instruction",
+  PWK: "Paperwork",
+  CR1: "Ambulance Certification",
+  CR2: "Chiropractic Certification",
+  CR3: "Durable Medical Equipment Certification",
+  CRC: "Conditions Indicator",
+  QTY: "Quantity Information",
+  MEA: "Measurements",
+  DN1: "Orthodontic Information",
+  DN2: "Tooth Status",
+  CL1: "Claim Codes",
+  PS1: "Purchase Service",
+  HCP: "Health Care Pricing"
 };
 
 const YES_NO = { "Y": "Yes", "N": "No", "U": "Unknown" };
@@ -79,20 +99,33 @@ export const STATUS_CATEGORIES: Record<string, string> = {
     "R4": "Request for Payer Info"
 };
 
-// STC01-2 Claim Status Codes (Subset of common codes)
+// STC01-2 Claim Status Codes (Extensive List)
 export const STATUS_CODES: Record<string, string> = {
     "1": "For more detailed information, see the remittance advice.",
     "2": "More detailed information is available in the letter or email.",
+    "4": "The procedure code is inconsistent with the modifier used.",
+    "6": "The procedure/revenue code is inconsistent with the patient's age.",
+    "7": "The procedure/revenue code is inconsistent with the patient's gender.",
+    "8": "The procedure/revenue code is inconsistent with the provider type.",
+    "9": "The diagnosis is inconsistent with the patient's age.",
+    "10": "The diagnosis is inconsistent with the patient's gender.",
+    "11": "The diagnosis is inconsistent with the procedure.",
+    "12": "The diagnosis is inconsistent with the provider type.",
     "15": "Authorization number is missing, invalid, or does not apply.",
     "16": "Claim/Encounter has been forwarded to entity.",
+    "18": "Duplicate claim/service.",
     "19": "Entity acknowledges receipt of claim/encounter.",
     "20": "Accepted for processing.",
     "21": "Missing or invalid information.",
-    "23": "Prior to this payment, a total deduction of payment was made...",
-    "27": "Expenses incurred prior to coverage.",
+    "23": "Prior to this payment, a total deduction of payment was made.",
+    "26": "Expenses incurred prior to coverage.",
+    "27": "Expenses incurred after coverage terminated.",
     "29": "Time limit for filing has expired.",
+    "33": "Subscriber and policy number not found.",
     "35": "Claim/Encounter not found.",
+    "37": "Predetermination is on file, awaiting processing.",
     "45": "Charge exceeds fee schedule/maximum allowable or contracted/legislated fee arrangement.",
+    "89": "Professional fees removed from charges.",
     "97": "Payment is included in the allowance for another service/procedure.",
     "187": "Date(s) of service.",
     "197": "Precertification/authorization/notification/pre-treatment absent.",
@@ -100,16 +133,244 @@ export const STATUS_CODES: Record<string, string> = {
     "479": "Missing or invalid Explanation of Benefits (EOB).",
     "568": "Review in progress.",
     "663": "Entity acknowledges receipt of claim/encounter; claim/encounter is being adjudicated.",
-    "720": "Alert: This claim/encounter is part of a cyclic filing..."
+    "720": "Alert: This claim/encounter is part of a cyclic filing."
+};
+
+// Claim Adjustment Group Codes (CAS01)
+const ADJUSTMENT_GROUP_CODES: Record<string, string> = {
+    "CO": "Contractual Obligation",
+    "CR": "Correction and Reversals",
+    "OA": "Other adjustments",
+    "PI": "Payer Initiated Reductions",
+    "PR": "Patient Responsibility"
+};
+
+// Claim Adjustment Reason Codes (CARC) - CAS02
+// Source: https://x12.org/codes/claim-adjustment-reason-codes
+const ADJUSTMENT_REASON_CODES: Record<string, string> = {
+    "1": "Deductible Amount",
+    "2": "Coinsurance Amount",
+    "3": "Co-payment Amount",
+    "4": "The procedure code is inconsistent with the modifier used or a required modifier is missing.",
+    "5": "The procedure code/bill type is inconsistent with the place of service.",
+    "16": "Claim/service lacks information or has submission/billing error(s).",
+    "18": "Exact duplicate claim/service.",
+    "22": "This care may be covered by another payer per coordination of benefits.",
+    "23": "The impact of prior payer(s) adjudication including payments and/or adjustments.",
+    "26": "Expenses incurred prior to coverage.",
+    "27": "Expenses incurred after coverage terminated.",
+    "29": "The time limit for filing has expired.",
+    "35": "Lifetime benefit maximum has been reached.",
+    "45": "Charge exceeds fee schedule/maximum allowable or contracted/legislated fee arrangement.",
+    "50": "These are non-covered services because this is not deemed a 'medical necessity' by the payer.",
+    "96": "Non-covered charge(s).",
+    "97": "The benefit for this service is included in the payment/allowance for another service/procedure that has already been adjudicated.",
+    "109": "Claim not covered by this payer/contractor. You must send the claim to the correct payer/contractor.",
+    "131": "Claim specific negotiated discount.",
+    "197": "Precertification/authorization/notification absent.",
+    "204": "This service/equipment/drug is not covered under the patient's current benefit plan."
+};
+
+// Service Type Codes (EB03, EQ01)
+// Source: https://x12.org/codes/service-type-codes
+const X12_SERVICE_TYPES: Record<string, string> = {
+    "1": "Medical Care",
+    "2": "Surgical",
+    "3": "Consultation",
+    "4": "Diagnostic X-Ray",
+    "5": "Diagnostic Lab",
+    "6": "Radiation Therapy",
+    "7": "Anesthesia",
+    "8": "Surgical Assistance",
+    "9": "Other Medical",
+    "10": "Blood Charges",
+    "11": "Used Durable Medical Equipment",
+    "12": "Durable Medical Equipment",
+    "13": "Hearing",
+    "14": "Renal Supplies",
+    "15": "Alternate Method Dialysis",
+    "16": "Chronic Renal Disease (CRD) Equipment",
+    "17": "Pre-Admission Testing",
+    "18": "Durable Medical Equipment - Rental",
+    "19": "Pneumonia Vaccine",
+    "20": "Second Surgical Opinion",
+    "21": "Third Surgical Opinion",
+    "22": "Social Work",
+    "23": "Diagnostic Dental",
+    "24": "Periodontics",
+    "25": "Restorative",
+    "26": "Endodontics",
+    "27": "Maxillofacial Prosthetics",
+    "28": "Adjunctive Dental Services",
+    "30": "Health Benefit Plan Coverage",
+    "31": "Benefit Disclaimer",
+    "32": "Plan Wait Period",
+    "33": "Chiropractic",
+    "34": "Chiropractic Office Visits",
+    "35": "Dental Care",
+    "36": "Dental Crowns",
+    "37": "Dental Accident",
+    "38": "Orthodontics",
+    "39": "Prosthodontics",
+    "40": "Oral Surgery",
+    "41": "Preventive Dental",
+    "42": "Psychiatric - Inpatient",
+    "45": "Hospice",
+    "47": "Hospital",
+    "48": "Hospital - Inpatient",
+    "49": "Hospital - Room and Board",
+    "50": "Hospital - Outpatient",
+    "51": "Hospital - Emergency Accident",
+    "52": "Hospital - Emergency Medical",
+    "53": "Hospital - Ambulatory Surgical",
+    "54": "Long Term Care",
+    "55": "Major Medical",
+    "56": "Medically Related Transportation",
+    "57": "Air Transportation",
+    "58": "Cabulance",
+    "59": "Licensed Ambulance",
+    "60": "Home Health Care",
+    "61": "Home Health Prescriptions",
+    "62": "MRI/CAT Scan",
+    "63": "Donor Procedures",
+    "64": "Acupuncture",
+    "65": "Newborn Care",
+    "66": "Pathology",
+    "67": "Smoking Cessation",
+    "68": "Well Baby Care",
+    "69": "Maternity",
+    "70": "Transplants",
+    "71": "Audiology",
+    "72": "Inhalation Therapy",
+    "73": "Diagnostic Medical",
+    "74": "Private Duty Nursing",
+    "75": "Prosthetic Device",
+    "76": "Dialysis",
+    "78": "Chemotherapy",
+    "79": "Allergy Testing",
+    "80": "Immunizations",
+    "81": "Routine Physical",
+    "82": "Family Planning",
+    "83": "Infertility",
+    "84": "Abortion",
+    "85": "AIDS",
+    "86": "Emergency Services",
+    "87": "Cancer",
+    "88": "Pharmacy",
+    "89": "Free Standing Prescription Drug",
+    "90": "Mail Order Prescription Drug",
+    "91": "Brand Name Prescription Drug",
+    "92": "Generic Prescription Drug",
+    "93": "Podiatry",
+    "94": "Podiatry - Office Visits",
+    "95": "Podiatry - Nursing Home Visits",
+    "96": "Professional (Physician)",
+    "97": "Anesthesiologist",
+    "98": "Professional Visit - Office",
+    "99": "Shift Nursing",
+    "A0": "Specialty",
+    "A1": "Specialty - Office",
+    "A2": "Specialty - Inpatient",
+    "A3": "Specialty - Outpatient",
+    "A4": "Psychiatric",
+    "A5": "Psychiatric - Room and Board",
+    "A6": "Psychotherapy",
+    "A7": "Psychiatric - Inpatient",
+    "A8": "Psychiatric - Outpatient",
+    "A9": "Rehabilitation",
+    "AA": "Rehabilitation - Room and Board",
+    "AB": "Rehabilitation - Inpatient",
+    "AC": "Rehabilitation - Outpatient",
+    "AD": "Occupational Therapy",
+    "AE": "Physical Medicine",
+    "AF": "Speech Therapy",
+    "AG": "Skilled Nursing Care",
+    "AH": "Skilled Nursing Care - Room and Board",
+    "AI": "Substance Abuse",
+    "AJ": "Alcoholism",
+    "AK": "Drug Addiction",
+    "AL": "Vision (Optometry)",
+    "AM": "Frames",
+    "AN": "Lenses",
+    "AO": "Routine Eye Exam",
+    "AQ": "Mammogram/Pap Smear",
+    "AR": "Experimental Drug Therapy",
+    "B1": "Burn Care",
+    "B2": "Brand Name Prescription Drug",
+    "B3": "Generic Prescription Drug",
+    "BA": "Independent Medical Exam",
+    "BB": "Partial Hospitalization (Psychiatric)",
+    "BC": "Day Care (Psychiatric)",
+    "BD": "Cognitive Therapy",
+    "BE": "Massage Therapy",
+    "BF": "Pulmonary Rehabilitation",
+    "BG": "Cardiac Rehabilitation",
+    "BH": "Pediatric",
+    "BI": "Nursery",
+    "BJ": "Skin",
+    "BK": "Orthopedic",
+    "BL": "Cardiac",
+    "BM": "Lymphatic",
+    "BN": "Gastrointestinal",
+    "BP": "Endocrine",
+    "BQ": "Neurology",
+    "BR": "Eye",
+    "BS": "Invasive Procedures",
+    "BT": "Gynecological",
+    "BU": "Obstetrical",
+    "BV": "Obstetrical/Gynecological",
+    "BW": "Mail Order Prescription Drug",
+    "BX": "No Service Type Code",
+    "BY": "Physician Care - 24hr",
+    "BZ": "Nursing Service - 24hr",
+    "C1": "Gynecological",
+    "CA": "Rehabilitation",
+    "CB": "Rehabilitation - Inpatient",
+    "CC": "Rehabilitation - Outpatient",
+    "CD": "Occupational Therapy",
+    "CE": "Physical Therapy",
+    "CF": "Speech Therapy",
+    "CG": "Hospice",
+    "CH": "Outpatient Hospital Facility",
+    "CI": "Peripheral Vascular",
+    "CJ": "Co-payment",
+    "CK": "Deductible",
+    "CL": "Co-insurance",
+    "CM": "Deductible & Co-insurance",
+    "CN": "Co-payment & Deductible",
+    "CO": "Co-payment, Deductible & Co-insurance",
+    "CP": "Co-payment & Co-insurance",
+    "CQ": "Case Management",
+    "DG": "Dermatology",
+    "DM": "DME",
+    "DS": "Diabetic Supplies",
+    "GF": "Generic Prescription Drug - Formulary",
+    "GN": "Generic Prescription Drug - Non-Formulary",
+    "GY": "Allergy",
+    "IC": "Intensive Care",
+    "MH": "Mental Health",
+    "NI": "Neonatal Intensive Care",
+    "ON": "Oncology",
+    "PT": "Physical Therapy",
+    "PU": "Pulmonary",
+    "RN": "Renal",
+    "RT": "Residential Treatment",
+    "TC": "Transitional Care",
+    "TN": "Transitional Nursery Care",
+    "UC": "Urgent Care"
 };
 
 // Maps Segment Tag -> Element Index (1-based) -> Definition
 const ELEMENT_DEFINITIONS: Record<string, Record<number, { name: string, codes?: Record<string, string> }>> = {
   ISA: {
-    1: { name: "Authorization Information Qualifier" },
+    1: { name: "Authorization Information Qualifier", codes: { "00": "No Authorization Information Present", "03": "Additional Data Identification" } },
     6: { name: "Interchange Sender ID" },
     8: { name: "Interchange Receiver ID" },
+    11: { name: "Repetition Separator" },
+    12: { name: "Interchange Control Version", codes: { "00501": "Standards Approved for Publication by X12 Procedures Review Board through October 2003" } },
     13: { name: "Interchange Control Number" },
+    14: { name: "Acknowledgment Requested", codes: { "0": "No Acknowledgment Requested", "1": "Interchange Acknowledgment Requested (TA1)" } },
+    15: { name: "Usage Indicator", codes: { "P": "Production", "T": "Test" } }
   },
   GS: {
     1: { 
@@ -125,13 +386,13 @@ const ELEMENT_DEFINITIONS: Record<string, Record<number, { name: string, codes?:
             "BE": "Benefit Enrollment (834)"
         } 
     },
-    8: { name: "Version Code", codes: { "005010X279A1": "HIPAA 5010 270/271", "005010X212": "HIPAA 5010 276/277", "005010X220A1": "HIPAA 5010 834" } }
+    8: { name: "Version Code", codes: { "005010X279A1": "HIPAA 5010 270/271", "005010X212": "HIPAA 5010 276/277", "005010X220A1": "HIPAA 5010 834", "005010X222A1": "HIPAA 5010 837 Prof", "005010X223A2": "HIPAA 5010 837 Inst" } }
   },
   BGN: {
-      1: { name: "Transaction Set Purpose Code", codes: { "00": "Original", "15": "Re-Submission", "22": "Information Copy" }},
+      1: { name: "Transaction Set Purpose Code", codes: { "00": "Original", "15": "Re-Submission", "22": "Information Copy", "01": "Cancellation", "04": "Verified" }},
       2: { name: "Reference Identification" },
       3: { name: "Date" },
-      8: { name: "Action Code", codes: { "2": "Change", "4": "Verify" }}
+      8: { name: "Action Code", codes: { "2": "Change (Update)", "4": "Verify", "1": "Add", "3": "Delete", "RX": "Replace" }}
   },
   BHT: {
     1: { name: "Hierarchical Structure Code", codes: { "0022": "Info Source -> Info Receiver -> Subscriber -> Dependent", "0010": "Information Source, Receiver, Provider, Subscriber, Dependent", "0019": "Info Source, Receiver, Provider, Subscriber, Dependent (Claim)" } },
@@ -152,9 +413,9 @@ const ELEMENT_DEFINITIONS: Record<string, Record<number, { name: string, codes?:
     4: { name: "Hierarchical Child Code", codes: { "0": "No Children (Leaf)", "1": "Has Children" } }
   },
   N1: {
-      1: { name: "Entity Identifier Code", codes: { "P5": "Plan Sponsor", "IN": "Insurer" } },
+      1: { name: "Entity Identifier Code", codes: { "P5": "Plan Sponsor", "IN": "Insurer", "PR": "Payer", "1P": "Provider", "85": "Billing Provider", "IL": "Insured" } },
       2: { name: "Name" },
-      3: { name: "ID Code Qualifier", codes: { "FI": "Tax ID", "XV": "CMS Plan ID", "91": "Assigned by Vendor" }}
+      3: { name: "ID Code Qualifier", codes: { "FI": "Tax ID", "XV": "CMS Plan ID", "91": "Assigned by Vendor", "XX": "NPI", "MI": "Member ID" }}
   },
   NM1: {
     1: { 
@@ -291,7 +552,10 @@ const ELEMENT_DEFINITIONS: Record<string, Record<number, { name: string, codes?:
         "F5": "Medicare Claim Number",
         "0B": "State License Number",
         "LU": "Location Number",
-        "0F": "Subscriber Number"
+        "0F": "Subscriber Number",
+        "6R": "Provider Control Number",
+        "A6": "Employee Identification Number",
+        "NT": "Administrator's Reference Number"
     } }
   },
   DMG: {
@@ -303,6 +567,7 @@ const ELEMENT_DEFINITIONS: Record<string, Record<number, { name: string, codes?:
       name: "Date/Time Qualifier", 
       codes: { 
         "007": "Effective",
+        "036": "Expiration",
         "050": "Received",
         "090": "Report Start",
         "091": "Report End",
@@ -312,10 +577,13 @@ const ELEMENT_DEFINITIONS: Record<string, Record<number, { name: string, codes?:
         "193": "Period Start",
         "194": "Period End",
         "198": "Completion",
+        "232": "Claim Statement Period Start",
+        "233": "Claim Statement Period End",
         "290": "Coordination of Benefits",
         "291": "Plan", 
         "292": "Benefit",
         "295": "Primary Care Provider",
+        "304": "Latest Visit or Consultation",
         "307": "Eligibility", 
         "318": "Added",
         "346": "Plan Begin",
@@ -323,13 +591,24 @@ const ELEMENT_DEFINITIONS: Record<string, Record<number, { name: string, codes?:
         "349": "Benefit End",
         "356": "Eligibility Begin",
         "357": "Eligibility End",
+        "360": "Initial Disability Period Start",
+        "361": "Initial Disability Period End",
         "382": "Enrollment",
+        "431": "Onset of Current Symptom or Illness",
         "435": "Admission", 
+        "439": "Accident",
+        "453": "Acute Manifestation of a Chronic Condition",
+        "454": "Initial Treatment",
+        "455": "Last X-Ray",
         "472": "Service Date",
+        "484": "Last Menstrual Period",
         "539": "Policy Effective",
         "540": "Policy Expiration",
+        "573": "Date Claim Paid",
         "576": "Check Date",
         "636": "Date of Last Update",
+        "738": "Most Recent Hemoglobin or Hematocrit or Glucagon Test",
+        "739": "Most Recent Serum Creatine Test",
         "771": "Status"
       } 
     },
@@ -337,13 +616,15 @@ const ELEMENT_DEFINITIONS: Record<string, Record<number, { name: string, codes?:
   },
   INS: {
       1: { name: "Member Indicator", codes: { "Y": "Subscriber", "N": "Dependent" } },
-      2: { name: "Relationship Code", codes: { "18": "Self", "01": "Spouse", "19": "Child", "21": "Unknown" } },
-      3: { name: "Maintenance Type Code", codes: { "001": "Change", "021": "Add", "024": "Cancel/Term", "030": "Audit" } },
-      4: { name: "Maintenance Reason Code", codes: { "01": "Divorce", "02": "Birth", "03": "Death", "07": "Term of Employment", "28": "Initial Enrollment" } }
+      2: { name: "Relationship Code", codes: { "18": "Self", "01": "Spouse", "19": "Child", "21": "Unknown", "20": "Employee", "31": "Court Appointed Guardian" } },
+      3: { name: "Maintenance Type Code", codes: { "001": "Change", "021": "Add", "024": "Cancel/Term", "030": "Audit", "025": "Reinstate" } },
+      4: { name: "Maintenance Reason Code", codes: { "01": "Divorce", "02": "Birth", "03": "Death", "07": "Term of Employment", "28": "Initial Enrollment", "05": "Marriage", "41": "Re-enrollment", "43": "Change of Location" } }
   },
   HD: {
       1: { name: "Maintenance Type Code", codes: { "001": "Change", "021": "Add", "024": "Cancel/Term", "030": "Audit" } },
-      3: { name: "Insurance Line Code", codes: { "HLT": "Health", "DEN": "Dental", "VIS": "Vision" } }
+      3: { name: "Insurance Line Code", codes: { "HLT": "Health", "DEN": "Dental", "VIS": "Vision", "LIF": "Life", "DIS": "Disability" } },
+      4: { name: "Plan Coverage Description" },
+      5: { name: "Coverage Level Code", codes: { "EMP": "Employee Only", "FAM": "Family", "ESP": "Employee + Spouse", "ECH": "Employee + Children", "IND": "Individual", "SPC": "Spouse + Children" } }
   },
   EB: {
     1: {
@@ -404,102 +685,7 @@ const ELEMENT_DEFINITIONS: Record<string, Record<number, { name: string, codes?:
     },
     3: {
         name: "Service Type",
-        codes: { 
-          "1": "Medical Care", 
-          "2": "Surgical",
-          "3": "Consultation",
-          "4": "Diagnostic X-Ray",
-          "5": "Diagnostic Lab",
-          "6": "Radiation Therapy",
-          "7": "Anesthesia",
-          "8": "Surgical Assistance",
-          "12": "Durable Medical Equipment",
-          "13": "Hearing",
-          "14": "Renal Supplies",
-          "18": "Durable Medical Equipment - Rental",
-          "20": "Second Surgical Opinion",
-          "30": "Health Benefit Plan Coverage", 
-          "33": "Chiropractic", 
-          "35": "Dental Care", 
-          "40": "Oral Surgery",
-          "42": "Psychiatric - Inpatient",
-          "45": "Hospice",
-          "47": "Hospital", 
-          "48": "Hospital - Inpatient", 
-          "50": "Hospital - Outpatient", 
-          "51": "Hospital - Emergency Accident",
-          "52": "Hospital - Emergency Medical",
-          "53": "Hospital - Ambulatory Surgical",
-          "54": "Long Term Care",
-          "60": "Home Health Care",
-          "62": "MRI/CAT Scan",
-          "65": "Newborn Care",
-          "67": "Smoking Cessation",
-          "81": "Routine Physical",
-          "82": "Family Planning",
-          "86": "Emergency Services", 
-          "88": "Pharmacy", 
-          "93": "Podiatry",
-          "98": "Professional Visit - Office",
-          "99": "Shift Nursing",
-          "A0": "Specialty",
-          "A3": "Professional (Physician)",
-          "A4": "Psychiatric",
-          "A6": "Psychotherapy",
-          "A7": "Psychiatric - Inpatient",
-          "A8": "Psychiatric - Outpatient",
-          "AD": "Occupational Therapy",
-          "AE": "Physical Medicine",
-          "AF": "Speech Therapy",
-          "AG": "Skilled Nursing Care",
-          "AI": "Substance Abuse",
-          "AJ": "Alcoholism",
-          "AK": "Drug Addiction",
-          "AL": "Vision (Optometry)",
-          "AM": "Frames",
-          "AN": "Lenses",
-          "AQ": "Mammogram/Pap Smear",
-          "AR": "Experimental Drug Therapy",
-          "B1": "Burn Care",
-          "B2": "Brand Name Prescription Drug",
-          "B3": "Generic Prescription Drug",
-          "BA": "Independent Medical Exam",
-          "BB": "Partial Hospitalization (Psychiatric)",
-          "BC": "Day Care (Psychiatric)",
-          "BF": "Pulmonary Rehabilitation",
-          "BG": "Cardiac Rehabilitation",
-          "BH": "Pediatric",
-          "BI": "Nursery",
-          "BJ": "Skin",
-          "BK": "Orthopedic",
-          "BL": "Cardiac",
-          "BM": "Lymphatic",
-          "BN": "Gastrointestinal",
-          "BP": "Endocrine",
-          "BQ": "Neurology",
-          "BR": "Eye",
-          "BS": "Invasive Procedures",
-          "BT": "Gynecological",
-          "BU": "Obstetrical",
-          "BV": "Obstetrical/Gynecological",
-          "BW": "Mail Order Prescription Drug",
-          "BY": "Physician Care - 24hr",
-          "BZ": "Nursing Service - 24hr",
-          "C1": "Gynecological",
-          "CA": "Rehabilitation",
-          "CB": "Rehabilitation - Inpatient",
-          "CC": "Rehabilitation - Outpatient",
-          "CD": "Occupational Therapy",
-          "CE": "Physical Therapy",
-          "CF": "Speech Therapy",
-          "CG": "Hospice",
-          "CH": "Outpatient Hospital Facility",
-          "DM": "DME",
-          "MH": "Mental Health",
-          "UC": "Urgent Care",
-          "PT": "Physical Therapy",
-          "RT": "Residential Treatment"
-        }
+        codes: X12_SERVICE_TYPES
     },
     4: { name: "Insurance Type", codes: { "MA": "Medicare A", "MB": "Medicare B", "MC": "Medicaid", "CI": "Commercial", "HM": "HMO", "PO": "PPO", "QM": "Qualified Medicare Beneficiary", "TV": "Title V" } },
     6: { name: "Time Period", codes: { "6": "Hour", "7": "Day", "13": "24 Hours", "21": "Years", "22": "Service Year", "23": "Calendar Year", "24": "Year to Date", "25": "Contract", "26": "Total", "27": "Visit", "29": "Remaining", "32": "Lifetime", "34": "Month", "35": "Week", "36": "Admission" } },
@@ -510,23 +696,7 @@ const ELEMENT_DEFINITIONS: Record<string, Record<number, { name: string, codes?:
   EQ: {
      1: {
          name: "Service Type",
-         codes: { 
-          "1": "Medical Care",
-          "2": "Surgical",
-          "30": "Health Benefit Plan Coverage", 
-          "33": "Chiropractic", 
-          "35": "Dental Care", 
-          "47": "Hospital", 
-          "48": "Hospital - Inpatient",
-          "50": "Hospital - Outpatient",
-          "86": "Emergency Services",
-          "88": "Pharmacy", 
-          "98": "Professional Visit - Office",
-          "AL": "Vision",
-          "MH": "Mental Health",
-          "UC": "Urgent Care",
-          "PT": "Physical Therapy"
-         }
+         codes: X12_SERVICE_TYPES
      }
   },
   STC: {
@@ -609,15 +779,24 @@ const ELEMENT_DEFINITIONS: Record<string, Record<number, { name: string, codes?:
       5: { name: "Service Unit Count" }
   },
   SBR: {
-      1: { name: "Payer Responsibility Code", codes: { "P": "Primary", "S": "Secondary", "T": "Tertiary" } },
-      2: { name: "Individual Relationship Code", codes: { "18": "Self", "01": "Spouse", "19": "Child" } },
-      9: { name: "Claim Filing Indicator Code", codes: { "CI": "Commercial Insurance", "MB": "Medicare Part B", "MA": "Medicare Part A", "MC": "Medicaid" } }
+      1: { name: "Payer Responsibility Code", codes: { "P": "Primary", "S": "Secondary", "T": "Tertiary", "A": "Payer Responsibility Unknown", "B": "Self-Pay" } },
+      2: { name: "Individual Relationship Code", codes: { "18": "Self", "01": "Spouse", "19": "Child", "20": "Employee" } },
+      9: { name: "Claim Filing Indicator Code", codes: { "CI": "Commercial Insurance", "MB": "Medicare Part B", "MA": "Medicare Part A", "MC": "Medicaid", "ZZ": "Mutually Defined" } }
   },
   PAT: {
       1: { name: "Individual Relationship Code" }
   },
   LX: {
       1: { name: "Assigned Number" }
+  },
+  CAS: {
+      1: { name: "Claim Adjustment Group Code", codes: ADJUSTMENT_GROUP_CODES },
+      2: { name: "Adjustment Reason Code", codes: ADJUSTMENT_REASON_CODES },
+      5: { name: "Adjustment Reason Code", codes: ADJUSTMENT_REASON_CODES },
+      8: { name: "Adjustment Reason Code", codes: ADJUSTMENT_REASON_CODES },
+      11: { name: "Adjustment Reason Code", codes: ADJUSTMENT_REASON_CODES },
+      14: { name: "Adjustment Reason Code", codes: ADJUSTMENT_REASON_CODES },
+      17: { name: "Adjustment Reason Code", codes: ADJUSTMENT_REASON_CODES }
   }
 };
 
@@ -770,7 +949,7 @@ export const analyzeSegmentOffline = (segment: EdiSegment): SegmentAnalysis => {
   else if (segment.tag === 'EB') {
      const coverage = fields.find(f => f.code === 'EB01')?.definition;
      const serviceField = fields.find(f => f.code === 'EB03');
-     const service = serviceField?.definition !== '-' ? serviceField?.definition : serviceField?.value;
+     const service = serviceField?.definition !== '-' && serviceField?.definition !== 'Code not in dictionary' ? serviceField?.definition : serviceField?.value;
      
      if (coverage) {
         summary = `Benefit: ${coverage}`;
@@ -833,6 +1012,11 @@ export const analyzeSegmentOffline = (segment: EdiSegment): SegmentAnalysis => {
   else if (segment.tag === 'HD') {
       const type = fields.find(f => f.code === 'HD01')?.definition;
       summary = `Coverage: ${type}`;
+  }
+  else if (segment.tag === 'CAS') {
+      const reason = fields.find(f => f.code === 'CAS02')?.definition;
+      const amt = fields.find(f => f.code === 'CAS03')?.value;
+      if (reason) summary = `Adj: ${reason} ($${amt})`;
   }
 
   return {

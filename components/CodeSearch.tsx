@@ -1,11 +1,12 @@
+
 import React, { useState, useMemo } from 'react';
-import { PROCEDURE_CODES, ICD10_CODES } from '../services/referenceData';
+import { PROCEDURE_CODES, ICD10_CODES, TAXONOMY_CODES } from '../services/referenceData';
 
 export const CodeSearch: React.FC = () => {
-    const [tab, setTab] = useState<'procedures' | 'diagnoses'>('procedures');
+    const [tab, setTab] = useState<'procedures' | 'diagnoses' | 'taxonomy'>('procedures');
     const [search, setSearch] = useState('');
 
-    const data = tab === 'procedures' ? PROCEDURE_CODES : ICD10_CODES;
+    const data = tab === 'procedures' ? PROCEDURE_CODES : tab === 'diagnoses' ? ICD10_CODES : TAXONOMY_CODES;
     
     const entries = useMemo(() => {
         return Object.entries(data).map(([code, desc]) => ({ code, desc }));
@@ -20,6 +21,12 @@ export const CodeSearch: React.FC = () => {
         );
     }, [entries, search]);
 
+    const getPlaceholder = () => {
+        if (tab === 'procedures') return 'Search procedures (CPT/HCPCS)...';
+        if (tab === 'diagnoses') return 'Search diagnoses (ICD-10)...';
+        return 'Search taxonomy codes (NUCC)...';
+    };
+
     return (
         <div className="flex flex-col h-full bg-white dark:bg-slate-900">
             <div className="p-6 border-b border-gray-100 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm z-10">
@@ -31,25 +38,31 @@ export const CodeSearch: React.FC = () => {
                 </div>
                 
                 <div className="flex flex-col sm:flex-row gap-4 mb-4">
-                     <div className="flex p-1 bg-gray-100 dark:bg-slate-800 rounded-lg">
+                     <div className="flex p-1 bg-gray-100 dark:bg-slate-800 rounded-lg overflow-x-auto">
                         <button 
                             onClick={() => setTab('procedures')} 
-                            className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${tab === 'procedures' ? 'bg-white dark:bg-slate-700 text-black dark:text-white shadow-sm' : 'text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200'}`}
+                            className={`px-4 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap ${tab === 'procedures' ? 'bg-white dark:bg-slate-700 text-black dark:text-white shadow-sm' : 'text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200'}`}
                         >
                             Procedures (CPT/HCPCS)
                         </button>
                         <button 
                             onClick={() => setTab('diagnoses')} 
-                            className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${tab === 'diagnoses' ? 'bg-white dark:bg-slate-700 text-black dark:text-white shadow-sm' : 'text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200'}`}
+                            className={`px-4 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap ${tab === 'diagnoses' ? 'bg-white dark:bg-slate-700 text-black dark:text-white shadow-sm' : 'text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200'}`}
                         >
                             Diagnoses (ICD-10)
+                        </button>
+                        <button 
+                            onClick={() => setTab('taxonomy')} 
+                            className={`px-4 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap ${tab === 'taxonomy' ? 'bg-white dark:bg-slate-700 text-black dark:text-white shadow-sm' : 'text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200'}`}
+                        >
+                            Taxonomy (NUCC)
                         </button>
                      </div>
                      
                      <div className="relative flex-1">
                         <input 
                             type="text" 
-                            placeholder={`Search ${tab === 'procedures' ? 'procedures' : 'diagnoses'}...`}
+                            placeholder={getPlaceholder()}
                             className="w-full pl-10 pr-4 py-2.5 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none focus:border-black dark:focus:border-slate-500 focus:ring-1 focus:ring-black dark:focus:ring-slate-500 transition-colors"
                             value={search}
                             onChange={e => setSearch(e.target.value)}
