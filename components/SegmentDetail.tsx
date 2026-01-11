@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { EdiSegment, SegmentAnalysis } from '../types';
 import { analyzeSegmentOffline } from '../services/offlineAnalyzer';
@@ -47,7 +48,7 @@ export const SegmentDetail: React.FC<SegmentDetailProps> = ({ segment }) => {
                   {analysis.summary}
                 </p>
                 <div className="flex flex-wrap gap-2">
-                   {analysis.fields.filter(f => f.definition && f.definition !== '-' && f.definition !== 'Code not in dictionary').map((field, idx) => (
+                   {analysis.fields.filter(f => f.definition && f.definition !== '-' && f.definition !== 'Code not in dictionary' && !f.definition.includes('\n')).map((field, idx) => (
                       <span key={idx} className="inline-flex items-center px-2 py-1 rounded-sm text-[10px] uppercase font-medium bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-300 border border-transparent dark:border-slate-700">
                         {field.code} • {field.definition}
                       </span>
@@ -77,7 +78,11 @@ export const SegmentDetail: React.FC<SegmentDetailProps> = ({ segment }) => {
                       </td>
                       <td className="py-3 px-4 text-sm text-gray-900 dark:text-slate-300 align-top pt-3.5">
                         <div className="font-medium mb-0.5 text-gray-900 dark:text-slate-200">{analyzedField?.description || 'Element'}</div>
-                        <div className="text-gray-500 dark:text-slate-500 font-light text-xs">{analyzedField?.definition !== '-' ? analyzedField?.definition : ''}</div>
+                        {analyzedField?.definition !== '-' && (
+                            <div className="text-gray-500 dark:text-slate-500 font-light text-xs whitespace-pre-wrap">
+                                {analyzedField?.definition}
+                            </div>
+                        )}
                       </td>
                       <td className="py-3 pl-4 whitespace-nowrap text-sm font-mono text-black dark:text-slate-200 align-top text-right pt-4 bg-gray-50/50 dark:bg-slate-900/30">
                         {el.value}
