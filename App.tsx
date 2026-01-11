@@ -586,8 +586,8 @@ function App() {
       {/* Main Content Area */}
       <div className="flex-1 flex overflow-hidden">
         
-        {/* Pane 1: Generator/Benefits/Claims (Resizable) - Hide if Fullscreen Mode */}
-        {(viewMode !== 'reference' && viewMode !== 'settings' && viewMode !== 'contact') && (
+        {/* Pane 1: Generator/Benefits/Claims (Resizable) - Hide if Fullscreen Mode or No File */}
+        {(viewMode !== 'reference' && viewMode !== 'settings' && viewMode !== 'contact' && (doc || rawEdi)) && (
             <div 
                 className="flex-none bg-white dark:bg-slate-900 z-20 border-r border-gray-200 dark:border-slate-800 relative"
                 style={{ width: sidebarWidth }}
@@ -612,8 +612,8 @@ function App() {
             </div>
         )}
 
-        {/* Drag Handle - Hide if Fullscreen Mode */}
-        {(viewMode !== 'reference' && viewMode !== 'settings' && viewMode !== 'contact') && (
+        {/* Drag Handle - Hide if Fullscreen Mode or No File */}
+        {(viewMode !== 'reference' && viewMode !== 'settings' && viewMode !== 'contact' && (doc || rawEdi)) && (
             <div 
                 className="flex-none w-1 -ml-1 cursor-col-resize z-30 relative group hover:bg-blue-500 transition-colors"
                 onMouseDown={() => setIsResizing(true)}

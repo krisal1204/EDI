@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { FormData270, FormData276, FormData837, FormData834, Member834, ServiceLine837 } from '../services/ediBuilder';
 import { EdiSegment } from '../types';
@@ -554,28 +555,6 @@ export const EdiGenerator: React.FC<Props> = ({
 
   return (
     <div className="flex flex-col h-full bg-white dark:bg-slate-900">
-      {/* Mode Switcher Tabs (Only if not in Result Mode) */}
-      {(activeMode === '270' || activeMode === '276' || activeMode === '837' || activeMode === '834') && (
-        <div className="flex border-b border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-            {['834', '270', '837', '276'].map((mode) => (
-                <button
-                    key={mode}
-                    onClick={() => onSetGeneratorMode(mode as any)}
-                    className={`flex-1 py-3 text-xs font-semibold text-center border-b-2 transition-colors ${
-                        activeMode === mode 
-                        ? 'border-black dark:border-brand-500 text-black dark:text-white bg-gray-50 dark:bg-slate-800/50' 
-                        : 'border-transparent text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300'
-                    }`}
-                >
-                    {mode === '834' && 'Enrollment'}
-                    {mode === '270' && 'Eligibility'}
-                    {mode === '837' && 'Claim'}
-                    {mode === '276' && 'Status'}
-                </button>
-            ))}
-        </div>
-      )}
-
       {/* Content Area */}
       <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
           {activeMode === '270' && renderForm270()}
