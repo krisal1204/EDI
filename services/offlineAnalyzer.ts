@@ -1,3 +1,4 @@
+
 import { EdiSegment, SegmentAnalysis } from "../types";
 import { PROCEDURE_CODES, ICD10_CODES } from "./referenceData";
 
@@ -640,12 +641,6 @@ export const getProcedureDefinition = (code: string): string => {
 export const getDiagnosisDefinition = (code: string): string => {
     // Check for direct match or variations (simple logic)
     if (ICD10_CODES[code]) return ICD10_CODES[code];
-    
-    // Sometimes codes come with dots, sometimes without in EDI (usually without, but good to be safe)
-    // EDI usually sends "I10", "A01" without dots.
-    // If the map uses dots (standard ICD-10), we might need to normalize. 
-    // For this implementation, the map has dots where standard.
-    
     return ICD10_CODES[code] || "Diagnosis " + code;
 };
 
@@ -657,87 +652,101 @@ export const analyzeSegmentOffline = (segment: EdiSegment): SegmentAnalysis => {
     const def = elemDefs[el.index];
     let definition = "-";
     
-    // Check if there is a predefined code value
-    if (def && def.codes) {
-        if (def.codes[el.value]) {
-            definition = def.codes[el.value];
-        } else {
-             definition = "Code not in dictionary";
-        }
-    }
-
-    // Heuristics
-    if (definition === "-") {
-      // Dates (D8 format usually)
-      if (el.value.length === 8 && !isNaN(Number(el.value)) && 
-         ((el.index === 3 || el.index === 2) && (segment.tag === 'DTP' || segment.tag === 'DMG' || segment.tag === 'STC' || segment.tag === 'BGN'))) {
-        definition = `${el.value.substring(4,6)}/${el.value.substring(6,8)}/${el.value.substring(0,4)}`;
-      } 
-      // Amounts
-      else if (def && (def.name.includes("Amount") || def.name.includes("Quantity"))) {
-        definition = el.value; 
-      }
-      
-      // SVC Procedure Code lookup
-      else if (segment.tag === 'SVC' && el.index === 1) {
-          const parts = el.value.split(':');
-          if (parts.length > 1) {
-              definition = getProcedureDefinition(parts[1]);
-          }
-      }
-      // SV1 Procedure Code lookup (Prof)
-      else if (segment.tag === 'SV1' && el.index === 1) {
-          const parts = el.value.split(':');
-          // SV1:01 is Composite (HC:Code)
-          const code = parts.length > 1 ? parts[1] : parts[0];
-          definition = getProcedureDefinition(code);
-      }
-      // SV2 Procedure Code lookup (Inst)
-      else if (segment.tag === 'SV2' && el.index === 2) {
-          // SV2:02 is Composite
-          const parts = el.value.split(':');
-          const code = parts.length > 1 ? parts[1] : parts[0];
-          definition = getProcedureDefinition(code);
-      }
-
-      // HI Diagnosis Code Lookup (Composite Element)
-      else if (segment.tag === 'HI') {
-          // Format is usually Qual:Code e.g. BK:I10 or ABK:I10
-          const parts = el.value.split(':');
-          if (parts.length >= 2) {
-              const qual = parts[0];
-              const code = parts[1];
-              const diagDesc = getDiagnosisDefinition(code);
-              
-              let qualDesc = qual;
-              if (qual === 'BK' || qual === 'ABK') qualDesc = 'Principal Diag';
-              else if (qual === 'BF' || qual === 'ABF') qualDesc = 'Diagnosis';
-              else if (qual === 'BJ') qualDesc = 'Admitting Diag';
-              
-              definition = `${qualDesc}: ${diagDesc}`;
-          }
-      }
-      // CLM05 Place of Service (Prof) or Type of Bill (Inst)
-      else if (segment.tag === 'CLM' && el.index === 5) {
-          const parts = el.value.split(':');
-          if (parts[0]) {
-             // Heuristic: If 3 digits, probably TOB. If 2, probably POS.
-             if (parts[0].length === 3) definition = `Type of Bill: ${parts[0]}`;
-             else definition = `Place of Service: ${parts[0]}`;
-          }
-      }
-    }
-
-    // Special handling for STC composite (Category Code:Status Code:Entity)
-    if (segment.tag === 'STC' && el.index === 1) {
-        const parts = el.value.split(':');
-        // Category
-        const catDesc = STATUS_CATEGORIES[parts[0]] || parts[0];
-        // Status
-        const statDesc = STATUS_CODES[parts[1]] || parts[1];
+    // -- Handle Repeats --
+    if (el.repeats && el.repeats.length > 0) {
+        // If element has repeats, map each value to its definition and join them
+        const definitions = el.repeats.map(val => {
+            if (def && def.codes && def.codes[val]) return `${val}: ${def.codes[val]}`;
+            return val;
+        });
+        // Limit to reasonable display number if huge
+        definition = definitions.join("\n"); 
+    } 
+    else {
+        // -- Normal Single Value Logic --
         
-        if (parts.length >= 2) {
-            definition = `[${parts[0]}] ${catDesc}\n[${parts[1]}] ${statDesc}`;
+        // Check if there is a predefined code value
+        if (def && def.codes) {
+            if (def.codes[el.value]) {
+                definition = def.codes[el.value];
+            } else {
+                 definition = "Code not in dictionary";
+            }
+        }
+
+        // Heuristics
+        if (definition === "-") {
+          // Dates (D8 format usually)
+          if (el.value.length === 8 && !isNaN(Number(el.value)) && 
+             ((el.index === 3 || el.index === 2) && (segment.tag === 'DTP' || segment.tag === 'DMG' || segment.tag === 'STC' || segment.tag === 'BGN'))) {
+            definition = `${el.value.substring(4,6)}/${el.value.substring(6,8)}/${el.value.substring(0,4)}`;
+          } 
+          // Amounts
+          else if (def && (def.name.includes("Amount") || def.name.includes("Quantity"))) {
+            definition = el.value; 
+          }
+          
+          // SVC Procedure Code lookup
+          else if (segment.tag === 'SVC' && el.index === 1) {
+              const parts = el.value.split(':');
+              if (parts.length > 1) {
+                  definition = getProcedureDefinition(parts[1]);
+              }
+          }
+          // SV1 Procedure Code lookup (Prof)
+          else if (segment.tag === 'SV1' && el.index === 1) {
+              const parts = el.value.split(':');
+              // SV1:01 is Composite (HC:Code)
+              const code = parts.length > 1 ? parts[1] : parts[0];
+              definition = getProcedureDefinition(code);
+          }
+          // SV2 Procedure Code lookup (Inst)
+          else if (segment.tag === 'SV2' && el.index === 2) {
+              // SV2:02 is Composite
+              const parts = el.value.split(':');
+              const code = parts.length > 1 ? parts[1] : parts[0];
+              definition = getProcedureDefinition(code);
+          }
+
+          // HI Diagnosis Code Lookup (Composite Element)
+          else if (segment.tag === 'HI') {
+              // Format is usually Qual:Code e.g. BK:I10 or ABK:I10
+              const parts = el.value.split(':');
+              if (parts.length >= 2) {
+                  const qual = parts[0];
+                  const code = parts[1];
+                  const diagDesc = getDiagnosisDefinition(code);
+                  
+                  let qualDesc = qual;
+                  if (qual === 'BK' || qual === 'ABK') qualDesc = 'Principal Diag';
+                  else if (qual === 'BF' || qual === 'ABF') qualDesc = 'Diagnosis';
+                  else if (qual === 'BJ') qualDesc = 'Admitting Diag';
+                  
+                  definition = `${qualDesc}: ${diagDesc}`;
+              }
+          }
+          // CLM05 Place of Service (Prof) or Type of Bill (Inst)
+          else if (segment.tag === 'CLM' && el.index === 5) {
+              const parts = el.value.split(':');
+              if (parts[0]) {
+                 // Heuristic: If 3 digits, probably TOB. If 2, probably POS.
+                 if (parts[0].length === 3) definition = `Type of Bill: ${parts[0]}`;
+                 else definition = `Place of Service: ${parts[0]}`;
+              }
+          }
+        }
+
+        // Special handling for STC composite (Category Code:Status Code:Entity)
+        if (segment.tag === 'STC' && el.index === 1) {
+            const parts = el.value.split(':');
+            // Category
+            const catDesc = STATUS_CATEGORIES[parts[0]] || parts[0];
+            // Status
+            const statDesc = STATUS_CODES[parts[1]] || parts[1];
+            
+            if (parts.length >= 2) {
+                definition = `[${parts[0]}] ${catDesc}\n[${parts[1]}] ${statDesc}`;
+            }
         }
     }
 
@@ -760,10 +769,16 @@ export const analyzeSegmentOffline = (segment: EdiSegment): SegmentAnalysis => {
   } 
   else if (segment.tag === 'EB') {
      const coverage = fields.find(f => f.code === 'EB01')?.definition;
-     const service = fields.find(f => f.code === 'EB03')?.definition;
+     const serviceField = fields.find(f => f.code === 'EB03');
+     const service = serviceField?.definition !== '-' ? serviceField?.definition : serviceField?.value;
+     
      if (coverage) {
         summary = `Benefit: ${coverage}`;
-        if (service) summary += ` for ${service}`;
+        if (service) {
+            // Truncate summary if service list is huge
+            const serviceSummary = service.includes('\n') ? service.split('\n')[0] + '...' : service;
+            summary += ` for ${serviceSummary}`;
+        }
      }
   }
   else if (segment.tag === 'STC') {

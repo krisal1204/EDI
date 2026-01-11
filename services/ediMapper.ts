@@ -1,3 +1,4 @@
+
 import { EdiDocument, EdiSegment } from '../types';
 import { FormData270, FormData276, FormData837, FormData834, ServiceLine837, Member834 } from './ediBuilder';
 import { getElementDefinition, getProcedureDefinition } from './offlineAnalyzer';
@@ -84,6 +85,21 @@ const formatDtpValue = (format: string, value: string): string => {
     }
     return value;
 }
+
+/**
+ * Handles mapping multiple repeated codes to a string list
+ */
+const getRepeatedDefinition = (tag: string, index: number, element?: { value: string, repeats?: string[] }): string => {
+    if (!element) return '';
+    
+    if (element.repeats && element.repeats.length > 0) {
+        return element.repeats.map(val => {
+            const def = getElementDefinition(tag, index, val);
+            return def !== val ? def : `${val}`;
+        }).join(', ');
+    }
+    return getElementDefinition(tag, index, element.value);
+};
 
 export const mapEdiToForm = (doc: EdiDocument): Partial<FormData270> => {
   const segments = flattenSegments(doc.segments);
@@ -423,17 +439,17 @@ export const mapEdiToBenefits = (doc: EdiDocument): BenefitRow[] => {
         
         if (seg.tag === 'EB') {
             const row: BenefitRow = {
-                type: getElementDefinition('EB', 1, seg.elements[0]?.value),
-                coverage: getElementDefinition('EB', 2, seg.elements[1]?.value),
-                service: getElementDefinition('EB', 3, seg.elements[2]?.value),
-                insuranceType: getElementDefinition('EB', 4, seg.elements[3]?.value),
-                timePeriod: getElementDefinition('EB', 6, seg.elements[5]?.value),
+                type: getRepeatedDefinition('EB', 1, seg.elements[0]), // Coverage Level/Type
+                coverage: getRepeatedDefinition('EB', 2, seg.elements[1]), // Coverage Description
+                service: getRepeatedDefinition('EB', 3, seg.elements[2]), // Service Type
+                insuranceType: getRepeatedDefinition('EB', 4, seg.elements[3]),
+                timePeriod: getRepeatedDefinition('EB', 6, seg.elements[5]),
                 amount: seg.elements[6]?.value,
                 percent: seg.elements[7]?.value,
-                quantityQualifier: getElementDefinition('EB', 9, seg.elements[8]?.value),
+                quantityQualifier: getRepeatedDefinition('EB', 9, seg.elements[8]),
                 quantity: seg.elements[9]?.value,
-                authRequired: getElementDefinition('EB', 11, seg.elements[10]?.value),
-                network: getElementDefinition('EB', 12, seg.elements[11]?.value),
+                authRequired: getRepeatedDefinition('EB', 11, seg.elements[10]),
+                network: getRepeatedDefinition('EB', 12, seg.elements[11]),
                 messages: [],
                 dates: [],
                 reference: currentEntity

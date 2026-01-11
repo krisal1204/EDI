@@ -1,3 +1,4 @@
+
 import { EdiDocument, EdiSegment } from '../types';
 
 /**
@@ -15,14 +16,25 @@ function detectDelimiters(raw: string) {
     return {
       elementSeparator: '*',
       componentSeparator: ':',
-      segmentTerminator: '~'
+      segmentTerminator: '~',
+      repetitionSeparator: '^'
     };
   }
 
+  const elementSeparator = raw.charAt(3);
+  
+  // ISA11 (Repetition Separator) is usually at a specific offset, but splitting is safer given potential formatting issues
+  // ISA segments have 16 elements. 
+  // ISA*01*...
+  // Split limit 17 to get up to ISA16
+  const parts = raw.split(elementSeparator);
+  const repetitionSeparator = parts[11] && parts[11].length === 1 ? parts[11] : undefined;
+
   return {
-    elementSeparator: raw.charAt(3),
+    elementSeparator,
     componentSeparator: raw.charAt(104),
-    segmentTerminator: raw.charAt(105) // Sometimes 105, check visual inspection
+    segmentTerminator: raw.charAt(105), // Sometimes 105, check visual inspection
+    repetitionSeparator
   };
 }
 
@@ -53,13 +65,26 @@ export const parseEdi = (rawEdi: string): EdiDocument => {
         else if (typeCode === '834') transactionType = '834';
     }
 
-    const elements = elementsRaw.slice(1).map((val, i) => ({
-      index: i + 1,
-      value: val,
-      components: val.includes(delimiters.componentSeparator) 
+    const elements = elementsRaw.slice(1).map((val, i) => {
+      // Handle Repeats (e.g. EB03 "1>33>35")
+      const repeats = (delimiters.repetitionSeparator && val.includes(delimiters.repetitionSeparator))
+        ? val.split(delimiters.repetitionSeparator)
+        : undefined;
+
+      // Handle Components (e.g. SVC01 "HC:99213")
+      // Note: If repeats exist, components might exist inside repeats, but simple parser usually treats them hierarchically or just splits strings.
+      // For this inspector, we'll check components on the main val or just leave as is if repeated.
+      const components = val.includes(delimiters.componentSeparator) 
         ? val.split(delimiters.componentSeparator) 
-        : undefined
-    }));
+        : undefined;
+
+      return {
+        index: i + 1,
+        value: val,
+        components,
+        repeats
+      };
+    });
 
     return {
       id: uuid(),
@@ -118,11 +143,6 @@ export const parseEdi = (rawEdi: string): EdiDocument => {
       }
     }
   });
-
-  // Special handling for 834 flat loops if no HL (834 usually doesn't use HL, it uses N1/INS loops)
-  // Standard 834 doesn't strictly use HL for hierarchy, it uses N1 loops then INS loops.
-  // This simple parser defaults to flat list if no HLs found, which is fine for 834 inspection.
-  // We can enhance visualization by grouping N1 loops if needed, but basic list is okay.
 
   const result: EdiDocument = {
     segments: hlMap.size > 0 ? tree : segments,

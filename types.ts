@@ -1,7 +1,9 @@
+
 export interface EdiElement {
   index: number;
   value: string;
   components?: string[];
+  repeats?: string[];
 }
 
 export interface EdiSegment {
@@ -24,6 +26,7 @@ export interface EdiDocument {
   elementSeparator: string;
   segmentTerminator: string;
   componentSeparator: string;
+  repetitionSeparator?: string;
   raw: string;
   transactionType: '270' | '271' | '276' | '277' | '837' | '834' | 'Unknown';
 }

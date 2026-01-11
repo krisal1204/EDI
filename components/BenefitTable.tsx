@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { BenefitRow } from '../services/ediMapper';
 
@@ -24,7 +25,8 @@ export const BenefitTable = ({ benefits }: { benefits: BenefitRow[] }) => {
 
       // Dropdown Filters
       const matchesEntity = filterEntity === 'All' || b.reference === filterEntity;
-      const matchesService = filterService === 'All' || b.service === filterService;
+      // Service filter is tricky with repeats; check includes if "All" is not selected
+      const matchesService = filterService === 'All' || b.service.includes(filterService);
 
       return matchesSearch && matchesEntity && matchesService;
     });
@@ -71,16 +73,6 @@ export const BenefitTable = ({ benefits }: { benefits: BenefitRow[] }) => {
            {uniqueEntities.map(e => <option key={e} value={e}>{e}</option>)}
         </select>
 
-        {/* Service Filter */}
-        <select 
-          value={filterService} 
-          onChange={(e) => setFilterService(e.target.value)}
-          className="block w-40 py-1.5 pl-2 pr-6 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-white rounded-sm text-sm focus:outline-none focus:border-gray-400 dark:focus:border-slate-500"
-        >
-           <option value="All">All Services</option>
-           {uniqueServices.map(s => <option key={s} value={s}>{s}</option>)}
-        </select>
-
         {/* Reset */}
         {(searchTerm || filterEntity !== 'All' || filterService !== 'All') && (
             <button 
@@ -101,7 +93,7 @@ export const BenefitTable = ({ benefits }: { benefits: BenefitRow[] }) => {
                     <th className="px-4 py-3 font-medium text-gray-900 dark:text-slate-300 uppercase tracking-wider bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 w-24">Entity</th>
                     <th className="px-4 py-3 font-medium text-gray-900 dark:text-slate-300 uppercase tracking-wider bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 w-32">Type</th>
                     <th className="px-4 py-3 font-medium text-gray-900 dark:text-slate-300 uppercase tracking-wider bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800">Service</th>
-                    <th className="px-4 py-3 font-medium text-gray-900 dark:text-slate-300 uppercase tracking-wider bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 w-24">Coverage</th>
+                    <th className="px-4 py-3 font-medium text-gray-900 dark:text-slate-300 uppercase tracking-wider bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 w-32">Coverage</th>
                     <th className="px-4 py-3 font-medium text-gray-900 dark:text-slate-300 uppercase tracking-wider bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 text-right">Limit/Copay</th>
                     <th className="px-4 py-3 font-medium text-gray-900 dark:text-slate-300 uppercase tracking-wider bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800">Info</th>
                 </tr>
@@ -114,7 +106,9 @@ export const BenefitTable = ({ benefits }: { benefits: BenefitRow[] }) => {
                             {b.reference}
                         </td>
                         <td className="px-4 py-3 text-gray-900 dark:text-slate-200 align-top font-medium">{b.type}</td>
-                        <td className="px-4 py-3 text-gray-600 dark:text-slate-400 align-top">{b.service}</td>
+                        <td className="px-4 py-3 text-gray-600 dark:text-slate-400 align-top text-xs leading-relaxed min-w-[200px]">
+                            {b.service}
+                        </td>
                         <td className="px-4 py-3 text-gray-600 dark:text-slate-400 align-top">{b.coverage}</td>
                         
                         <td className="px-4 py-3 text-right font-mono text-gray-700 dark:text-slate-300 align-top">
