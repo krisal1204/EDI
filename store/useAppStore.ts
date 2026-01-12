@@ -1,3 +1,4 @@
+
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
@@ -14,8 +15,8 @@ export const useAppStore = create<AppState>()(
     (set) => ({
       theme: 'light',
       // Default to env var or localhost
-      ollamaHost: process.env.VITE_OLLAMA_HOST || 'http://localhost:11434',
-      ollamaModel: process.env.VITE_OLLAMA_MODEL || 'qwen3:8b',
+      ollamaHost: (import.meta as any).env?.VITE_OLLAMA_HOST || 'http://localhost:11434',
+      ollamaModel: (import.meta as any).env?.VITE_OLLAMA_MODEL || 'qwen3:8b',
       
       toggleTheme: () => set((state) => ({ theme: state.theme === 'light' ? 'dark' : 'light' })),
       setOllamaConfig: (host, model) => set({ ollamaHost: host, ollamaModel: model }),
