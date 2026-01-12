@@ -27,9 +27,9 @@
                 900: '#134e4a',
               },
               slate: {
-                750: '#293548', // Custom lighter panel
+                750: '#293548',
                 800: '#1e293b',
-                850: '#161f2e', // Custom mid-dark
+                850: '#161f2e',
                 900: '#0f172a',
                 950: '#020617', 
               }
@@ -39,40 +39,26 @@
       }
     </script>
     <style>
-      /* Custom Scrollbar for a cleaner technical look */
-      ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
-      }
-      ::-webkit-scrollbar-track {
-        background: transparent;
-      }
-      ::-webkit-scrollbar-thumb {
-        background: #cbd5e1;
-        border-radius: 4px;
-      }
-      ::-webkit-scrollbar-thumb:hover {
-        background: #94a3b8;
-      }
-      .dark ::-webkit-scrollbar-thumb {
-        background: #334155;
-      }
-      .dark ::-webkit-scrollbar-thumb:hover {
-        background: #475569;
-      }
+      ::-webkit-scrollbar { width: 8px; height: 8px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+      ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+      .dark ::-webkit-scrollbar-thumb { background: #334155; }
+      .dark ::-webkit-scrollbar-thumb:hover { background: #475569; }
+      html, body, #root { height: 100%; margin: 0; padding: 0; }
     </style>
-  <script type="importmap">
+<script type="importmap">
 {
   "imports": {
-    "react-markdown": "https://esm.sh/react-markdown@^10.1.0",
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/",
     "vite": "https://esm.sh/vite@^7.3.1",
     "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
     "react-dom": "https://esm.sh/react-dom@^19.2.3",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "react": "https://esm.sh/react@^19.2.3",
-    "zustand/": "https://esm.sh/zustand@^5.0.10/",
-    "zustand": "https://esm.sh/zustand@^5.0.10"
+    "react-markdown": "https://esm.sh/react-markdown@^10.1.0",
+    "zustand": "https://esm.sh/zustand@^5.0.10",
+    "zustand/": "https://esm.sh/zustand@^5.0.10/"
   }
 }
 </script>
