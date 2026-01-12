@@ -2,9 +2,6 @@
 {
   "name": "edi-insight-monorepo",
   "version": "1.0.0",
-  "workspaces": [
-    "backend"
-  ],
   "type": "module",
   "scripts": {
     "dev:frontend": "vite",
