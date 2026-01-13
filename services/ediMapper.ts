@@ -38,6 +38,8 @@ export interface ServiceLine {
 
 export interface ClaimStatusRow {
   entity: string; // Subscriber or Dependent
+  patientName: string;
+  patientId: string;
   claimRef: string; // REF*1K or TRN
   statusCategory: string; // STC01-1
   statusCode: string; // STC01-2
@@ -122,6 +124,7 @@ export const mapEdiToForm = (doc: EdiDocument, targetId?: string): Partial<FormD
       if (idx !== -1) anchorIndex = idx;
   }
 
+  // Payer and Provider are always "upstream" (backward) from the subscriber/dependent HL
   const payerSeg = findBackwards(segments, anchorIndex, s => s.tag === 'NM1' && s.elements[0]?.value === 'PR');
   if (payerSeg) {
     data.payerName = payerSeg.elements[2]?.value || '';
@@ -134,14 +137,34 @@ export const mapEdiToForm = (doc: EdiDocument, targetId?: string): Partial<FormD
     data.providerNpi = providerSeg.elements[8]?.value || '';
   }
 
-  // Find Subscriber
-  // If the anchor is a Dependent HL, look back for Subscriber HL then NM1*IL inside it
-  const subSeg = findBackwards(segments, anchorIndex, s => s.tag === 'NM1' && s.elements[0]?.value === 'IL');
+  // Determine current level based on anchor segment
+  const anchorSeg = segments[anchorIndex];
+  const isSubscriberLevel = anchorSeg.tag === 'HL' && anchorSeg.elements[2]?.value === '22';
+  const isDependentLevel = anchorSeg.tag === 'HL' && anchorSeg.elements[2]?.value === '23';
+
+  // 1. Map Subscriber
+  let subSeg: EdiSegment | undefined;
+  if (isSubscriberLevel) {
+      // If we are at Subscriber HL, the Subscriber NM1 is FORWARD in this loop
+      for(let i = anchorIndex; i < segments.length; i++) {
+          // Stop if we hit next HL or SE
+          if (i > anchorIndex && (segments[i].tag === 'HL' || segments[i].tag === 'SE')) break;
+          if (segments[i].tag === 'NM1' && segments[i].elements[0]?.value === 'IL') {
+              subSeg = segments[i];
+              break;
+          }
+      }
+  } else {
+      // If we are at Dependent level (or deep inside), Subscriber is BACKWARD
+      subSeg = findBackwards(segments, anchorIndex, s => s.tag === 'NM1' && s.elements[0]?.value === 'IL');
+  }
+
   if (subSeg) {
     data.subscriberLastName = subSeg.elements[2]?.value || '';
     data.subscriberFirstName = subSeg.elements[3]?.value || '';
     data.subscriberId = subSeg.elements[8]?.value || '';
 
+    // Find DMG associated with this subscriber (usually immediately following)
     const subIndex = segments.indexOf(subSeg);
     const dmg = segments.slice(subIndex, subIndex + 5).find(s => s.tag === 'DMG');
     if (dmg) {
@@ -149,30 +172,25 @@ export const mapEdiToForm = (doc: EdiDocument, targetId?: string): Partial<FormD
     }
   }
 
-  // Is anchor dependent?
-  // Check if current anchor area has NM1*03
-  // We search LOCAL to the anchor.
-  // If the anchor is the Subscriber HL, we shouldn't find a dependent unless we look forward?
-  // Actually, usually in the "Record Selector", if it's a dependent, targetId is the Dependent HL.
-  
-  const targetSeg = segments[anchorIndex];
+  // 2. Map Dependent
   let depSeg: EdiSegment | undefined;
-  
-  if (targetSeg?.tag === 'HL' && targetSeg.elements[2]?.value === '23') {
-       // Target is Dependent HL. Look for NM1*03 inside this HL block
+  if (isDependentLevel) {
+       data.hasDependent = true;
+       // If we are at Dependent HL, Dependent NM1 is FORWARD
        for(let i = anchorIndex; i < segments.length; i++) {
-           if (i > anchorIndex && segments[i].tag === 'HL') break;
+           if (i > anchorIndex && (segments[i].tag === 'HL' || segments[i].tag === 'SE')) break;
            if (segments[i].tag === 'NM1' && segments[i].elements[0]?.value === '03') {
                depSeg = segments[i];
                break;
            }
        }
-  } else if (targetSeg?.tag === 'NM1' && targetSeg.elements[0]?.value === '03') {
-      depSeg = targetSeg;
+  } else {
+      // If we are at Subscriber level, we generally don't show Dependent info in the form 
+      // unless we want to support nested editing. The RecordList splits them into separate entries.
+      data.hasDependent = false; 
   }
 
   if (depSeg) {
-    data.hasDependent = true;
     data.dependentLastName = depSeg.elements[2]?.value || '';
     data.dependentFirstName = depSeg.elements[3]?.value || '';
 
@@ -182,16 +200,17 @@ export const mapEdiToForm = (doc: EdiDocument, targetId?: string): Partial<FormD
       data.dependentDob = formatDate(dmg.elements[1]?.value);
       data.dependentGender = dmg.elements[2]?.value || 'U';
     }
-  } else {
-    data.hasDependent = false;
   }
 
-  // Dates & EQ
-  // Look forward from anchor until next HL
+  // 3. Map Dates & Service Types (EQ)
+  // These belong to the *current* level (Subscriber or Dependent)
+  // Look FORWARD from anchor until next HL/SE
   const eqSegs: EdiSegment[] = [];
+  data.serviceTypeCodes = []; 
+  
   for (let i = anchorIndex; i < segments.length; i++) {
       const s = segments[i];
-      if (i > anchorIndex && s.tag === 'HL') break;
+      if (i > anchorIndex && (s.tag === 'HL' || s.tag === 'SE')) break;
       
       if (s.tag === 'DTP' && s.elements[0]?.value === '291') {
           data.serviceDate = formatDate(s.elements[2]?.value);
@@ -583,6 +602,11 @@ export const mapEdiToClaimStatus = (doc: EdiDocument): ClaimStatusRow[] => {
     let currentClaim: ClaimStatusRow | null = null;
     let currentLine: ServiceLine | null = null;
 
+    let subName = "";
+    let subId = "";
+    let depName = "";
+    let depId = "";
+
     const pushClaim = () => {
         if (currentClaim) {
             if (currentLine) {
@@ -607,9 +631,27 @@ export const mapEdiToClaimStatus = (doc: EdiDocument): ClaimStatusRow[] => {
         // Track Hierarchy Entity (Subscriber vs Dependent)
         if (seg.tag === 'HL') {
             const level = seg.elements[2]?.value; 
-            if (level === '22' || level === '23') {
+            if (level === '22') {
                 pushClaim(); // Close previous claim context if switching entity
-                currentEntity = level === '22' ? "Subscriber" : "Dependent";
+                currentEntity = "Subscriber";
+                subName = ""; subId = ""; // Reset
+                depName = ""; depId = ""; // Reset
+            } else if (level === '23') {
+                pushClaim();
+                currentEntity = "Dependent";
+                depName = ""; depId = ""; // Reset
+            }
+        }
+
+        // Capture Names
+        if (seg.tag === 'NM1') {
+            const code = seg.elements[0]?.value;
+            if (code === 'IL' && currentEntity === 'Subscriber') {
+                subName = `${seg.elements[3]?.value || ''} ${seg.elements[2]?.value || ''}`.trim();
+                subId = seg.elements[8]?.value || '';
+            } else if ((code === '03' || code === 'QC') && currentEntity === 'Dependent') {
+                depName = `${seg.elements[3]?.value || ''} ${seg.elements[2]?.value || ''}`.trim();
+                depId = seg.elements[8]?.value || '';
             }
         }
 
@@ -617,8 +659,12 @@ export const mapEdiToClaimStatus = (doc: EdiDocument): ClaimStatusRow[] => {
         if (seg.tag === 'TRN' && seg.elements[0]?.value === '2') {
              pushClaim(); // Close previous claim
              
+             const isDep = currentEntity === 'Dependent';
+
              currentClaim = {
                  entity: currentEntity,
+                 patientName: isDep ? depName : subName,
+                 patientId: isDep ? depId : subId,
                  claimRef: seg.elements[1]?.value || "Unknown",
                  statusCategory: "-",
                  statusCode: "-",

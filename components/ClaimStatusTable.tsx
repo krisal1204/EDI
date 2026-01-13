@@ -1,3 +1,4 @@
+
 import React, { useState, Fragment } from 'react';
 import { ClaimStatusRow } from '../services/ediMapper';
 import { STATUS_CODES } from '../services/offlineAnalyzer';
@@ -49,7 +50,12 @@ export const ClaimStatusTable = ({ claims }: { claims: ClaimStatusRow[] }) => {
                                 )}
                             </td>
                             <td className="px-4 py-3 whitespace-nowrap align-top text-gray-600 dark:text-slate-300 font-medium">
-                               {c.entity}
+                                <div className="font-bold text-gray-900 dark:text-white">{c.patientName || c.entity}</div>
+                                {(c.patientName || c.patientId) && (
+                                    <div className="text-[10px] text-gray-500 dark:text-slate-400">
+                                        {c.entity} {c.patientId ? `• ${c.patientId}` : ''}
+                                    </div>
+                                )}
                             </td>
                             <td className="px-4 py-3 font-mono text-gray-700 dark:text-slate-400 align-top">
                                {c.claimRef}
