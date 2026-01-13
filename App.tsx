@@ -11,7 +11,7 @@ import { Landing } from './components/Landing';
 import { JsonViewer } from './components/JsonViewer';
 import { SendMessage } from './components/SendMessage';
 import { RecordList } from './components/RecordList';
-import { parseEdi, flattenTree } from './services/ediParser';
+import { parseEdi, flattenTree, replaceRecordInEdi, getRecordRaw } from './services/ediParser';
 import { EdiDocument, EdiSegment } from './types';
 import { FormData270, FormData276, FormData837, FormData834, build270, build276, build837, build834 } from './services/ediBuilder';
 import { mapEdiToForm, mapEdiToForm276, mapEdiToForm837, mapEdiToForm834, mapEdiToBenefits, BenefitRow, mapEdiToClaimStatus, ClaimStatusRow } from './services/ediMapper';
@@ -177,6 +177,7 @@ function App() {
   const [formData834, setFormData834] = useState<FormData834>(INITIAL_FORM_DATA_834);
   
   const [rawEdi, setRawEdi] = useState<string>('');
+  const [originalEdi, setOriginalEdi] = useState<string>(''); // Persist original loaded file for restoration
   const [doc, setDoc] = useState<EdiDocument | null>(null);
   
   // Record Handling
@@ -197,7 +198,7 @@ function App() {
   const [generatorMode, setGeneratorMode] = useState<'270' | '276' | '837' | '834'>('270');
 
   // Resizable Sidebar State
-  const [sidebarWidth, setSidebarWidth] = useState(450);
+  const [sidebarWidth, setSidebarWidth] = useState(700);
   const [isResizing, setIsResizing] = useState(false);
   const [lastTransactionType, setLastTransactionType] = useState<string>('Unknown');
 
@@ -245,25 +246,47 @@ function App() {
     };
   }, [isResizing]);
 
-  const processEdi = (edi: string, shouldMapToForm: boolean, specificRecordId?: string) => {
+  const handleLoadNewEdi = (edi: string) => {
+      setRawEdi(edi);
+      setOriginalEdi(edi);
+      processEdi(edi, true);
+  };
+
+  const processEdi = (edi: string, shouldMapToForm: boolean, specificRecordId?: string, maintainSelectionIndex?: number) => {
     try {
       const parsed = parseEdi(edi);
       setDoc(parsed);
       
-      // If we are doing a fresh load/map, extract records
-      if (shouldMapToForm) {
-          const extractedRecords = extractRecords(parsed);
-          setRecords(extractedRecords);
-          
-          // Select default (first) or specific
-          let targetId = specificRecordId;
-          if (!targetId && extractedRecords.length > 0) {
-              targetId = extractedRecords[0].id;
-          }
-          setSelectedRecordId(targetId || null);
+      // Always extract records to reflect any changes in the EDI file (labels, etc)
+      const extractedRecords = extractRecords(parsed);
+      setRecords(extractedRecords);
+      
+      let targetId = specificRecordId;
 
-          // Map data based on the target record
+      // Handle selection persistence logic
+      if (maintainSelectionIndex !== undefined && maintainSelectionIndex >= 0 && maintainSelectionIndex < extractedRecords.length) {
+          // If we edited a record, IDs change, so we try to select by index to keep user context
+          targetId = extractedRecords[maintainSelectionIndex].id;
+      } else if (!targetId && extractedRecords.length > 0) {
+          // Default to first
+          targetId = extractedRecords[0].id;
+      }
+
+      // Update Selection
+      setSelectedRecordId(targetId || null);
+
+      // Only Map to Form if requested (e.g. on new load or explicit record switch)
+      // If we just edited the form, we don't want to re-map back from the EDI immediately, 
+      // as it might cause cursor jumps or minor state loss if mapping isn't 100% loss-less.
+      if (shouldMapToForm) {
           mapToForm(parsed, targetId);
+          
+          // Also sync inspector selection if we switched context
+          if (targetId) {
+              const flat = flattenTree(parsed.segments);
+              const seg = flat.find(s => s.id === targetId);
+              if (seg) setSelectedSegment(seg);
+          }
       }
 
       // UI sizing logic
@@ -271,9 +294,9 @@ function App() {
           const windowWidth = window.innerWidth;
           const maxWidth = windowWidth * 0.8;
           if (parsed.transactionType === '271' || parsed.transactionType === '277') {
-              setSidebarWidth(Math.min(550, maxWidth)); 
+              setSidebarWidth(Math.min(750, maxWidth)); 
           } else {
-              setSidebarWidth(Math.min(450, maxWidth)); 
+              setSidebarWidth(Math.min(700, maxWidth)); 
           }
           setLastTransactionType(parsed.transactionType);
       }
@@ -282,7 +305,7 @@ function App() {
         setSelectedSegment(parsed.segments[0]);
       }
 
-      // Handle List Views (271/277 usually show all, ignoring record selection for table view)
+      // Handle List Views (271/277 usually show all)
       if (parsed.transactionType === '271') {
           setBenefits(mapEdiToBenefits(parsed));
           setClaims([]);
@@ -319,42 +342,92 @@ function App() {
   };
 
   const handleRecordSelect = (record: EdiRecord) => {
-      setSelectedRecordId(record.id);
-      if (doc) {
-          mapToForm(doc, record.id);
-          // Auto-scroll/focus in tree
-          const seg = flattenTree(doc.segments).find(s => s.id === record.id);
-          if (seg) setSelectedSegment(seg);
+      // Find the index of this record in current `records` array.
+      // We use index because IDs get regenerated on every parse, making old IDs stale.
+      const index = records.findIndex(r => r.id === record.id);
+      
+      const ediToUse = rawEdi || originalEdi;
+      
+      // Pass the index to processEdi. It will re-parse the EDI (generating new IDs), 
+      // but select the record at the same index, effectively persisting selection through the ID change.
+      processEdi(ediToUse, true, undefined, index !== -1 ? index : undefined);
+  };
+
+  const handleResetAll = () => {
+     if (originalEdi) {
+         setRawEdi(originalEdi);
+         processEdi(originalEdi, true);
+     }
+  };
+
+  const handleResetRecord = (index: number) => {
+      if (!originalEdi || !doc || index < 0) return;
+
+      // 1. Get Original Content for this index
+      // We parse the original document to find the segment structure
+      const origDoc = parseEdi(originalEdi);
+      const origRecords = extractRecords(origDoc);
+      
+      if (index >= origRecords.length) return; // Safety check
+      
+      const origRecordId = origRecords[index].id;
+      const origRaw = getRecordRaw(origDoc, origRecordId);
+
+      // 2. Get Current ID
+      // The current document might have different IDs or modified content
+      if (index >= records.length) return;
+      const currentRecordId = records[index].id;
+
+      // 3. Replace the current record with the original record's raw text
+      const updatedEdi = replaceRecordInEdi(doc, origRaw, currentRecordId);
+      
+      setRawEdi(updatedEdi);
+      // Reprocess, mapping back to form, maintaining the selection at this index
+      processEdi(updatedEdi, true, undefined, index);
+  };
+
+  // Helper to splice changes into the main EDI file
+  const updateEdiWithFormChange = (newSingleRecordEdi: string) => {
+      if (!doc || !selectedRecordId) {
+          // Fallback if no doc context (e.g. creating from scratch)
+          setRawEdi(newSingleRecordEdi);
+          processEdi(newSingleRecordEdi, false);
+          return;
       }
+      
+      // Determine current selection index before update (to restore selection after ID change)
+      const currentIndex = records.findIndex(r => r.id === selectedRecordId);
+
+      // Perform Splice
+      const updatedEdi = replaceRecordInEdi(doc, newSingleRecordEdi, selectedRecordId);
+      
+      setRawEdi(updatedEdi);
+      // Process without re-mapping form, but maintaining selection index
+      processEdi(updatedEdi, false, undefined, currentIndex);
   };
 
   const handleFormChange = (newData: FormData270) => {
     setFormData(newData);
     const newEdi = build270(newData);
-    setRawEdi(newEdi);
-    // When editing, we treat the output as a single record file
-    processEdi(newEdi, true); 
+    updateEdiWithFormChange(newEdi);
   };
 
   const handleForm276Change = (newData: FormData276) => {
     setFormData276(newData);
     const newEdi = build276(newData);
-    setRawEdi(newEdi);
-    processEdi(newEdi, true);
+    updateEdiWithFormChange(newEdi);
   }
 
   const handleForm837Change = (newData: FormData837) => {
     setFormData837(newData);
     const newEdi = build837(newData);
-    setRawEdi(newEdi);
-    processEdi(newEdi, true);
+    updateEdiWithFormChange(newEdi);
   }
 
   const handleForm834Change = (newData: FormData834) => {
     setFormData834(newData);
     const newEdi = build834(newData);
-    setRawEdi(newEdi);
-    processEdi(newEdi, true);
+    updateEdiWithFormChange(newEdi);
   }
 
   const handleGeneratorModeChange = (mode: '270' | '276' | '837' | '834') => {
@@ -365,8 +438,10 @@ function App() {
       else if (mode === '837') newEdi = build837(formData837);
       else newEdi = build834(formData834);
       
+      // Switching generator mode usually implies starting fresh or generating scratchpad data
+      // So we overwrite rawEdi completely here.
       setRawEdi(newEdi);
-      processEdi(newEdi, true);
+      processEdi(newEdi, false);
   };
 
   const handleClear = () => {
@@ -375,13 +450,14 @@ function App() {
     setFormData837(INITIAL_FORM_DATA_837);
     setFormData834(INITIAL_FORM_DATA_834);
     setRawEdi('');
+    setOriginalEdi('');
     setDoc(null);
     setBenefits([]);
     setClaims([]);
     setRecords([]);
     setSelectedRecordId(null);
     setViewMode('inspector');
-    setSidebarWidth(450); 
+    setSidebarWidth(700); 
     setLastTransactionType('Unknown');
     setGeneratorMode('270');
     setJsonExpandMode('auto');
@@ -412,11 +488,87 @@ function App() {
   };
 
   const handleFieldFocus = (fieldName: string) => {
-    // Basic field focus logic can remain, but might need adjustment for multi-record context.
-    // For now, it searches flattened tree, which is fine as `selectedSegment` will update.
     if (!doc) return;
     const flat = flattenTree(doc.segments);
-    // ... existing search logic ... (simplified for brevity, keeps existing behavior which finds *first* match)
+    
+    // Find anchor for current record if selected
+    let anchorIdx = 0;
+    if (selectedRecordId) {
+        const idx = flat.findIndex(s => s.id === selectedRecordId);
+        if (idx !== -1) anchorIdx = idx;
+    }
+
+    // Helper to find backward from anchor
+    const findBackwards = (start: number, predicate: (s: EdiSegment) => boolean) => {
+        for (let i = start; i >= 0; i--) {
+            if (predicate(flat[i])) return flat[i];
+        }
+        return undefined;
+    };
+
+    let target: EdiSegment | undefined;
+
+    // Pattern matching field names to segments
+    if (fieldName.includes('payer')) {
+         // NM1*PR (Payer) or N1*IN (Insurer)
+         target = findBackwards(anchorIdx, s => (s.tag === 'NM1' && s.elements[0]?.value === 'PR') || (s.tag === 'N1' && s.elements[0]?.value === 'IN'));
+    } 
+    else if (fieldName.includes('provider') || fieldName.includes('billingProvider')) {
+         // NM1*1P (Provider), NM1*85 (Billing Provider), NM1*41 (Submitter/Provider)
+         target = findBackwards(anchorIdx, s => s.tag === 'NM1' && (['1P', '85', '41'].includes(s.elements[0]?.value)));
+    }
+    else if (fieldName.includes('subscriber')) {
+         // Look for NM1*IL (Subscriber/Insured)
+         target = findBackwards(anchorIdx, s => s.tag === 'NM1' && s.elements[0]?.value === 'IL');
+         
+         // If looking for DOB, find associated DMG
+         if (fieldName.includes('Dob') && target) {
+             const subIdx = flat.indexOf(target);
+             target = flat.slice(subIdx, subIdx + 10).find(s => s.tag === 'DMG');
+         }
+    }
+    else if (fieldName.includes('dependent')) {
+         // Look for NM1*03 (Dependent)
+         // Dependents might be forward or backward from anchor depending on structure
+         // Try checking 20 segments around anchor
+         const start = Math.max(0, anchorIdx - 20);
+         const end = Math.min(flat.length, anchorIdx + 20);
+         target = flat.slice(start, end).find(s => s.tag === 'NM1' && s.elements[0]?.value === '03');
+
+         if (fieldName.includes('Dob') && target) {
+             const depIdx = flat.indexOf(target);
+             target = flat.slice(depIdx, depIdx + 10).find(s => s.tag === 'DMG');
+         }
+    }
+    else if (fieldName === 'claimId' || fieldName === 'totalCharge') {
+         if (doc.transactionType === '837') {
+             // 837 CLM segment
+             if (flat[anchorIdx]?.tag === 'CLM') target = flat[anchorIdx];
+             else target = findBackwards(anchorIdx, s => s.tag === 'CLM');
+         } else {
+             // 276 TRN segment
+             target = flat.slice(anchorIdx, anchorIdx + 10).find(s => s.tag === 'TRN');
+         }
+    }
+    else if (fieldName === 'serviceDate') {
+         // DTP segments (Service Date 472 or 291)
+         target = flat.slice(anchorIdx, anchorIdx + 20).find(s => s.tag === 'DTP' && (s.elements[0]?.value === '472' || s.elements[0]?.value === '291'));
+    }
+    else if (fieldName === 'serviceTypeCodes') {
+         target = flat.slice(anchorIdx, anchorIdx + 20).find(s => s.tag === 'EQ');
+    }
+    else if (fieldName.includes('sponsor')) {
+         target = findBackwards(anchorIdx, s => s.tag === 'N1' && s.elements[0]?.value === 'P5');
+    }
+    else if (fieldName.includes('maintenance')) {
+         target = findBackwards(anchorIdx, s => s.tag === 'INS');
+    }
+    
+    if (target) {
+        setSelectedSegment(target);
+        // We do not scroll automatically here to avoid jumpiness during typing,
+        // but the SegmentTree will highlight the node.
+    }
   };
 
   const enrichedJson = useMemo(() => {
@@ -494,6 +646,9 @@ function App() {
                         records={records} 
                         selectedId={selectedRecordId} 
                         onSelect={handleRecordSelect} 
+                        onResetAll={handleResetAll}
+                        onResetRecord={handleResetRecord}
+                        isModified={rawEdi !== originalEdi}
                     />
                 )}
                 
@@ -525,7 +680,7 @@ function App() {
             <>
                 {!doc && !rawEdi ? (
                     <div className="w-full h-full">
-                        <DragDropInput onProcess={(txt) => { setRawEdi(txt); processEdi(txt, true); }} />
+                        <DragDropInput onProcess={handleLoadNewEdi} />
                     </div>
                 ) : (
                     <>
