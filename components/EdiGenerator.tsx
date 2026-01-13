@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FormData270, FormData276, FormData837, FormData834, Member834, ServiceLine837 } from '../services/ediBuilder';
 import { EdiSegment } from '../types';
 import { BenefitRow, ClaimStatusRow } from '../services/ediMapper';
@@ -26,10 +26,11 @@ interface Props {
   onFieldFocus: (field: string) => void;
 }
 
-const InputField = ({ label, value, onChange, onFocus, type = 'text', className = '', placeholder }: { label: string, value: string, onChange: (val: string) => void, onFocus?: () => void, type?: string, className?: string, placeholder?: string }) => (
+const InputField = ({ label, value, onChange, onFocus, type = 'text', className = '', placeholder, id }: { label: string, value: string, onChange: (val: string) => void, onFocus?: () => void, type?: string, className?: string, placeholder?: string, id?: string }) => (
   <div className={`mb-4 ${className}`}>
-    <label className="block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1.5 uppercase tracking-wide">{label}</label>
+    <label className="block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1.5 uppercase tracking-wide" htmlFor={id}>{label}</label>
     <input
+      id={id}
       type={type}
       className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded text-sm text-gray-900 dark:text-white focus:outline-none focus:border-black dark:focus:border-brand-500 focus:ring-1 focus:ring-black dark:focus:ring-brand-500 transition-colors"
       value={value}
@@ -40,11 +41,12 @@ const InputField = ({ label, value, onChange, onFocus, type = 'text', className 
   </div>
 );
 
-const SelectField = ({ label, value, onChange, onFocus, options, className = '' }: { label: string, value: string, onChange: (val: string) => void, onFocus?: () => void, options: {value: string, label: string}[], className?: string }) => (
+const SelectField = ({ label, value, onChange, onFocus, options, className = '', id }: { label: string, value: string, onChange: (val: string) => void, onFocus?: () => void, options: {value: string, label: string}[], className?: string, id?: string }) => (
   <div className={`mb-4 ${className}`}>
-    <label className="block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1.5 uppercase tracking-wide">{label}</label>
+    <label className="block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1.5 uppercase tracking-wide" htmlFor={id}>{label}</label>
     <div className="relative">
       <select
+        id={id}
         className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded text-sm text-gray-900 dark:text-white focus:outline-none focus:border-black dark:focus:border-brand-500 focus:ring-1 focus:ring-black dark:focus:ring-brand-500 transition-colors appearance-none cursor-pointer"
         value={value}
         onChange={e => onChange(e.target.value)}
@@ -61,7 +63,7 @@ const SelectField = ({ label, value, onChange, onFocus, options, className = '' 
   </div>
 );
 
-const AutocompleteField = ({ label, value, onChange, onFocus, options, placeholder }: { label: string, value: string, onChange: (val: string) => void, onFocus?: () => void, options: Record<string, string>, placeholder?: string }) => {
+const AutocompleteField = ({ label, value, onChange, onFocus, options, placeholder, id }: { label: string, value: string, onChange: (val: string) => void, onFocus?: () => void, options: Record<string, string>, placeholder?: string, id?: string }) => {
     const [showSuggestions, setShowSuggestions] = useState(false);
     
     // Filter options based on input
@@ -74,8 +76,9 @@ const AutocompleteField = ({ label, value, onChange, onFocus, options, placehold
 
     return (
         <div className="mb-4 relative">
-            <label className="block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1.5 uppercase tracking-wide">{label}</label>
+            <label className="block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1.5 uppercase tracking-wide" htmlFor={id}>{label}</label>
             <input
+                id={id}
                 type="text"
                 className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded text-sm text-gray-900 dark:text-white focus:outline-none focus:border-black dark:focus:border-brand-500 focus:ring-1 focus:ring-black dark:focus:ring-brand-500 transition-colors"
                 value={value}
@@ -167,9 +170,46 @@ export const EdiGenerator: React.FC<Props> = ({
   transactionType,
   generatorMode, onSetGeneratorMode,
   benefits, claims,
+  selectedSegment,
   onFieldFocus
 }) => {
   const activeMode = generatorMode;
+
+  // Sync Structure Selection -> Form Input Focus
+  useEffect(() => {
+      if (!selectedSegment) return;
+      const s = selectedSegment;
+      let fieldToFocus = '';
+
+      if (s.tag === 'NM1') {
+          const type = s.elements.find(e => e.index === 1)?.value;
+          if (type === 'IL') fieldToFocus = 'subscriberFirstName';
+          else if (type === 'PR' || (type === 'IN' && activeMode === '834')) fieldToFocus = 'payerName';
+          else if (type === '1P' || type === '85') fieldToFocus = 'providerName';
+          else if (type === '03') fieldToFocus = 'dependentFirstName';
+          else if (type === 'P5') fieldToFocus = 'sponsorName';
+      }
+      else if (s.tag === 'CLM') fieldToFocus = 'claimId';
+      else if (s.tag === 'TRN') fieldToFocus = 'claimId'; // 276
+      else if (s.tag === 'DMG') {
+          fieldToFocus = 'subscriberDob'; 
+      }
+      else if (s.tag === 'DTP') {
+          const qual = s.elements.find(e => e.index === 1)?.value;
+          if (qual === '472' || qual === '291') fieldToFocus = 'serviceDate';
+          if (qual === '348') fieldToFocus = 'planEffectiveDate';
+      }
+      else if (s.tag === 'EQ') fieldToFocus = 'serviceTypeCodes';
+      else if (s.tag === 'INS') fieldToFocus = 'subscriberFirstName'; // 834 Member start
+      
+      if (fieldToFocus) {
+          const el = document.getElementById(fieldToFocus);
+          if (el) {
+              el.focus();
+              el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+      }
+  }, [selectedSegment, activeMode]);
 
   if (transactionType === '271') {
     return <BenefitTable benefits={benefits} />;
@@ -183,18 +223,20 @@ export const EdiGenerator: React.FC<Props> = ({
     <>
       <SectionHeader title="Payer & Provider" />
       <div className="grid grid-cols-2 gap-4">
-        <InputField label="Payer Name" value={formData.payerName} onChange={v => onChange({...formData, payerName: v})} onFocus={() => onFieldFocus('payerName')} />
-        <InputField label="Payer ID" value={formData.payerId} onChange={v => onChange({...formData, payerId: v})} onFocus={() => onFieldFocus('payerId')} />
-        <InputField label="Provider Name" value={formData.providerName} onChange={v => onChange({...formData, providerName: v})} onFocus={() => onFieldFocus('providerName')} />
-        <InputField label="Provider NPI" value={formData.providerNpi} onChange={v => onChange({...formData, providerNpi: v})} onFocus={() => onFieldFocus('providerNpi')} />
+        <InputField id="payerName" label="Payer Name" value={formData.payerName} onChange={v => onChange({...formData, payerName: v})} onFocus={() => onFieldFocus('payerName')} />
+        <InputField id="payerId" label="Payer ID" value={formData.payerId} onChange={v => onChange({...formData, payerId: v})} onFocus={() => onFieldFocus('payerId')} />
+        <InputField id="providerName" label="Provider Name" value={formData.providerName} onChange={v => onChange({...formData, providerName: v})} onFocus={() => onFieldFocus('providerName')} />
+        <InputField id="providerNpi" label="Provider NPI" value={formData.providerNpi} onChange={v => onChange({...formData, providerNpi: v})} onFocus={() => onFieldFocus('providerNpi')} />
       </div>
 
       <SectionHeader title="Subscriber" />
       <div className="grid grid-cols-2 gap-4">
-        <InputField label="First Name" value={formData.subscriberFirstName} onChange={v => onChange({...formData, subscriberFirstName: v})} onFocus={() => onFieldFocus('subscriberFirstName')} />
-        <InputField label="Last Name" value={formData.subscriberLastName} onChange={v => onChange({...formData, subscriberLastName: v})} onFocus={() => onFieldFocus('subscriberLastName')} />
-        <InputField label="Member ID" value={formData.subscriberId} onChange={v => onChange({...formData, subscriberId: v})} onFocus={() => onFieldFocus('subscriberId')} />
-        <DatePicker label="DOB" value={formData.subscriberDob} onChange={v => onChange({...formData, subscriberDob: v})} onFocus={() => onFieldFocus('subscriberDob')} />
+        <InputField id="subscriberFirstName" label="First Name" value={formData.subscriberFirstName} onChange={v => onChange({...formData, subscriberFirstName: v})} onFocus={() => onFieldFocus('subscriberFirstName')} />
+        <InputField id="subscriberLastName" label="Last Name" value={formData.subscriberLastName} onChange={v => onChange({...formData, subscriberLastName: v})} onFocus={() => onFieldFocus('subscriberLastName')} />
+        <InputField id="subscriberId" label="Member ID" value={formData.subscriberId} onChange={v => onChange({...formData, subscriberId: v})} onFocus={() => onFieldFocus('subscriberId')} />
+        <div id="subscriberDob">
+            <DatePicker label="DOB" value={formData.subscriberDob} onChange={v => onChange({...formData, subscriberDob: v})} onFocus={() => onFieldFocus('subscriberDob')} />
+        </div>
       </div>
 
       <div className="mt-4 mb-4 flex items-center">
@@ -212,19 +254,23 @@ export const EdiGenerator: React.FC<Props> = ({
         <>
             <SectionHeader title="Dependent" />
             <div className="grid grid-cols-2 gap-4">
-                <InputField label="First Name" value={formData.dependentFirstName} onChange={v => onChange({...formData, dependentFirstName: v})} onFocus={() => onFieldFocus('dependentFirstName')} />
-                <InputField label="Last Name" value={formData.dependentLastName} onChange={v => onChange({...formData, dependentLastName: v})} onFocus={() => onFieldFocus('dependentLastName')} />
-                <DatePicker label="DOB" value={formData.dependentDob} onChange={v => onChange({...formData, dependentDob: v})} onFocus={() => onFieldFocus('dependentDob')} />
-                <SelectField label="Gender" value={formData.dependentGender} onChange={v => onChange({...formData, dependentGender: v})} onFocus={() => onFieldFocus('dependentGender')} options={GENDER_OPTIONS} />
+                <InputField id="dependentFirstName" label="First Name" value={formData.dependentFirstName} onChange={v => onChange({...formData, dependentFirstName: v})} onFocus={() => onFieldFocus('dependentFirstName')} />
+                <InputField id="dependentLastName" label="Last Name" value={formData.dependentLastName} onChange={v => onChange({...formData, dependentLastName: v})} onFocus={() => onFieldFocus('dependentLastName')} />
+                <div id="dependentDob">
+                    <DatePicker label="DOB" value={formData.dependentDob} onChange={v => onChange({...formData, dependentDob: v})} onFocus={() => onFieldFocus('dependentDob')} />
+                </div>
+                <SelectField id="dependentGender" label="Gender" value={formData.dependentGender} onChange={v => onChange({...formData, dependentGender: v})} onFocus={() => onFieldFocus('dependentGender')} options={GENDER_OPTIONS} />
             </div>
         </>
       )}
 
       <SectionHeader title="Request Details" />
       <div className="space-y-4">
-        <DatePicker label="Service Date" value={formData.serviceDate} onChange={v => onChange({...formData, serviceDate: v})} onFocus={() => onFieldFocus('serviceDate')} />
+        <div id="serviceDate">
+            <DatePicker label="Service Date" value={formData.serviceDate} onChange={v => onChange({...formData, serviceDate: v})} onFocus={() => onFieldFocus('serviceDate')} />
+        </div>
         
-        <div>
+        <div id="serviceTypeCodes">
             <label className="block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1.5 uppercase tracking-wide">Service Types</label>
             <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded p-3">
                 <div className="flex flex-wrap gap-2 mb-3">
@@ -277,17 +323,17 @@ export const EdiGenerator: React.FC<Props> = ({
     <>
       <SectionHeader title="Payer & Provider" />
       <div className="grid grid-cols-2 gap-4">
-        <InputField label="Payer Name" value={formData276.payerName} onChange={v => onChange276({...formData276, payerName: v})} onFocus={() => onFieldFocus('payerName')} />
-        <InputField label="Payer ID" value={formData276.payerId} onChange={v => onChange276({...formData276, payerId: v})} onFocus={() => onFieldFocus('payerId')} />
-        <InputField label="Provider Name" value={formData276.providerName} onChange={v => onChange276({...formData276, providerName: v})} onFocus={() => onFieldFocus('providerName')} />
-        <InputField label="Provider NPI" value={formData276.providerNpi} onChange={v => onChange276({...formData276, providerNpi: v})} onFocus={() => onFieldFocus('providerNpi')} />
+        <InputField id="payerName" label="Payer Name" value={formData276.payerName} onChange={v => onChange276({...formData276, payerName: v})} onFocus={() => onFieldFocus('payerName')} />
+        <InputField id="payerId" label="Payer ID" value={formData276.payerId} onChange={v => onChange276({...formData276, payerId: v})} onFocus={() => onFieldFocus('payerId')} />
+        <InputField id="providerName" label="Provider Name" value={formData276.providerName} onChange={v => onChange276({...formData276, providerName: v})} onFocus={() => onFieldFocus('providerName')} />
+        <InputField id="providerNpi" label="Provider NPI" value={formData276.providerNpi} onChange={v => onChange276({...formData276, providerNpi: v})} onFocus={() => onFieldFocus('providerNpi')} />
       </div>
 
       <SectionHeader title="Subscriber" />
       <div className="grid grid-cols-2 gap-4">
-        <InputField label="First Name" value={formData276.subscriberFirstName} onChange={v => onChange276({...formData276, subscriberFirstName: v})} onFocus={() => onFieldFocus('subscriberFirstName')} />
-        <InputField label="Last Name" value={formData276.subscriberLastName} onChange={v => onChange276({...formData276, subscriberLastName: v})} onFocus={() => onFieldFocus('subscriberLastName')} />
-        <InputField label="Member ID" value={formData276.subscriberId} onChange={v => onChange276({...formData276, subscriberId: v})} onFocus={() => onFieldFocus('subscriberId')} />
+        <InputField id="subscriberFirstName" label="First Name" value={formData276.subscriberFirstName} onChange={v => onChange276({...formData276, subscriberFirstName: v})} onFocus={() => onFieldFocus('subscriberFirstName')} />
+        <InputField id="subscriberLastName" label="Last Name" value={formData276.subscriberLastName} onChange={v => onChange276({...formData276, subscriberLastName: v})} onFocus={() => onFieldFocus('subscriberLastName')} />
+        <InputField id="subscriberId" label="Member ID" value={formData276.subscriberId} onChange={v => onChange276({...formData276, subscriberId: v})} onFocus={() => onFieldFocus('subscriberId')} />
       </div>
 
       <div className="mt-4 mb-4 flex items-center">
@@ -305,17 +351,19 @@ export const EdiGenerator: React.FC<Props> = ({
         <>
             <SectionHeader title="Dependent" />
             <div className="grid grid-cols-2 gap-4">
-                <InputField label="First Name" value={formData276.dependentFirstName} onChange={v => onChange276({...formData276, dependentFirstName: v})} onFocus={() => onFieldFocus('dependentFirstName')} />
-                <InputField label="Last Name" value={formData276.dependentLastName} onChange={v => onChange276({...formData276, dependentLastName: v})} onFocus={() => onFieldFocus('dependentLastName')} />
+                <InputField id="dependentFirstName" label="First Name" value={formData276.dependentFirstName} onChange={v => onChange276({...formData276, dependentFirstName: v})} onFocus={() => onFieldFocus('dependentFirstName')} />
+                <InputField id="dependentLastName" label="Last Name" value={formData276.dependentLastName} onChange={v => onChange276({...formData276, dependentLastName: v})} onFocus={() => onFieldFocus('dependentLastName')} />
             </div>
         </>
       )}
 
       <SectionHeader title="Claim Details" />
       <div className="grid grid-cols-2 gap-4">
-        <InputField label="Claim ID (Trace)" value={formData276.claimId} onChange={v => onChange276({...formData276, claimId: v})} onFocus={() => onFieldFocus('claimId')} />
-        <InputField label="Charge Amount" value={formData276.chargeAmount} onChange={v => onChange276({...formData276, chargeAmount: v})} onFocus={() => onFieldFocus('chargeAmount')} />
-        <DatePicker label="Service Date" value={formData276.serviceDate} onChange={v => onChange276({...formData276, serviceDate: v})} onFocus={() => onFieldFocus('serviceDate')} />
+        <InputField id="claimId" label="Claim ID (Trace)" value={formData276.claimId} onChange={v => onChange276({...formData276, claimId: v})} onFocus={() => onFieldFocus('claimId')} />
+        <InputField id="chargeAmount" label="Charge Amount" value={formData276.chargeAmount} onChange={v => onChange276({...formData276, chargeAmount: v})} onFocus={() => onFieldFocus('chargeAmount')} />
+        <div id="serviceDate">
+            <DatePicker label="Service Date" value={formData276.serviceDate} onChange={v => onChange276({...formData276, serviceDate: v})} onFocus={() => onFieldFocus('serviceDate')} />
+        </div>
       </div>
     </>
   );
@@ -363,36 +411,39 @@ export const EdiGenerator: React.FC<Props> = ({
 
         <SectionHeader title="Billing Provider" />
         <div className="grid grid-cols-2 gap-4">
-            <InputField label="Name" value={formData837.billingProviderName} onChange={v => onChange837({...formData837, billingProviderName: v})} onFocus={() => onFieldFocus('billingProviderName')} />
-            <InputField label="NPI" value={formData837.billingProviderNpi} onChange={v => onChange837({...formData837, billingProviderNpi: v})} onFocus={() => onFieldFocus('billingProviderNpi')} />
-            <InputField label="Tax ID" value={formData837.billingTaxId} onChange={v => onChange837({...formData837, billingTaxId: v})} onFocus={() => onFieldFocus('billingTaxId')} />
-            <InputField label="Address" value={formData837.billingProviderAddress} onChange={v => onChange837({...formData837, billingProviderAddress: v})} onFocus={() => onFieldFocus('billingProviderAddress')} />
-            <InputField label="City" value={formData837.billingProviderCity} onChange={v => onChange837({...formData837, billingProviderCity: v})} onFocus={() => onFieldFocus('billingProviderCity')} />
+            <InputField id="billingProviderName" label="Name" value={formData837.billingProviderName} onChange={v => onChange837({...formData837, billingProviderName: v})} onFocus={() => onFieldFocus('billingProviderName')} />
+            <InputField id="billingProviderNpi" label="NPI" value={formData837.billingProviderNpi} onChange={v => onChange837({...formData837, billingProviderNpi: v})} onFocus={() => onFieldFocus('billingProviderNpi')} />
+            <InputField id="billingTaxId" label="Tax ID" value={formData837.billingTaxId} onChange={v => onChange837({...formData837, billingTaxId: v})} onFocus={() => onFieldFocus('billingTaxId')} />
+            <InputField id="billingProviderAddress" label="Address" value={formData837.billingProviderAddress} onChange={v => onChange837({...formData837, billingProviderAddress: v})} onFocus={() => onFieldFocus('billingProviderAddress')} />
+            <InputField id="billingProviderCity" label="City" value={formData837.billingProviderCity} onChange={v => onChange837({...formData837, billingProviderCity: v})} onFocus={() => onFieldFocus('billingProviderCity')} />
             <div className="grid grid-cols-2 gap-4">
-                <InputField label="State" value={formData837.billingProviderState} onChange={v => onChange837({...formData837, billingProviderState: v})} onFocus={() => onFieldFocus('billingProviderState')} />
-                <InputField label="Zip" value={formData837.billingProviderZip} onChange={v => onChange837({...formData837, billingProviderZip: v})} onFocus={() => onFieldFocus('billingProviderZip')} />
+                <InputField id="billingProviderState" label="State" value={formData837.billingProviderState} onChange={v => onChange837({...formData837, billingProviderState: v})} onFocus={() => onFieldFocus('billingProviderState')} />
+                <InputField id="billingProviderZip" label="Zip" value={formData837.billingProviderZip} onChange={v => onChange837({...formData837, billingProviderZip: v})} onFocus={() => onFieldFocus('billingProviderZip')} />
             </div>
         </div>
 
         <SectionHeader title="Subscriber" />
         <div className="grid grid-cols-2 gap-4">
-            <InputField label="First Name" value={formData837.subscriberFirstName} onChange={v => onChange837({...formData837, subscriberFirstName: v})} onFocus={() => onFieldFocus('subscriberFirstName')} />
-            <InputField label="Last Name" value={formData837.subscriberLastName} onChange={v => onChange837({...formData837, subscriberLastName: v})} onFocus={() => onFieldFocus('subscriberLastName')} />
-            <InputField label="Member ID" value={formData837.subscriberId} onChange={v => onChange837({...formData837, subscriberId: v})} onFocus={() => onFieldFocus('subscriberId')} />
-            <DatePicker label="DOB" value={formData837.subscriberDob} onChange={v => onChange837({...formData837, subscriberDob: v})} onFocus={() => onFieldFocus('subscriberDob')} />
-            <InputField label="Gender" value={formData837.subscriberGender} onChange={v => onChange837({...formData837, subscriberGender: v})} onFocus={() => onFieldFocus('subscriberGender')} />
+            <InputField id="subscriberFirstName" label="First Name" value={formData837.subscriberFirstName} onChange={v => onChange837({...formData837, subscriberFirstName: v})} onFocus={() => onFieldFocus('subscriberFirstName')} />
+            <InputField id="subscriberLastName" label="Last Name" value={formData837.subscriberLastName} onChange={v => onChange837({...formData837, subscriberLastName: v})} onFocus={() => onFieldFocus('subscriberLastName')} />
+            <InputField id="subscriberId" label="Member ID" value={formData837.subscriberId} onChange={v => onChange837({...formData837, subscriberId: v})} onFocus={() => onFieldFocus('subscriberId')} />
+            <div id="subscriberDob">
+                <DatePicker label="DOB" value={formData837.subscriberDob} onChange={v => onChange837({...formData837, subscriberDob: v})} onFocus={() => onFieldFocus('subscriberDob')} />
+            </div>
+            <InputField id="subscriberGender" label="Gender" value={formData837.subscriberGender} onChange={v => onChange837({...formData837, subscriberGender: v})} onFocus={() => onFieldFocus('subscriberGender')} />
         </div>
 
         <SectionHeader title="Claim Info" />
         <div className="grid grid-cols-2 gap-4">
-            <InputField label="Claim ID" value={formData837.claimId} onChange={v => onChange837({...formData837, claimId: v})} onFocus={() => onFieldFocus('claimId')} />
-            <InputField label="Total Charge" value={formData837.totalCharge} onChange={v => onChange837({...formData837, totalCharge: v})} onFocus={() => onFieldFocus('totalCharge')} />
+            <InputField id="claimId" label="Claim ID" value={formData837.claimId} onChange={v => onChange837({...formData837, claimId: v})} onFocus={() => onFieldFocus('claimId')} />
+            <InputField id="totalCharge" label="Total Charge" value={formData837.totalCharge} onChange={v => onChange837({...formData837, totalCharge: v})} onFocus={() => onFieldFocus('totalCharge')} />
             {formData837.type === 'Professional' ? (
-                <InputField label="Place of Service" value={formData837.placeOfService} onChange={v => onChange837({...formData837, placeOfService: v})} onFocus={() => onFieldFocus('placeOfService')} />
+                <InputField id="placeOfService" label="Place of Service" value={formData837.placeOfService} onChange={v => onChange837({...formData837, placeOfService: v})} onFocus={() => onFieldFocus('placeOfService')} />
             ) : (
-                <InputField label="Type of Bill" value={formData837.typeOfBill} onChange={v => onChange837({...formData837, typeOfBill: v})} onFocus={() => onFieldFocus('typeOfBill')} />
+                <InputField id="typeOfBill" label="Type of Bill" value={formData837.typeOfBill} onChange={v => onChange837({...formData837, typeOfBill: v})} onFocus={() => onFieldFocus('typeOfBill')} />
             )}
             <AutocompleteField 
+                id="diagnosisCode1"
                 label="Diagnosis 1" 
                 value={formData837.diagnosisCode1} 
                 onChange={v => onChange837({...formData837, diagnosisCode1: v})} 
@@ -431,6 +482,7 @@ export const EdiGenerator: React.FC<Props> = ({
                     
                     <div className="grid grid-cols-2 gap-4">
                         <AutocompleteField 
+                            id="procedureCode"
                             label={`Procedure ${idx + 1}`} 
                             value={line.procedureCode} 
                             onChange={v => updateServiceLine(idx, 'procedureCode', v)} 
@@ -438,9 +490,11 @@ export const EdiGenerator: React.FC<Props> = ({
                             options={PROCEDURE_CODES}
                             placeholder="CPT/HCPCS"
                         />
-                        <InputField label="Charge" value={line.lineCharge} onChange={v => updateServiceLine(idx, 'lineCharge', v)} onFocus={() => onFieldFocus('lineCharge')} />
-                        <InputField label="Units" value={line.units} onChange={v => updateServiceLine(idx, 'units', v)} onFocus={() => onFieldFocus('units')} />
-                        <DatePicker label="Date" value={line.serviceDate} onChange={v => updateServiceLine(idx, 'serviceDate', v)} onFocus={() => onFieldFocus('serviceDate')} placeholder="YYYY-MM-DD" />
+                        <InputField id="lineCharge" label="Charge" value={line.lineCharge} onChange={v => updateServiceLine(idx, 'lineCharge', v)} onFocus={() => onFieldFocus('lineCharge')} />
+                        <InputField id="units" label="Units" value={line.units} onChange={v => updateServiceLine(idx, 'units', v)} onFocus={() => onFieldFocus('units')} />
+                        <div id="serviceDate">
+                            <DatePicker label="Date" value={line.serviceDate} onChange={v => updateServiceLine(idx, 'serviceDate', v)} onFocus={() => onFieldFocus('serviceDate')} placeholder="YYYY-MM-DD" />
+                        </div>
                     </div>
                 </div>
             ))}
@@ -472,30 +526,34 @@ export const EdiGenerator: React.FC<Props> = ({
       <>
         <SectionHeader title="Sponsor & Payer" />
         <div className="grid grid-cols-2 gap-4">
-             <InputField label="Sponsor Name" value={formData834.sponsorName} onChange={v => onChange834({...formData834, sponsorName: v})} onFocus={() => onFieldFocus('sponsorName')} />
-             <InputField label="Sponsor Tax ID" value={formData834.sponsorTaxId} onChange={v => onChange834({...formData834, sponsorTaxId: v})} onFocus={() => onFieldFocus('sponsorTaxId')} />
-             <InputField label="Payer Name" value={formData834.payerName} onChange={v => onChange834({...formData834, payerName: v})} onFocus={() => onFieldFocus('payerName')} />
-             <InputField label="Payer ID" value={formData834.payerId} onChange={v => onChange834({...formData834, payerId: v})} onFocus={() => onFieldFocus('payerId')} />
+             <InputField id="sponsorName" label="Sponsor Name" value={formData834.sponsorName} onChange={v => onChange834({...formData834, sponsorName: v})} onFocus={() => onFieldFocus('sponsorName')} />
+             <InputField id="sponsorTaxId" label="Sponsor Tax ID" value={formData834.sponsorTaxId} onChange={v => onChange834({...formData834, sponsorTaxId: v})} onFocus={() => onFieldFocus('sponsorTaxId')} />
+             <InputField id="payerName" label="Payer Name" value={formData834.payerName} onChange={v => onChange834({...formData834, payerName: v})} onFocus={() => onFieldFocus('payerName')} />
+             <InputField id="payerId" label="Payer ID" value={formData834.payerId} onChange={v => onChange834({...formData834, payerId: v})} onFocus={() => onFieldFocus('payerId')} />
         </div>
 
         <SectionHeader title="Enrollment Details" />
         <div className="grid grid-cols-2 gap-4">
-             <SelectField label="Maint Type" value={formData834.maintenanceType} onChange={v => onChange834({...formData834, maintenanceType: v})} onFocus={() => onFieldFocus('maintenanceType')} options={MAINT_TYPES} />
-             <SelectField label="Reason" value={formData834.maintenanceReason} onChange={v => onChange834({...formData834, maintenanceReason: v})} onFocus={() => onFieldFocus('maintenanceReason')} options={MAINT_REASONS} />
-             <SelectField label="Benefit Status" value={formData834.benefitStatus} onChange={v => onChange834({...formData834, benefitStatus: v})} onFocus={() => onFieldFocus('benefitStatus')} options={MAINT_TYPES} />
-             <SelectField label="Coverage Level" value={formData834.coverageLevelCode} onChange={v => onChange834({...formData834, coverageLevelCode: v})} onFocus={() => onFieldFocus('coverageLevelCode')} options={COVERAGE_LEVELS} />
-             <DatePicker label="Effective Date" value={formData834.planEffectiveDate} onChange={v => onChange834({...formData834, planEffectiveDate: v})} onFocus={() => onFieldFocus('planEffectiveDate')} />
-             <InputField label="Policy Number" value={formData834.policyNumber} onChange={v => onChange834({...formData834, policyNumber: v})} onFocus={() => onFieldFocus('policyNumber')} />
+             <SelectField id="maintenanceType" label="Maint Type" value={formData834.maintenanceType} onChange={v => onChange834({...formData834, maintenanceType: v})} onFocus={() => onFieldFocus('maintenanceType')} options={MAINT_TYPES} />
+             <SelectField id="maintenanceReason" label="Reason" value={formData834.maintenanceReason} onChange={v => onChange834({...formData834, maintenanceReason: v})} onFocus={() => onFieldFocus('maintenanceReason')} options={MAINT_REASONS} />
+             <SelectField id="benefitStatus" label="Benefit Status" value={formData834.benefitStatus} onChange={v => onChange834({...formData834, benefitStatus: v})} onFocus={() => onFieldFocus('benefitStatus')} options={MAINT_TYPES} />
+             <SelectField id="coverageLevelCode" label="Coverage Level" value={formData834.coverageLevelCode} onChange={v => onChange834({...formData834, coverageLevelCode: v})} onFocus={() => onFieldFocus('coverageLevelCode')} options={COVERAGE_LEVELS} />
+             <div id="planEffectiveDate">
+                <DatePicker label="Effective Date" value={formData834.planEffectiveDate} onChange={v => onChange834({...formData834, planEffectiveDate: v})} onFocus={() => onFieldFocus('planEffectiveDate')} />
+             </div>
+             <InputField id="policyNumber" label="Policy Number" value={formData834.policyNumber} onChange={v => onChange834({...formData834, policyNumber: v})} onFocus={() => onFieldFocus('policyNumber')} />
         </div>
 
         <SectionHeader title="Subscriber" />
         <div className="grid grid-cols-2 gap-4">
-            <InputField label="First Name" value={formData834.subscriber.firstName} onChange={v => onChange834({...formData834, subscriber: {...formData834.subscriber, firstName: v}})} onFocus={() => onFieldFocus('subscriberFirstName')} />
-            <InputField label="Last Name" value={formData834.subscriber.lastName} onChange={v => onChange834({...formData834, subscriber: {...formData834.subscriber, lastName: v}})} onFocus={() => onFieldFocus('subscriberLastName')} />
-            <InputField label="Member ID" value={formData834.subscriber.id} onChange={v => onChange834({...formData834, subscriber: {...formData834.subscriber, id: v}})} onFocus={() => onFieldFocus('subscriberId')} />
-            <InputField label="SSN" value={formData834.subscriber.ssn} onChange={v => onChange834({...formData834, subscriber: {...formData834.subscriber, ssn: v}})} onFocus={() => onFieldFocus('subscriberSSN')} />
-            <DatePicker label="DOB" value={formData834.subscriber.dob} onChange={v => onChange834({...formData834, subscriber: {...formData834.subscriber, dob: v}})} onFocus={() => onFieldFocus('subscriberDob')} />
-            <SelectField label="Gender" value={formData834.subscriber.gender} onChange={v => onChange834({...formData834, subscriber: {...formData834.subscriber, gender: v}})} onFocus={() => onFieldFocus('subscriberGender')} options={GENDER_OPTIONS} />
+            <InputField id="subscriberFirstName" label="First Name" value={formData834.subscriber.firstName} onChange={v => onChange834({...formData834, subscriber: {...formData834.subscriber, firstName: v}})} onFocus={() => onFieldFocus('subscriberFirstName')} />
+            <InputField id="subscriberLastName" label="Last Name" value={formData834.subscriber.lastName} onChange={v => onChange834({...formData834, subscriber: {...formData834.subscriber, lastName: v}})} onFocus={() => onFieldFocus('subscriberLastName')} />
+            <InputField id="subscriberId" label="Member ID" value={formData834.subscriber.id} onChange={v => onChange834({...formData834, subscriber: {...formData834.subscriber, id: v}})} onFocus={() => onFieldFocus('subscriberId')} />
+            <InputField id="subscriberSSN" label="SSN" value={formData834.subscriber.ssn} onChange={v => onChange834({...formData834, subscriber: {...formData834.subscriber, ssn: v}})} onFocus={() => onFieldFocus('subscriberSSN')} />
+            <div id="subscriberDob">
+                <DatePicker label="DOB" value={formData834.subscriber.dob} onChange={v => onChange834({...formData834, subscriber: {...formData834.subscriber, dob: v}})} onFocus={() => onFieldFocus('subscriberDob')} />
+            </div>
+            <SelectField id="subscriberGender" label="Gender" value={formData834.subscriber.gender} onChange={v => onChange834({...formData834, subscriber: {...formData834.subscriber, gender: v}})} onFocus={() => onFieldFocus('subscriberGender')} options={GENDER_OPTIONS} />
         </div>
 
         <SectionHeader 
