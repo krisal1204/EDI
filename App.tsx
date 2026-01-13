@@ -11,7 +11,7 @@ import { Landing } from './components/Landing';
 import { JsonViewer } from './components/JsonViewer';
 import { SendMessage } from './components/SendMessage';
 import { RecordList } from './components/RecordList';
-import { parseEdi, flattenTree, replaceRecordInEdi, getRecordRaw } from './services/ediParser';
+import { parseEdi, flattenTree, replaceRecordInEdi, getRecordRaw, duplicateRecordInEdi, removeRecordFromEdi } from './services/ediParser';
 import { EdiDocument, EdiSegment } from './types';
 import { FormData270, FormData276, FormData837, FormData834, build270, build276, build837, build834 } from './services/ediBuilder';
 import { mapEdiToForm, mapEdiToForm276, mapEdiToForm837, mapEdiToForm834, mapEdiToBenefits, BenefitRow, mapEdiToClaimStatus, ClaimStatusRow } from './services/ediMapper';
@@ -386,6 +386,42 @@ function App() {
       processEdi(updatedEdi, true, undefined, index);
   };
 
+  // Add Record: Duplicate current (or last) record
+  const handleAddRecord = () => {
+      if (!doc || records.length === 0) return;
+      
+      // Duplicate selected or last record
+      const idToDuplicate = selectedRecordId || records[records.length - 1].id;
+      const newEdi = duplicateRecordInEdi(doc, idToDuplicate);
+      
+      setRawEdi(newEdi);
+      // Process and select the newly added record (it will be next after the duplicated one)
+      // We need to guess the new index. If we duplicated index I, new one is I+1.
+      const currentIdx = records.findIndex(r => r.id === idToDuplicate);
+      const newIdx = currentIdx !== -1 ? currentIdx + 1 : records.length;
+      
+      processEdi(newEdi, true, undefined, newIdx);
+  };
+
+  // Delete Record
+  const handleDeleteRecord = (index: number) => {
+      if (!doc || index < 0 || index >= records.length) return;
+      
+      const idToDelete = records[index].id;
+      const newEdi = removeRecordFromEdi(doc, idToDelete);
+      
+      setRawEdi(newEdi);
+      
+      // Determine new selection. If we deleted current, select previous or next.
+      let newSelectionIndex = index;
+      if (newSelectionIndex >= records.length - 1) {
+          newSelectionIndex = records.length - 2;
+      }
+      if (newSelectionIndex < 0) newSelectionIndex = 0; // if list becomes empty?
+      
+      processEdi(newEdi, true, undefined, newSelectionIndex);
+  };
+
   // Helper to splice changes into the main EDI file
   const updateEdiWithFormChange = (newSingleRecordEdi: string) => {
       if (!doc || !selectedRecordId) {
@@ -641,13 +677,15 @@ function App() {
             <div className="flex-none bg-white dark:bg-slate-900 z-20 border-r border-gray-200 dark:border-slate-800 relative flex flex-row h-full" style={{ width: sidebarWidth }}>
                 
                 {/* Record Selector (New) */}
-                {records.length > 1 && (viewMode === 'inspector' || viewMode === 'raw') && (
+                {records.length > 0 && (viewMode === 'inspector' || viewMode === 'raw') && (
                     <RecordList 
                         records={records} 
                         selectedId={selectedRecordId} 
                         onSelect={handleRecordSelect} 
                         onResetAll={handleResetAll}
                         onResetRecord={handleResetRecord}
+                        onAddRecord={handleAddRecord}
+                        onDeleteRecord={handleDeleteRecord}
                         isModified={rawEdi !== originalEdi}
                     />
                 )}

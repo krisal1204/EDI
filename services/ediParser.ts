@@ -72,8 +72,6 @@ export const parseEdi = (rawEdi: string): EdiDocument => {
         : undefined;
 
       // Handle Components (e.g. SVC01 "HC:99213")
-      // Note: If repeats exist, components might exist inside repeats, but simple parser usually treats them hierarchically or just splits strings.
-      // For this inspector, we'll check components on the main val or just leave as is if repeated.
       const components = val.includes(delimiters.componentSeparator) 
         ? val.split(delimiters.componentSeparator) 
         : undefined;
@@ -219,7 +217,6 @@ export const replaceRecordInEdi = (doc: EdiDocument, newEdi: string, recordId: s
     const anchorSeg = originalFlat[anchorIdx];
     
     // 2. Determine Original Range End
-    // Scan forward until we hit a segment that starts a "sibling" or "parent" record, or SE.
     let endIdx = anchorIdx + 1;
     
     const isStartOfNextRecord = (seg: EdiSegment) => {
@@ -230,8 +227,6 @@ export const replaceRecordInEdi = (doc: EdiDocument, newEdi: string, recordId: s
         if (anchorSeg.tag === 'INS') return seg.tag === 'INS';
         if (anchorSeg.tag === 'CLM') return seg.tag === 'CLM';
         if (anchorSeg.tag === 'HL') {
-            // For HL, we stop if we hit a sibling or parent HL (depth <= current)
-            // If next HL is a child (depth > current), it's part of this record.
             if (seg.tag === 'HL') {
                 return seg.depth <= anchorSeg.depth;
             }
@@ -293,4 +288,164 @@ export const replaceRecordInEdi = (doc: EdiDocument, newEdi: string, recordId: s
     const suffix = originalFlat.slice(endIdx).map(s => s.raw).join('');
 
     return prefix + replacement + suffix;
+};
+
+/**
+ * Re-indexes HL segments to ensure sequential numbering.
+ * Also updates parent references and SE segment count.
+ */
+export const reindexEdi = (doc: EdiDocument): string => {
+    const flat = flattenTree(doc.segments);
+    
+    let hlCounter = 0;
+    const hlMap = new Map<string, string>(); // Old ID -> New ID
+
+    // 1. Re-map HL IDs
+    const reindexedSegments = flat.map(seg => {
+        if (seg.tag === 'HL') {
+            hlCounter++;
+            const oldId = seg.elements[0]?.value;
+            const newId = hlCounter.toString();
+            if (oldId) hlMap.set(oldId, newId);
+            
+            // Shallow copy elements to modify
+            const newElements = seg.elements.map(e => ({...e}));
+            if (newElements[0]) newElements[0].value = newId;
+            
+            return { ...seg, elements: newElements };
+        }
+        return seg;
+    });
+
+    // 2. Update Parent IDs and regenerate RAW strings
+    const finalSegments = reindexedSegments.map(seg => {
+        // Handle HL Parent ID updates
+        if (seg.tag === 'HL') {
+            const newElements = seg.elements.map(e => ({...e}));
+            const parentId = seg.elements[1]?.value;
+            
+            // Update HL02 (Parent ID)
+            if (parentId && hlMap.has(parentId)) {
+                if (newElements[1]) newElements[1].value = hlMap.get(parentId)!;
+            }
+            
+            // Reconstruct Raw
+            const content = newElements.map(e => e.value).join(doc.elementSeparator);
+            const raw = `${seg.tag}${doc.elementSeparator}${content}${doc.segmentTerminator}`;
+            return { ...seg, elements: newElements, raw };
+        }
+        return seg;
+    });
+    
+    // Fix SE count
+    const stIndex = finalSegments.findIndex(s => s.tag === 'ST');
+    const seIndex = finalSegments.findIndex(s => s.tag === 'SE');
+    
+    if (stIndex !== -1 && seIndex !== -1) {
+        const count = seIndex - stIndex + 1;
+        const seSeg = finalSegments[seIndex];
+        const newElements = seSeg.elements.map(e => ({...e}));
+        if (newElements[0]) newElements[0].value = count.toString();
+        
+        const content = newElements.map(e => e.value).join(doc.elementSeparator);
+        seSeg.raw = `${seSeg.tag}${doc.elementSeparator}${content}${doc.segmentTerminator}`;
+        finalSegments[seIndex] = { ...seSeg, raw: seSeg.raw };
+    }
+
+    return finalSegments.map(s => s.raw).join('');
+};
+
+/**
+ * Duplicates the record loop identified by recordId and appends it after the original.
+ */
+export const duplicateRecordInEdi = (doc: EdiDocument, recordId: string): string => {
+    const flat = flattenTree(doc.segments);
+    const anchorIdx = flat.findIndex(s => s.id === recordId);
+    if (anchorIdx === -1) return doc.raw;
+
+    const anchorSeg = flat[anchorIdx];
+    let endIdx = anchorIdx + 1;
+
+    const isStartOfNextRecord = (seg: EdiSegment) => {
+        if (seg.tag === 'SE') return true;
+        if (seg.tag === 'GE') return true;
+        if (seg.tag === 'IEA') return true;
+
+        if (anchorSeg.tag === 'INS') return seg.tag === 'INS';
+        if (anchorSeg.tag === 'CLM') return seg.tag === 'CLM';
+        if (anchorSeg.tag === 'HL') {
+            if (seg.tag === 'HL') {
+                return seg.depth <= anchorSeg.depth;
+            }
+            return false;
+        }
+        if (anchorSeg.tag === 'TRN') return seg.tag === 'TRN';
+        return false;
+    };
+
+    while (endIdx < flat.length) {
+        if (isStartOfNextRecord(flat[endIdx])) break;
+        endIdx++;
+    }
+
+    // Extract raw string of the record
+    const recordRaw = flat.slice(anchorIdx, endIdx).map(s => s.raw).join('');
+    
+    // Insert after the current record
+    const prefix = flat.slice(0, endIdx).map(s => s.raw).join('');
+    const suffix = flat.slice(endIdx).map(s => s.raw).join('');
+    
+    let newEdi = prefix + recordRaw + suffix;
+    
+    // Reindex to fix SE count and HL IDs
+    const tempDoc = parseEdi(newEdi);
+    newEdi = reindexEdi(tempDoc);
+
+    return newEdi;
+};
+
+/**
+ * Removes the record loop identified by recordId.
+ */
+export const removeRecordFromEdi = (doc: EdiDocument, recordId: string): string => {
+    const flat = flattenTree(doc.segments);
+    const anchorIdx = flat.findIndex(s => s.id === recordId);
+    if (anchorIdx === -1) return doc.raw;
+
+    const anchorSeg = flat[anchorIdx];
+    let endIdx = anchorIdx + 1;
+
+    const isStartOfNextRecord = (seg: EdiSegment) => {
+        if (seg.tag === 'SE') return true;
+        if (seg.tag === 'GE') return true;
+        if (seg.tag === 'IEA') return true;
+
+        if (anchorSeg.tag === 'INS') return seg.tag === 'INS';
+        if (anchorSeg.tag === 'CLM') return seg.tag === 'CLM';
+        if (anchorSeg.tag === 'HL') {
+            if (seg.tag === 'HL') {
+                return seg.depth <= anchorSeg.depth;
+            }
+            return false;
+        }
+        if (anchorSeg.tag === 'TRN') return seg.tag === 'TRN';
+        return false;
+    };
+
+    while (endIdx < flat.length) {
+        if (isStartOfNextRecord(flat[endIdx])) break;
+        endIdx++;
+    }
+
+    // Remove the slice
+    const prefix = flat.slice(0, anchorIdx).map(s => s.raw).join('');
+    const suffix = flat.slice(endIdx).map(s => s.raw).join('');
+    
+    let newEdi = prefix + suffix;
+    
+    // Reindex to fix SE count and HL IDs
+    const tempDoc = parseEdi(newEdi);
+    newEdi = reindexEdi(tempDoc);
+
+    return newEdi;
 };
