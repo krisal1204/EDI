@@ -65,6 +65,16 @@ const flattenSegments = (segments: EdiSegment[]): EdiSegment[] => {
 };
 
 /**
+ * Find a segment backwards from a starting index
+ */
+const findBackwards = (segments: EdiSegment[], startIndex: number, predicate: (s: EdiSegment) => boolean): EdiSegment | undefined => {
+    for (let i = startIndex; i >= 0; i--) {
+        if (predicate(segments[i])) return segments[i];
+    }
+    return undefined;
+};
+
+/**
  * Format YYYYMMDD to YYYY-MM-DD
  */
 const formatDate = (dateStr?: string): string => {
@@ -101,23 +111,32 @@ const getRepeatedDefinition = (tag: string, index: number, element?: { value: st
     return getElementDefinition(tag, index, element.value);
 };
 
-export const mapEdiToForm = (doc: EdiDocument): Partial<FormData270> => {
+export const mapEdiToForm = (doc: EdiDocument, targetId?: string): Partial<FormData270> => {
   const segments = flattenSegments(doc.segments);
   const data: Partial<FormData270> = {};
 
-  const payerSeg = segments.find(s => s.tag === 'NM1' && s.elements[0]?.value === 'PR');
+  // If targetId is provided (e.g. specific HL segment for sub/dep), use it as anchor
+  let anchorIndex = segments.length - 1;
+  if (targetId) {
+      const idx = segments.findIndex(s => s.id === targetId);
+      if (idx !== -1) anchorIndex = idx;
+  }
+
+  const payerSeg = findBackwards(segments, anchorIndex, s => s.tag === 'NM1' && s.elements[0]?.value === 'PR');
   if (payerSeg) {
     data.payerName = payerSeg.elements[2]?.value || '';
     data.payerId = payerSeg.elements[8]?.value || '';
   }
 
-  const providerSeg = segments.find(s => s.tag === 'NM1' && s.elements[0]?.value === '1P');
+  const providerSeg = findBackwards(segments, anchorIndex, s => s.tag === 'NM1' && s.elements[0]?.value === '1P');
   if (providerSeg) {
     data.providerName = providerSeg.elements[2]?.value || '';
     data.providerNpi = providerSeg.elements[8]?.value || '';
   }
 
-  const subSeg = segments.find(s => s.tag === 'NM1' && s.elements[0]?.value === 'IL');
+  // Find Subscriber
+  // If the anchor is a Dependent HL, look back for Subscriber HL then NM1*IL inside it
+  const subSeg = findBackwards(segments, anchorIndex, s => s.tag === 'NM1' && s.elements[0]?.value === 'IL');
   if (subSeg) {
     data.subscriberLastName = subSeg.elements[2]?.value || '';
     data.subscriberFirstName = subSeg.elements[3]?.value || '';
@@ -130,7 +149,28 @@ export const mapEdiToForm = (doc: EdiDocument): Partial<FormData270> => {
     }
   }
 
-  const depSeg = segments.find(s => s.tag === 'NM1' && s.elements[0]?.value === '03');
+  // Is anchor dependent?
+  // Check if current anchor area has NM1*03
+  // We search LOCAL to the anchor.
+  // If the anchor is the Subscriber HL, we shouldn't find a dependent unless we look forward?
+  // Actually, usually in the "Record Selector", if it's a dependent, targetId is the Dependent HL.
+  
+  const targetSeg = segments[anchorIndex];
+  let depSeg: EdiSegment | undefined;
+  
+  if (targetSeg?.tag === 'HL' && targetSeg.elements[2]?.value === '23') {
+       // Target is Dependent HL. Look for NM1*03 inside this HL block
+       for(let i = anchorIndex; i < segments.length; i++) {
+           if (i > anchorIndex && segments[i].tag === 'HL') break;
+           if (segments[i].tag === 'NM1' && segments[i].elements[0]?.value === '03') {
+               depSeg = segments[i];
+               break;
+           }
+       }
+  } else if (targetSeg?.tag === 'NM1' && targetSeg.elements[0]?.value === '03') {
+      depSeg = targetSeg;
+  }
+
   if (depSeg) {
     data.hasDependent = true;
     data.dependentLastName = depSeg.elements[2]?.value || '';
@@ -146,12 +186,21 @@ export const mapEdiToForm = (doc: EdiDocument): Partial<FormData270> => {
     data.hasDependent = false;
   }
 
-  const dtpSeg = segments.find(s => s.tag === 'DTP' && s.elements[0]?.value === '291');
-  if (dtpSeg) {
-    data.serviceDate = formatDate(dtpSeg.elements[2]?.value);
+  // Dates & EQ
+  // Look forward from anchor until next HL
+  const eqSegs: EdiSegment[] = [];
+  for (let i = anchorIndex; i < segments.length; i++) {
+      const s = segments[i];
+      if (i > anchorIndex && s.tag === 'HL') break;
+      
+      if (s.tag === 'DTP' && s.elements[0]?.value === '291') {
+          data.serviceDate = formatDate(s.elements[2]?.value);
+      }
+      if (s.tag === 'EQ') {
+          eqSegs.push(s);
+      }
   }
-
-  const eqSegs = segments.filter(s => s.tag === 'EQ');
+  
   if (eqSegs.length > 0) {
     data.serviceTypeCodes = eqSegs.map(s => s.elements[0]?.value || '30');
   }
@@ -159,57 +208,75 @@ export const mapEdiToForm = (doc: EdiDocument): Partial<FormData270> => {
   return data;
 };
 
-export const mapEdiToForm276 = (doc: EdiDocument): Partial<FormData276> => {
+export const mapEdiToForm276 = (doc: EdiDocument, targetId?: string): Partial<FormData276> => {
   const segments = flattenSegments(doc.segments);
   const data: Partial<FormData276> = {};
 
-  const payerSeg = segments.find(s => s.tag === 'NM1' && s.elements[0]?.value === 'PR');
+  let anchorIndex = segments.length - 1;
+  if (targetId) {
+      const idx = segments.findIndex(s => s.id === targetId);
+      if (idx !== -1) anchorIndex = idx;
+  }
+
+  const payerSeg = findBackwards(segments, anchorIndex, s => s.tag === 'NM1' && s.elements[0]?.value === 'PR');
   if (payerSeg) {
     data.payerName = payerSeg.elements[2]?.value || '';
     data.payerId = payerSeg.elements[8]?.value || '';
   }
 
-  const providerSeg = segments.find(s => s.tag === 'NM1' && (s.elements[0]?.value === '41' || s.elements[0]?.value === '1P'));
+  const providerSeg = findBackwards(segments, anchorIndex, s => s.tag === 'NM1' && (s.elements[0]?.value === '41' || s.elements[0]?.value === '1P'));
   if (providerSeg) {
     data.providerName = providerSeg.elements[2]?.value || '';
     data.providerNpi = providerSeg.elements[8]?.value || '';
   }
 
-  const subSeg = segments.find(s => s.tag === 'NM1' && s.elements[0]?.value === 'IL');
+  const subSeg = findBackwards(segments, anchorIndex, s => s.tag === 'NM1' && s.elements[0]?.value === 'IL');
   if (subSeg) {
     data.subscriberLastName = subSeg.elements[2]?.value || '';
     data.subscriberFirstName = subSeg.elements[3]?.value || '';
     data.subscriberId = subSeg.elements[8]?.value || '';
   }
 
-  const depSeg = segments.find(s => s.tag === 'NM1' && s.elements[0]?.value === '03');
-  if (depSeg) {
-    data.hasDependent = true;
-    data.dependentLastName = depSeg.elements[2]?.value || '';
-    data.dependentFirstName = depSeg.elements[3]?.value || '';
+  // Look for dependent in the hierarchy up to anchor
+  // If anchor is TRN inside a Dependent HL loop.
+  const depSeg = findBackwards(segments, anchorIndex, s => s.tag === 'NM1' && s.elements[0]?.value === '03');
+  // Check if depSeg is actually the parent of this anchor (not a previous sibling's dependent)
+  // Simplification: In 276, hierarchy is linear usually. If we found a Dep before this TRN and after the Sub, it applies.
+  if (depSeg && subSeg && segments.indexOf(depSeg) > segments.indexOf(subSeg)) {
+      data.hasDependent = true;
+      data.dependentLastName = depSeg.elements[2]?.value || '';
+      data.dependentFirstName = depSeg.elements[3]?.value || '';
   } else {
     data.hasDependent = false;
   }
 
-  const trnSeg = segments.find(s => s.tag === 'TRN' && s.elements[0]?.value === '1');
-  if (trnSeg) {
+  // Current Anchor should be TRN or close to it
+  let trnSeg = segments[anchorIndex];
+  if (trnSeg.tag !== 'TRN') {
+      // search forward slightly
+      const nextTrn = segments.slice(anchorIndex, anchorIndex + 5).find(s => s.tag === 'TRN');
+      if (nextTrn) trnSeg = nextTrn;
+  }
+
+  if (trnSeg && trnSeg.tag === 'TRN') {
       data.claimId = trnSeg.elements[1]?.value || '';
-  }
+      const trnIndex = segments.indexOf(trnSeg);
+      
+      const amtSeg = segments.slice(trnIndex, trnIndex + 5).find(s => s.tag === 'AMT' && s.elements[0]?.value === 'T3');
+      if (amtSeg) {
+          data.chargeAmount = amtSeg.elements[1]?.value || '';
+      }
 
-  const amtSeg = segments.find(s => s.tag === 'AMT' && s.elements[0]?.value === 'T3');
-  if (amtSeg) {
-      data.chargeAmount = amtSeg.elements[1]?.value || '';
-  }
-
-  const dtpSeg = segments.find(s => s.tag === 'DTP' && s.elements[0]?.value === '472');
-  if (dtpSeg) {
-      data.serviceDate = formatDate(dtpSeg.elements[2]?.value);
+      const dtpSeg = segments.slice(trnIndex, trnIndex + 5).find(s => s.tag === 'DTP' && s.elements[0]?.value === '472');
+      if (dtpSeg) {
+          data.serviceDate = formatDate(dtpSeg.elements[2]?.value);
+      }
   }
 
   return data;
 };
 
-export const mapEdiToForm837 = (doc: EdiDocument): Partial<FormData837> => {
+export const mapEdiToForm837 = (doc: EdiDocument, targetId?: string): Partial<FormData837> => {
     const segments = flattenSegments(doc.segments);
     const data: Partial<FormData837> = {};
     
@@ -219,13 +286,28 @@ export const mapEdiToForm837 = (doc: EdiDocument): Partial<FormData837> => {
     if (version?.includes('223')) data.type = 'Institutional';
     else data.type = 'Professional';
 
-    // Billing Provider (NM1*85)
-    const billing = segments.find(s => s.tag === 'NM1' && s.elements[0]?.value === '85');
+    // Locate Anchor (The specific CLM segment)
+    let clmIndex = -1;
+    if (targetId) {
+        clmIndex = segments.findIndex(s => s.id === targetId);
+    }
+    // Default to first CLM if not found or not provided
+    if (clmIndex === -1) {
+        clmIndex = segments.findIndex(s => s.tag === 'CLM');
+    }
+
+    if (clmIndex === -1) return data; // No claim found
+
+    // Look BACKWARDS for Header Info (Context)
+    
+    // Billing Provider (NM1*85) - nearest before CLM
+    const billing = findBackwards(segments, clmIndex, s => s.tag === 'NM1' && s.elements[0]?.value === '85');
     if (billing) {
         data.billingProviderName = billing.elements[2]?.value || '';
         data.billingProviderNpi = billing.elements[8]?.value || '';
         
         const idx = segments.indexOf(billing);
+        // Usually N3/N4 follow immediately
         const n3 = segments[idx + 1];
         if (n3 && n3.tag === 'N3') data.billingProviderAddress = n3.elements[0]?.value || '';
         const n4 = segments[idx + 2];
@@ -238,8 +320,8 @@ export const mapEdiToForm837 = (doc: EdiDocument): Partial<FormData837> => {
         if (ref) data.billingTaxId = ref.elements[1]?.value || '';
     }
 
-    // Subscriber (NM1*IL)
-    const sub = segments.find(s => s.tag === 'NM1' && s.elements[0]?.value === 'IL');
+    // Subscriber (NM1*IL) - nearest before CLM
+    const sub = findBackwards(segments, clmIndex, s => s.tag === 'NM1' && s.elements[0]?.value === 'IL');
     if (sub) {
         data.subscriberLastName = sub.elements[2]?.value || '';
         data.subscriberFirstName = sub.elements[3]?.value || '';
@@ -253,22 +335,19 @@ export const mapEdiToForm837 = (doc: EdiDocument): Partial<FormData837> => {
         }
     }
 
-    // Payer (NM1*PR) - usually inside Loop 2010BB (after Subscriber)
-    // Finding second PR NM1 or one after subscriber
-    const subIndex = sub ? segments.indexOf(sub) : 0;
-    const payer = segments.slice(subIndex).find(s => s.tag === 'NM1' && s.elements[0]?.value === 'PR');
+    // Payer (NM1*PR) - nearest before CLM (but usually after Subscriber)
+    const payer = findBackwards(segments, clmIndex, s => s.tag === 'NM1' && s.elements[0]?.value === 'PR');
     if (payer) {
         data.payerName = payer.elements[2]?.value || '';
         data.payerId = payer.elements[8]?.value || '';
     }
 
-    // Claim (CLM)
-    const clm = segments.find(s => s.tag === 'CLM');
-    if (clm) {
+    // Claim (CLM) - Current Segment
+    const clm = segments[clmIndex];
+    if (clm && clm.tag === 'CLM') {
         data.claimId = clm.elements[0]?.value || '';
         data.totalCharge = clm.elements[1]?.value || '';
         
-        // CLM05 is composite
         const comp = clm.elements[4]?.value || '';
         const parts = comp.split(':');
         
@@ -279,21 +358,28 @@ export const mapEdiToForm837 = (doc: EdiDocument): Partial<FormData837> => {
         }
     }
 
+    // Look FORWARD from CLM for Details (Diagnosis, Service Lines)
+    // Stop at next CLM or next Loop Header that breaks context (e.g. next HL)
+    const claimSegments: EdiSegment[] = [];
+    for (let i = clmIndex + 1; i < segments.length; i++) {
+        const s = segments[i];
+        if (s.tag === 'CLM' || s.tag === 'HL' || s.tag === 'SE') break;
+        claimSegments.push(s);
+    }
+
     // HI (Diagnosis)
-    const hi = segments.find(s => s.tag === 'HI');
+    const hi = claimSegments.find(s => s.tag === 'HI');
     if (hi) {
-        const diag1 = hi.elements[0]?.value || ''; // e.g., ABK:I10
+        const diag1 = hi.elements[0]?.value || '';
         data.diagnosisCode1 = diag1.split(':')[1] || '';
         const diag2 = hi.elements[1]?.value;
         if (diag2) data.diagnosisCode2 = diag2.split(':')[1] || '';
     }
 
-    // Service Lines (Loop 2400)
+    // Service Lines
     data.serviceLines = [];
-    
-    // Simple Loop finding: iterate all segments, if LX found, read next SV1/SV2/DTP
-    for (let i = 0; i < segments.length; i++) {
-        const seg = segments[i];
+    for (let i = 0; i < claimSegments.length; i++) {
+        const seg = claimSegments[i];
         if (seg.tag === 'LX') {
             const line: ServiceLine837 = {
                 procedureCode: '',
@@ -302,14 +388,14 @@ export const mapEdiToForm837 = (doc: EdiDocument): Partial<FormData837> => {
                 serviceDate: ''
             };
             
-            // Scan forward until next LX or SE
+            // Scan sub-loop
             let j = i + 1;
-            while(j < segments.length) {
-                const next = segments[j];
-                if (next.tag === 'LX' || next.tag === 'SE') break;
+            while(j < claimSegments.length) {
+                const next = claimSegments[j];
+                if (next.tag === 'LX') break;
                 
                 if (next.tag === 'SV1') {
-                    const comp = next.elements[0]?.value || ''; // HC:99213
+                    const comp = next.elements[0]?.value || '';
                     line.procedureCode = comp.split(':')[1] || comp;
                     line.lineCharge = next.elements[1]?.value || '';
                     line.units = next.elements[3]?.value || '';
@@ -320,7 +406,6 @@ export const mapEdiToForm837 = (doc: EdiDocument): Partial<FormData837> => {
                 } else if (next.tag === 'DTP' && next.elements[0]?.value === '472') {
                     line.serviceDate = formatDate(next.elements[2]?.value);
                 }
-                
                 j++;
             }
             data.serviceLines.push(line);
@@ -330,94 +415,103 @@ export const mapEdiToForm837 = (doc: EdiDocument): Partial<FormData837> => {
     return data;
 };
 
-export const mapEdiToForm834 = (doc: EdiDocument): Partial<FormData834> => {
+export const mapEdiToForm834 = (doc: EdiDocument, targetId?: string): Partial<FormData834> => {
     const segments = flattenSegments(doc.segments);
     const data: Partial<FormData834> = {
         dependents: []
     };
 
-    // Loop 1000A Sponsor
-    const sponsor = segments.find(s => s.tag === 'N1' && s.elements[0]?.value === 'P5');
+    // Locate Anchor (INS segment)
+    let insIndex = -1;
+    if (targetId) {
+        insIndex = segments.findIndex(s => s.id === targetId);
+    }
+    if (insIndex === -1) insIndex = segments.findIndex(s => s.tag === 'INS');
+    
+    if (insIndex === -1) return data;
+
+    // Headers (Look Backwards)
+    const sponsor = findBackwards(segments, insIndex, s => s.tag === 'N1' && s.elements[0]?.value === 'P5');
     if (sponsor) {
         data.sponsorName = sponsor.elements[1]?.value || '';
         data.sponsorTaxId = sponsor.elements[3]?.value || '';
     }
 
-    // Loop 1000B Payer
-    const payer = segments.find(s => s.tag === 'N1' && s.elements[0]?.value === 'IN');
+    const payer = findBackwards(segments, insIndex, s => s.tag === 'N1' && s.elements[0]?.value === 'IN');
     if (payer) {
         data.payerName = payer.elements[1]?.value || '';
         data.payerId = payer.elements[3]?.value || '';
     }
 
-    // Find all INS segments
-    const insIndices = segments.map((s, i) => s.tag === 'INS' ? i : -1).filter(i => i !== -1);
+    // Process Member Loop (Forward from INS)
+    const ins = segments[insIndex];
+    const maintType = ins.elements[2]?.value;
+    const maintReason = ins.elements[3]?.value;
     
-    insIndices.forEach(idx => {
-        const ins = segments[idx];
-        const isSub = ins.elements[1]?.value === '18';
-        const maintType = ins.elements[2]?.value;
-        const maintReason = ins.elements[3]?.value;
-        
-        // Scan for Member Info (REF, DTP, NM1, DMG) inside this loop
-        // Loop ends at next INS or SE
-        let nextIdx = segments.length;
-        // Find next INS index
-        const nextIns = insIndices.find(i => i > idx);
-        if (nextIns) nextIdx = nextIns;
+    // Member details are in the loop starting at INS
+    // Stop at next INS
+    const loopSegs: EdiSegment[] = [ins];
+    for (let i = insIndex + 1; i < segments.length; i++) {
+        const s = segments[i];
+        if (s.tag === 'INS' || s.tag === 'SE') break;
+        loopSegs.push(s);
+    }
 
-        const loopSegs = segments.slice(idx, nextIdx);
-        
-        const member: Member834 = {
-            id: '',
-            firstName: '',
-            lastName: '',
-            ssn: '',
-            dob: '',
-            gender: '',
-            relationship: ins.elements[1]?.value || '18'
-        };
+    const member: Member834 = {
+        id: '',
+        firstName: '',
+        lastName: '',
+        ssn: '',
+        dob: '',
+        gender: '',
+        relationship: ins.elements[1]?.value || '18'
+    };
 
-        const ref0F = loopSegs.find(s => s.tag === 'REF' && s.elements[0]?.value === '0F');
-        if (ref0F) member.id = ref0F.elements[1]?.value || '';
-        
-        const refSY = loopSegs.find(s => s.tag === 'REF' && s.elements[0]?.value === 'SY');
-        if (refSY) member.ssn = refSY.elements[1]?.value || '';
+    const ref0F = loopSegs.find(s => s.tag === 'REF' && s.elements[0]?.value === '0F');
+    if (ref0F) member.id = ref0F.elements[1]?.value || '';
+    
+    const refSY = loopSegs.find(s => s.tag === 'REF' && s.elements[0]?.value === 'SY');
+    if (refSY) member.ssn = refSY.elements[1]?.value || '';
 
-        const nm1 = loopSegs.find(s => s.tag === 'NM1' && s.elements[0]?.value === 'IL');
-        if (nm1) {
-            member.lastName = nm1.elements[2]?.value || '';
-            member.firstName = nm1.elements[3]?.value || '';
-        }
+    const nm1 = loopSegs.find(s => s.tag === 'NM1' && s.elements[0]?.value === 'IL');
+    if (nm1) {
+        member.lastName = nm1.elements[2]?.value || '';
+        member.firstName = nm1.elements[3]?.value || '';
+    }
 
-        const dmg = loopSegs.find(s => s.tag === 'DMG');
-        if (dmg) {
-            member.dob = formatDate(dmg.elements[1]?.value);
-            member.gender = dmg.elements[2]?.value || '';
-        }
+    const dmg = loopSegs.find(s => s.tag === 'DMG');
+    if (dmg) {
+        member.dob = formatDate(dmg.elements[1]?.value);
+        member.gender = dmg.elements[2]?.value || '';
+    }
 
-        if (isSub) {
-            data.subscriber = member;
-            data.maintenanceType = maintType;
-            data.maintenanceReason = maintReason;
-            
-            const hd = loopSegs.find(s => s.tag === 'HD');
-            if (hd) {
-                data.benefitStatus = hd.elements[0]?.value || '';
-                data.coverageLevelCode = hd.elements[4]?.value || '';
-            }
-            
-            const ref1L = loopSegs.find(s => s.tag === 'REF' && s.elements[0]?.value === '1L');
-            if (ref1L) {
-                data.policyNumber = ref1L.elements[1]?.value || '';
-            }
-            
-            const dtp = loopSegs.find(s => s.tag === 'DTP' && s.elements[0]?.value === '348'); // Benefit Begin usually inside loop 2300 or 2000
-            if (dtp) data.planEffectiveDate = formatDate(dtp.elements[2]?.value);
-        } else {
-            if (data.dependents) data.dependents.push(member);
-        }
-    });
+    // Since this is single record selection mode, we map this member as Subscriber for editing simplicity,
+    // or as a Dependent if relationship indicates, but usually 834 editing focuses on one life.
+    // However, to keep Form structure, we treat this record as the Primary.
+    
+    data.subscriber = member;
+    data.maintenanceType = maintType;
+    data.maintenanceReason = maintReason;
+    
+    const hd = loopSegs.find(s => s.tag === 'HD');
+    if (hd) {
+        data.benefitStatus = hd.elements[0]?.value || '';
+        data.coverageLevelCode = hd.elements[4]?.value || '';
+    }
+    
+    const ref1L = loopSegs.find(s => s.tag === 'REF' && s.elements[0]?.value === '1L');
+    if (ref1L) {
+        data.policyNumber = ref1L.elements[1]?.value || '';
+    }
+    
+    const dtp = loopSegs.find(s => s.tag === 'DTP' && s.elements[0]?.value === '348');
+    if (dtp) data.planEffectiveDate = formatDate(dtp.elements[2]?.value);
+
+    // Dependencies in 834 are usually sequential INS loops. 
+    // If we select a dependent, we just show that dependent.
+    // If we select a subscriber, we theoretically should show their dependents, but 834 format is flat.
+    // For simplicity in Record Selection mode, we treat each INS as an independent editable unit.
+    data.dependents = []; 
 
     return data;
 };
