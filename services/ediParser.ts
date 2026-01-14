@@ -47,7 +47,7 @@ export const parseEdi = (rawEdi: string): EdiDocument => {
     .map(s => s.trim())
     .filter(s => s.length > 0);
 
-  let transactionType: '270' | '271' | '276' | '277' | '837' | '834' | 'Unknown' = 'Unknown';
+  let transactionType: '270' | '271' | '276' | '277' | '837' | '834' | '835' | 'Unknown' = 'Unknown';
 
   const segments: EdiSegment[] = rawSegments.map((rawSeg, index) => {
     // Split elements
@@ -63,6 +63,7 @@ export const parseEdi = (rawEdi: string): EdiDocument => {
         else if (typeCode === '277') transactionType = '277';
         else if (typeCode === '837') transactionType = '837';
         else if (typeCode === '834') transactionType = '834';
+        else if (typeCode === '835') transactionType = '835';
     }
 
     const elements = elementsRaw.slice(1).map((val, i) => {
@@ -182,6 +183,7 @@ export const getRecordRaw = (doc: EdiDocument, recordId: string): string => {
 
         if (anchorSeg.tag === 'INS') return seg.tag === 'INS';
         if (anchorSeg.tag === 'CLM') return seg.tag === 'CLM';
+        if (anchorSeg.tag === 'CLP') return seg.tag === 'CLP'; // 835 Claim Loop
         if (anchorSeg.tag === 'HL') {
             // For HL, we stop if we hit a sibling or parent HL (depth <= current)
             if (seg.tag === 'HL') {
@@ -226,6 +228,7 @@ export const replaceRecordInEdi = (doc: EdiDocument, newEdi: string, recordId: s
 
         if (anchorSeg.tag === 'INS') return seg.tag === 'INS';
         if (anchorSeg.tag === 'CLM') return seg.tag === 'CLM';
+        if (anchorSeg.tag === 'CLP') return seg.tag === 'CLP';
         if (anchorSeg.tag === 'HL') {
             if (seg.tag === 'HL') {
                 return seg.depth <= anchorSeg.depth;
@@ -268,6 +271,7 @@ export const replaceRecordInEdi = (doc: EdiDocument, newEdi: string, recordId: s
         if (seg.tag === 'SE') return true;
         if (anchorSeg.tag === 'INS') return seg.tag === 'INS';
         if (anchorSeg.tag === 'CLM') return seg.tag === 'CLM';
+        if (anchorSeg.tag === 'CLP') return seg.tag === 'CLP';
         if (anchorSeg.tag === 'TRN') return seg.tag === 'TRN';
         if (anchorSeg.tag === 'HL') {
              if (seg.tag === 'HL') return seg.depth <= newAnchorSeg.depth;
@@ -373,6 +377,7 @@ export const duplicateRecordInEdi = (doc: EdiDocument, recordId: string): string
 
         if (anchorSeg.tag === 'INS') return seg.tag === 'INS';
         if (anchorSeg.tag === 'CLM') return seg.tag === 'CLM';
+        if (anchorSeg.tag === 'CLP') return seg.tag === 'CLP';
         if (anchorSeg.tag === 'HL') {
             if (seg.tag === 'HL') {
                 return seg.depth <= anchorSeg.depth;
@@ -422,6 +427,7 @@ export const removeRecordFromEdi = (doc: EdiDocument, recordId: string): string 
 
         if (anchorSeg.tag === 'INS') return seg.tag === 'INS';
         if (anchorSeg.tag === 'CLM') return seg.tag === 'CLM';
+        if (anchorSeg.tag === 'CLP') return seg.tag === 'CLP';
         if (anchorSeg.tag === 'HL') {
             if (seg.tag === 'HL') {
                 return seg.depth <= anchorSeg.depth;

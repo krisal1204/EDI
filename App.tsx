@@ -14,7 +14,7 @@ import { RecordList } from './components/RecordList';
 import { parseEdi, flattenTree, replaceRecordInEdi, getRecordRaw, duplicateRecordInEdi, removeRecordFromEdi } from './services/ediParser';
 import { EdiDocument, EdiSegment } from './types';
 import { FormData270, FormData276, FormData837, FormData834, build270, build276, build837, build834 } from './services/ediBuilder';
-import { mapEdiToForm, mapEdiToForm276, mapEdiToForm837, mapEdiToForm834, mapEdiToBenefits, BenefitRow, mapEdiToClaimStatus, ClaimStatusRow } from './services/ediMapper';
+import { mapEdiToForm, mapEdiToForm276, mapEdiToForm837, mapEdiToForm834, mapEdiToBenefits, BenefitRow, mapEdiToClaimStatus, ClaimStatusRow, mapEdiToRemittance, PaymentInfo, RemittanceClaim } from './services/ediMapper';
 import { analyzeSegmentOffline } from './services/offlineAnalyzer';
 import { extractRecords, EdiRecord } from './services/recordService';
 import { useAppStore } from './store/useAppStore';
@@ -186,6 +186,11 @@ function App() {
 
   const [benefits, setBenefits] = useState<BenefitRow[]>([]);
   const [claims, setClaims] = useState<ClaimStatusRow[]>([]);
+  
+  // 835 Data
+  const [paymentInfo, setPaymentInfo] = useState<PaymentInfo | null>(null);
+  const [remittanceClaims, setRemittanceClaims] = useState<RemittanceClaim[]>([]);
+
   const [selectedSegment, setSelectedSegment] = useState<EdiSegment | null>(null);
   const [viewMode, setViewMode] = useState<'inspector' | 'raw' | 'json' | 'reference' | 'settings' | 'contact'>('inspector');
   const [copyFeedback, setCopyFeedback] = useState(false);
@@ -293,7 +298,7 @@ function App() {
       if (parsed.transactionType !== lastTransactionType) {
           const windowWidth = window.innerWidth;
           const maxWidth = windowWidth * 0.8;
-          if (parsed.transactionType === '271' || parsed.transactionType === '277') {
+          if (['271', '277', '835'].includes(parsed.transactionType)) {
               setSidebarWidth(Math.min(750, maxWidth)); 
           } else {
               setSidebarWidth(Math.min(700, maxWidth)); 
@@ -305,16 +310,25 @@ function App() {
         setSelectedSegment(parsed.segments[0]);
       }
 
-      // Handle List Views (271/277 usually show all)
+      // Handle List Views (271/277/835 usually show all)
       if (parsed.transactionType === '271') {
           setBenefits(mapEdiToBenefits(parsed));
           setClaims([]);
+          setRemittanceClaims([]);
       } else if (parsed.transactionType === '277') {
           setClaims(mapEdiToClaimStatus(parsed));
           setBenefits([]);
+          setRemittanceClaims([]);
+      } else if (parsed.transactionType === '835') {
+          const { info, claims } = mapEdiToRemittance(parsed);
+          setPaymentInfo(info);
+          setRemittanceClaims(claims);
+          setBenefits([]);
+          setClaims([]);
       } else {
           setBenefits([]);
           setClaims([]);
+          setRemittanceClaims([]);
       }
     } catch (e) {
       console.error("Parse error", e);
@@ -491,6 +505,8 @@ function App() {
     setBenefits([]);
     setClaims([]);
     setRecords([]);
+    setPaymentInfo(null);
+    setRemittanceClaims([]);
     setSelectedRecordId(null);
     setViewMode('inspector');
     setSidebarWidth(700); 
@@ -684,8 +700,8 @@ function App() {
                         onSelect={handleRecordSelect} 
                         onResetAll={handleResetAll}
                         onResetRecord={handleResetRecord}
-                        onAddRecord={handleAddRecord}
-                        onDeleteRecord={handleDeleteRecord}
+                        onAddRecord={doc?.transactionType !== '835' ? handleAddRecord : undefined} // No add record for 835 yet
+                        onDeleteRecord={doc?.transactionType !== '835' ? handleDeleteRecord : undefined}
                         isModified={rawEdi !== originalEdi}
                     />
                 )}
@@ -699,7 +715,10 @@ function App() {
                         formData834={formData834} onChange834={handleForm834Change}
                         transactionType={doc?.transactionType} 
                         generatorMode={generatorMode} onSetGeneratorMode={handleGeneratorModeChange}
-                        benefits={benefits} claims={claims}
+                        benefits={benefits} 
+                        claims={claims}
+                        remittanceInfo={paymentInfo}
+                        remittanceClaims={remittanceClaims}
                         selectedSegment={selectedSegment} onFieldFocus={handleFieldFocus}
                     />
                 </div>

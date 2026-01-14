@@ -15,6 +15,8 @@ const sample276 = `ISA*00*          *00*          *ZZ*SENDER         *ZZ*RECEIVE
 
 const sample277 = `ISA*00*          *00*          *ZZ*RECEIVER       *ZZ*SENDER         *240101*1505*^*00501*000000007*0*T*:~GS*HN*RECEIVER*SENDER*20240101*1505*7*X*005010X212~ST*277*0007*005010X212~BHT*0010*08*000000007*20240101*1505~HL*1**20*1~NM1*PR*2*PAYER*****PI*PAYERID~HL*2*1*21*1~NM1*41*2*PROVIDER*****XX*1234567890~HL*3*2*22*0~NM1*IL*1*DOE*JOHN****MI*MEMBERID~TRN*2*CLM12345~STC*F1:20:PR*20240101**150.00*120.00~REF*1K*999999~DTP*576*D8*20240115~TRN*2*CLM99887~STC*P1:16:PR*20240215**225.00*0.00~REF*1K*888888~SE*19*0007~GE*1*7~IEA*1*000000007~`;
 
+const sample835 = `ISA*00*          *00*          *ZZ*PAYER          *ZZ*PROVIDER       *240201*1600*^*00501*000000008*0*P*:~GS*HP*PAYER*PROVIDER*20240201*1600*8*X*005010X221A1~ST*835*0008*005010X221A1~BPR*I*500.00*C*CHK*CCP*01*999888777*DA*123456789*1512345678**01*987654321*DA*98765*20240201~TRN*1*CHECK12345*1999999999~N1*PR*UNITED HEALTHCARE*XV*87726~N1*PE*MEDICAL GROUP LLC*XX*1234567890~LX*1~CLP*CLM12345*1*150.00*120.00*30.00*12*1234567890123~NM1*QC*1*DOE*JOHN~DTM*232*20240101~CAS*PR*2*30.00~SVC*HC:99213*150.00*120.00~DTM*472*20240101~CAS*CO*45*30.00~LX*2~CLP*CLM99887*3*225.00*0.00*225.00*12*1234567890124~NM1*QC*1*SMITH*ALICE~DTM*232*20240215~CAS*PR*1*225.00~SVC*HC:99214*225.00*0.00~DTM*472*20240215~CAS*CO*45*225.00~SE*20*0008~GE*1*8~IEA*1*000000008~`;
+
 interface Props {
   onProcess: (text: string) => void;
 }
@@ -117,7 +119,7 @@ export const DragDropInput: React.FC<Props> = ({ onProcess }) => {
         <div className="border-t border-gray-100 dark:border-slate-800 pt-8">
             <p className="text-center text-xs text-gray-400 dark:text-slate-500 mb-6 font-medium uppercase tracking-widest">Or load a sample transaction</p>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-6">
                 <ButtonGroup title="Enrollment">
                     <SampleButton code="834" label="Maintenance" onClick={() => { setText(sample834); onProcess(sample834); }} />
                 </ButtonGroup>
@@ -132,9 +134,13 @@ export const DragDropInput: React.FC<Props> = ({ onProcess }) => {
                     <SampleButton code="837I" label="Institutional" onClick={() => { setText(sample837Inst); onProcess(sample837Inst); }} />
                 </ButtonGroup>
                 
-                <ButtonGroup title="Claims Status">
-                    <SampleButton code="276" label="Request" onClick={() => { setText(sample276); onProcess(sample276); }} />
-                    <SampleButton code="277" label="Response" onClick={() => { setText(sample277); onProcess(sample277); }} />
+                <ButtonGroup title="Claim Status">
+                    <SampleButton code="276" label="Status Req" onClick={() => { setText(sample276); onProcess(sample276); }} />
+                    <SampleButton code="277" label="Status Resp" onClick={() => { setText(sample277); onProcess(sample277); }} />
+                </ButtonGroup>
+
+                <ButtonGroup title="Payment">
+                    <SampleButton code="835" label="Remittance" onClick={() => { setText(sample835); onProcess(sample835); }} />
                 </ButtonGroup>
             </div>
         </div>
