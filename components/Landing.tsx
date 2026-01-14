@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 interface Props {
@@ -22,7 +23,7 @@ export const Landing: React.FC<Props> = ({ onEnter, onContact }) => {
             </p>
 
             <div className="flex flex-wrap justify-center gap-3 mb-12">
-                {['834 Enrollment', '270/271 Eligibility', '837 Claims', '276/277 Status'].map((tag) => (
+                {['834 Enrollment', '270/271 Eligibility', '837 Claims', '276/277 Status', '835 Remittance'].map((tag) => (
                     <span key={tag} className="px-3 py-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-full text-xs font-medium uppercase tracking-wider">
                         {tag}
                     </span>

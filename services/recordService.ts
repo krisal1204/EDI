@@ -6,7 +6,7 @@ export interface EdiRecord {
     id: string;         // The unique ID of the triggering segment (e.g., CLM segment ID)
     label: string;      // Human readable label (e.g., "Claim #12345")
     value: string;      // Secondary info (e.g., "$150.00")
-    type: 'Claim' | 'Subscriber' | 'Member' | 'Transaction' | 'Unknown';
+    type: 'Claim' | 'Subscriber' | 'Member' | 'Transaction' | 'Payment' | 'Unknown';
     startIndex: number; // Index in the flattened segment list
 }
 
@@ -128,6 +128,30 @@ export const extractRecords = (doc: EdiDocument): EdiRecord[] => {
                     label: `Trace ${trace}`,
                     value: amount,
                     type: 'Claim',
+                    startIndex: index
+                });
+            }
+        });
+    }
+    // --- 835 Remittance ---
+    else if (type === '835') {
+        flat.forEach((seg, index) => {
+            if (seg.tag === 'CLP') {
+                const claimId = seg.elements[0]?.value || 'Unknown';
+                const status = seg.elements[1]?.value; // 1, 2, 3, etc
+                const paidAmt = seg.elements[2]?.value || '0';
+                
+                // 1=Processed Primary, 2=Processed Secondary, 3=Denied, 22=Reversal
+                let statusLabel = 'Processed';
+                if (status === '3') statusLabel = 'Denied';
+                else if (status === '22') statusLabel = 'Reversal';
+                else if (status === '4') statusLabel = 'Denied';
+
+                records.push({
+                    id: seg.id,
+                    label: `Claim ${claimId}`,
+                    value: `Paid $${paidAmt} (${statusLabel})`,
+                    type: 'Payment',
                     startIndex: index
                 });
             }

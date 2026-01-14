@@ -2,9 +2,10 @@
 import React, { useState, useEffect } from 'react';
 import { FormData270, FormData276, FormData837, FormData834, Member834, ServiceLine837 } from '../services/ediBuilder';
 import { EdiSegment } from '../types';
-import { BenefitRow, ClaimStatusRow } from '../services/ediMapper';
+import { BenefitRow, ClaimStatusRow, PaymentInfo, RemittanceClaim } from '../services/ediMapper';
 import { BenefitTable } from './BenefitTable';
 import { ClaimStatusTable } from './ClaimStatusTable';
+import { PaymentTable } from './PaymentTable';
 import { PROCEDURE_CODES, ICD10_CODES, SERVICE_TYPE_CODES } from '../services/referenceData';
 import { DatePicker } from './DatePicker';
 
@@ -22,6 +23,8 @@ interface Props {
   onSetGeneratorMode: (mode: '270' | '276' | '837' | '834') => void;
   benefits: BenefitRow[];
   claims: ClaimStatusRow[];
+  remittanceInfo?: PaymentInfo | null;
+  remittanceClaims?: RemittanceClaim[];
   selectedSegment: EdiSegment | null;
   onFieldFocus: (field: string) => void;
 }
@@ -170,6 +173,7 @@ export const EdiGenerator: React.FC<Props> = ({
   transactionType,
   generatorMode, onSetGeneratorMode,
   benefits, claims,
+  remittanceInfo, remittanceClaims,
   selectedSegment,
   onFieldFocus
 }) => {
@@ -216,6 +220,9 @@ export const EdiGenerator: React.FC<Props> = ({
   }
   if (transactionType === '277') {
     return <ClaimStatusTable claims={claims} />;
+  }
+  if (transactionType === '835' && remittanceInfo && remittanceClaims) {
+    return <PaymentTable info={remittanceInfo} claims={remittanceClaims} />;
   }
 
   // --- 270 Eligibility Form ---

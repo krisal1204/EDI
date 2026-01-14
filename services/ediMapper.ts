@@ -52,6 +52,52 @@ export interface ClaimStatusRow {
   serviceLines: ServiceLine[];
 }
 
+export interface Adjustment {
+    groupCode: string; // CAS01
+    reasonCode: string; // CAS02
+    amount: string; // CAS03
+    quantity?: string; // CAS04
+}
+
+export interface RemittanceServiceLine {
+    procedureCode: string;
+    chargeAmount: string;
+    paidAmount: string;
+    revenueCode?: string;
+    units?: string;
+    date?: string;
+    adjustments: Adjustment[];
+    refId?: string; // LX or REF
+}
+
+export interface RemittanceClaim {
+    claimId: string; // CLP01
+    status: string; // CLP02
+    chargeAmount: string; // CLP03
+    paidAmount: string; // CLP04
+    patientResp: string; // CLP05
+    claimType: string; // CLP06
+    payerControlNumber: string; // CLP07
+    patientName?: string;
+    patientId?: string;
+    serviceLines: RemittanceServiceLine[];
+    adjustments: Adjustment[]; // Claim level adjustments
+    startDate?: string;
+    endDate?: string;
+}
+
+export interface PaymentInfo {
+    payerName: string;
+    payerId: string;
+    payeeName: string;
+    payeeNpi: string;
+    checkNumber: string; // TRN02 or BPR02
+    checkAmount: string; // BPR02
+    checkDate: string; // BPR16
+    productionDate: string; // GS04
+    paymentMethod: string; // BPR04
+}
+
 /**
  * Helper to flatten tree for easier searching
  */
@@ -753,3 +799,144 @@ export const mapEdiToClaimStatus = (doc: EdiDocument): ClaimStatusRow[] => {
     pushClaim(); // Close last claim
     return rows;
 }
+
+export const mapEdiToRemittance = (doc: EdiDocument): { info: PaymentInfo, claims: RemittanceClaim[] } => {
+    const flat = flattenSegments(doc.segments);
+    
+    const info: PaymentInfo = {
+        payerName: '', payerId: '', payeeName: '', payeeNpi: '', 
+        checkNumber: '', checkAmount: '0.00', checkDate: '', productionDate: '', paymentMethod: ''
+    };
+    
+    const claims: RemittanceClaim[] = [];
+    let currentClaim: RemittanceClaim | null = null;
+    let currentLine: RemittanceServiceLine | null = null;
+
+    // Helper to capture adjustments
+    const extractAdjustments = (seg: EdiSegment): Adjustment[] => {
+        const adjs: Adjustment[] = [];
+        const group = seg.elements[0]?.value;
+        // Pairs start at index 1 (reason) and 2 (amount)
+        for (let i = 1; i < seg.elements.length; i += 3) {
+            const reason = seg.elements[i]?.value;
+            const amount = seg.elements[i+1]?.value;
+            const qty = seg.elements[i+2]?.value; // Quantity usually not present or optional
+            if (reason && amount) {
+                adjs.push({ groupCode: group, reasonCode: reason, amount, quantity: qty });
+            }
+        }
+        return adjs;
+    };
+
+    // Global Header Info
+    const gs = flat.find(s => s.tag === 'GS');
+    if (gs) info.productionDate = formatDate(gs.elements[3]?.value);
+
+    const bpr = flat.find(s => s.tag === 'BPR');
+    if (bpr) {
+        info.checkAmount = bpr.elements[1]?.value || '0.00';
+        info.paymentMethod = bpr.elements[3]?.value || '';
+        info.checkDate = formatDate(bpr.elements[15]?.value);
+    }
+
+    const trn = flat.find(s => s.tag === 'TRN' && s.elements[0]?.value === '1');
+    if (trn) info.checkNumber = trn.elements[1]?.value || '';
+
+    // Loop 1000A Payer
+    const payer = flat.find(s => s.tag === 'N1' && s.elements[0]?.value === 'PR');
+    if (payer) {
+        info.payerName = payer.elements[1]?.value || '';
+        info.payerId = payer.elements[3]?.value || '';
+    }
+
+    // Loop 1000B Payee
+    const payee = flat.find(s => s.tag === 'N1' && s.elements[0]?.value === 'PE');
+    if (payee) {
+        info.payeeName = payee.elements[1]?.value || '';
+        info.payeeNpi = payee.elements[3]?.value || '';
+    }
+
+    // Process Claims (Loop 2100)
+    for (let i = 0; i < flat.length; i++) {
+        const seg = flat[i];
+
+        if (seg.tag === 'CLP') {
+            // New Claim
+            if (currentClaim) {
+                if (currentLine) currentClaim.serviceLines.push(currentLine);
+                claims.push(currentClaim);
+                currentLine = null;
+            }
+
+            currentClaim = {
+                claimId: seg.elements[0]?.value,
+                status: seg.elements[1]?.value,
+                chargeAmount: seg.elements[2]?.value,
+                paidAmount: seg.elements[3]?.value,
+                patientResp: seg.elements[4]?.value,
+                claimType: seg.elements[5]?.value,
+                payerControlNumber: seg.elements[6]?.value,
+                adjustments: [],
+                serviceLines: []
+            };
+        }
+
+        if (currentClaim) {
+            // Claim Level Names (NM1)
+            if (seg.tag === 'NM1' && seg.elements[0]?.value === 'QC') {
+                const first = seg.elements[3]?.value || '';
+                const last = seg.elements[2]?.value || '';
+                currentClaim.patientName = `${first} ${last}`.trim();
+                currentClaim.patientId = seg.elements[8]?.value || '';
+            }
+
+            // Claim Level Dates
+            if (seg.tag === 'DTM') {
+                if (seg.elements[0]?.value === '232') currentClaim.startDate = formatDate(seg.elements[1]?.value);
+                if (seg.elements[0]?.value === '233') currentClaim.endDate = formatDate(seg.elements[1]?.value);
+            }
+
+            // Claim Adjustments (CAS) - if no SVC active
+            if (seg.tag === 'CAS' && !currentLine) {
+                currentClaim.adjustments.push(...extractAdjustments(seg));
+            }
+
+            // Service Lines (SVC)
+            if (seg.tag === 'SVC') {
+                if (currentLine) currentClaim.serviceLines.push(currentLine);
+                
+                const comp = seg.elements[0]?.value.split(':');
+                const proc = comp.length > 1 ? comp[1] : comp[0];
+
+                currentLine = {
+                    procedureCode: proc,
+                    chargeAmount: seg.elements[1]?.value,
+                    paidAmount: seg.elements[2]?.value,
+                    revenueCode: seg.elements[3]?.value,
+                    units: seg.elements[4]?.value,
+                    adjustments: []
+                };
+            }
+
+            if (currentLine) {
+                if (seg.tag === 'DTM' && seg.elements[0]?.value === '472') {
+                    currentLine.date = formatDate(seg.elements[1]?.value);
+                }
+                if (seg.tag === 'CAS') {
+                    currentLine.adjustments.push(...extractAdjustments(seg));
+                }
+                if (seg.tag === 'REF' && seg.elements[0]?.value === '6R') {
+                    currentLine.refId = seg.elements[1]?.value;
+                }
+            }
+        }
+    }
+
+    // Push final claim
+    if (currentClaim) {
+        if (currentLine) currentClaim.serviceLines.push(currentLine);
+        claims.push(currentClaim);
+    }
+
+    return { info, claims };
+};
