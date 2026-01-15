@@ -4,9 +4,10 @@ import React from 'react';
 interface Props {
   onEnter: () => void;
   onContact: () => void;
+  onLearn: () => void;
 }
 
-export const Landing: React.FC<Props> = ({ onEnter, onContact }) => {
+export const Landing: React.FC<Props> = ({ onEnter, onContact, onLearn }) => {
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-white dark:bg-slate-950 p-6 text-center animate-fade-in">
         <div className="mb-8">
@@ -30,15 +31,23 @@ export const Landing: React.FC<Props> = ({ onEnter, onContact }) => {
                 ))}
             </div>
 
-            <button 
-                onClick={onEnter}
-                className="group relative inline-flex items-center justify-center px-8 py-3 text-sm font-semibold text-white transition-all duration-200 bg-black dark:bg-brand-600 rounded-full hover:bg-gray-800 dark:hover:bg-brand-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black dark:focus:ring-brand-500 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
-            >
-                Get Started
-                <svg className="w-4 h-4 ml-2 transition-transform duration-200 group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                </svg>
-            </button>
+            <div className="flex items-center justify-center gap-4">
+                <button 
+                    onClick={onEnter}
+                    className="group relative inline-flex items-center justify-center px-8 py-3 text-sm font-semibold text-white transition-all duration-200 bg-black dark:bg-brand-600 rounded-full hover:bg-gray-800 dark:hover:bg-brand-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-black dark:focus:ring-brand-500 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
+                >
+                    Get Started
+                    <svg className="w-4 h-4 ml-2 transition-transform duration-200 group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                    </svg>
+                </button>
+                <button 
+                    onClick={onLearn}
+                    className="inline-flex items-center justify-center px-8 py-3 text-sm font-semibold text-gray-700 dark:text-white transition-all duration-200 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-full hover:bg-gray-50 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-200 dark:focus:ring-slate-700"
+                >
+                    Learn EDI Basics
+                </button>
+            </div>
         </div>
 
         <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl text-left">

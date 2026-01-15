@@ -1,6 +1,8 @@
 
 import React, { useState, Fragment } from 'react';
 import { PaymentInfo, RemittanceClaim, Adjustment } from '../services/ediMapper';
+import { ADJUSTMENT_GROUP_CODES, ADJUSTMENT_REASON_CODES, REMITTANCE_STATUS_CODES } from '../services/offlineAnalyzer';
+import { PROCEDURE_CODES } from '../services/referenceData';
 
 interface Props {
     info: PaymentInfo;
@@ -20,6 +22,16 @@ export const PaymentTable: React.FC<Props> = ({ info, claims }) => {
         if (next.has(index)) next.delete(index);
         else next.add(index);
         setExpandedRows(next);
+    };
+
+    const getStatusDesc = (code: string) => {
+        return REMITTANCE_STATUS_CODES[code] || `Status ${code}`;
+    };
+
+    const getAdjustmentTooltip = (adj: Adjustment) => {
+        const group = ADJUSTMENT_GROUP_CODES[adj.groupCode] || adj.groupCode;
+        const reason = ADJUSTMENT_REASON_CODES[adj.reasonCode] || "Unknown Reason";
+        return `[${adj.groupCode}] ${group}: [${adj.reasonCode}] ${reason}`;
     };
 
     if (!claims || claims.length === 0) {
@@ -98,12 +110,7 @@ export const PaymentTable: React.FC<Props> = ({ info, claims }) => {
                                                 ? 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 border-red-200 dark:border-red-900/50'
                                                 : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 border-gray-200 dark:border-slate-700'
                                             }`}>
-                                            {claim.status === '1' ? 'Processed' : 
-                                             claim.status === '2' ? 'Secondary' : 
-                                             claim.status === '3' ? 'Denied' :
-                                             claim.status === '4' ? 'Denied' : 
-                                             claim.status === '22' ? 'Reversal' : 
-                                             `Status ${claim.status}`}
+                                            {getStatusDesc(claim.status)}
                                         </span>
                                     </td>
                                 </tr>
@@ -119,7 +126,7 @@ export const PaymentTable: React.FC<Props> = ({ info, claims }) => {
                                                         <div className="text-[10px] font-bold text-yellow-700 dark:text-yellow-500 uppercase mb-1">Claim Adjustments</div>
                                                         <div className="flex flex-wrap gap-2">
                                                             {claim.adjustments.map((adj, idx) => (
-                                                                <span key={idx} className="text-xs px-2 py-1 bg-white dark:bg-slate-900 border border-yellow-200 dark:border-yellow-800/50 rounded text-gray-700 dark:text-slate-300">
+                                                                <span key={idx} className="text-xs px-2 py-1 bg-white dark:bg-slate-900 border border-yellow-200 dark:border-yellow-800/50 rounded text-gray-700 dark:text-slate-300" title={getAdjustmentTooltip(adj)}>
                                                                     <span className="font-bold">{adj.groupCode}-{adj.reasonCode}</span>: {formatCurrency(adj.amount)}
                                                                 </span>
                                                             ))}
@@ -142,7 +149,8 @@ export const PaymentTable: React.FC<Props> = ({ info, claims }) => {
                                                             <tr key={idx} className="hover:bg-blue-50/10 dark:hover:bg-blue-900/10 transition-colors">
                                                                 <td className="px-3 py-2 text-gray-500 dark:text-slate-400 whitespace-nowrap">{line.date}</td>
                                                                 <td className="px-3 py-2">
-                                                                    <div className="font-mono text-gray-800 dark:text-slate-200">{line.procedureCode}</div>
+                                                                    <div className="font-mono text-gray-800 dark:text-slate-200 font-medium">{line.procedureCode}</div>
+                                                                    <div className="text-[10px] text-gray-500 dark:text-slate-400 truncate max-w-xs">{PROCEDURE_CODES[line.procedureCode] || ''}</div>
                                                                     {line.units && <div className="text-[10px] text-gray-400 dark:text-slate-500">{line.units} units</div>}
                                                                 </td>
                                                                 <td className="px-3 py-2 text-right text-gray-600 dark:text-slate-400 font-mono">{formatCurrency(line.chargeAmount)}</td>
@@ -150,7 +158,7 @@ export const PaymentTable: React.FC<Props> = ({ info, claims }) => {
                                                                 <td className="px-3 py-2 pl-6">
                                                                     <div className="flex flex-wrap gap-1.5">
                                                                         {line.adjustments.map((adj, aIdx) => (
-                                                                            <span key={aIdx} className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-100 dark:border-red-800/50">
+                                                                            <span key={aIdx} className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border border-red-100 dark:border-red-800/50" title={getAdjustmentTooltip(adj)}>
                                                                                 <span className="font-bold mr-1">{adj.groupCode}-{adj.reasonCode}</span>
                                                                                 {formatCurrency(adj.amount)}
                                                                             </span>

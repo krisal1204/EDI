@@ -1,3 +1,4 @@
+
 import { EdiSegment, SegmentAnalysis } from "../types";
 import { useAppStore } from "../store/useAppStore";
 
@@ -132,6 +133,59 @@ export const askEdiQuestion = async (
     } catch (error) {
         console.error("Chat error", error);
         return `I'm sorry, I couldn't connect to your local Ollama instance at ${host}. Please make sure it is running and '${model}' is pulled.`;
+    }
+};
+
+/**
+ * General EDI Tutor Chat (No specific file context)
+ */
+export const askGeneralQuestion = async (
+    question: string,
+    history: { role: string; parts: { text: string }[] }[]
+) => {
+    const { host, model } = getConfig();
+
+    const ollamaHistory = history.map(h => ({
+        role: h.role === 'model' ? 'assistant' : 'user',
+        content: h.parts[0].text
+    }));
+
+    const systemPrompt = `You are a helpful and knowledgeable EDI X12 Tutor.
+    You specialize in US Healthcare EDI transactions (HIPAA 5010 standards).
+    
+    Your goal is to explain EDI concepts, segments, loops, and codes to a student or developer.
+    
+    Guidelines:
+    1. Be clear and concise.
+    2. Use examples where possible (e.g., "A common segment is NM1...").
+    3. Explain acronyms (like "Explanation of Benefits" for EOB).
+    4. If asked about a specific code (like "Status Code 21"), provide the standard definition.
+    `;
+
+    const messages = [
+        { role: 'system', content: systemPrompt },
+        ...ollamaHistory,
+        { role: 'user', content: question }
+    ];
+
+    try {
+        const response = await fetch(`${host}/api/chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                model: model,
+                messages: messages,
+                stream: false
+            })
+        });
+
+        if (!response.ok) throw new Error(`Ollama API Error: ${response.statusText}`);
+
+        const data = await response.json();
+        return data.message.content;
+    } catch (error) {
+        console.error("Chat error", error);
+        return `I'm sorry, I couldn't connect to your local Ollama instance at ${host}.`;
     }
 };
 

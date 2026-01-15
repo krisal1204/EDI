@@ -8,6 +8,7 @@ import { ChatInterface } from './components/ChatInterface';
 import { CodeSearch } from './components/CodeSearch';
 import { Settings } from './components/Settings';
 import { Landing } from './components/Landing';
+import { Guide } from './components/Guide';
 import { JsonViewer } from './components/JsonViewer';
 import { SendMessage } from './components/SendMessage';
 import { RecordList } from './components/RecordList';
@@ -169,7 +170,7 @@ function App() {
   const { theme } = useAppStore();
 
   // Route State
-  const [currentPage, setCurrentPage] = useState<'landing' | 'workspace'>('landing');
+  const [currentPage, setCurrentPage] = useState<'landing' | 'workspace' | 'guide'>('landing');
 
   const [formData, setFormData] = useState<FormData270>(INITIAL_FORM_DATA);
   const [formData276, setFormData276] = useState<FormData276>(INITIAL_FORM_DATA_276);
@@ -648,8 +649,13 @@ function App() {
         <Landing 
             onEnter={() => { setCurrentPage('workspace'); setViewMode('inspector'); }} 
             onContact={() => { setCurrentPage('workspace'); setViewMode('contact'); }}
+            onLearn={() => setCurrentPage('guide')}
         />
       );
+  }
+
+  if (currentPage === 'guide') {
+      return <Guide onBack={() => setCurrentPage('landing')} />;
   }
 
   return (

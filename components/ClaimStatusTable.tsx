@@ -1,7 +1,7 @@
 
 import React, { useState, Fragment } from 'react';
 import { ClaimStatusRow } from '../services/ediMapper';
-import { STATUS_CODES } from '../services/offlineAnalyzer';
+import { STATUS_CODES, STATUS_CATEGORIES } from '../services/offlineAnalyzer';
 
 export const ClaimStatusTable = ({ claims }: { claims: ClaimStatusRow[] }) => {
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
@@ -62,7 +62,7 @@ export const ClaimStatusTable = ({ claims }: { claims: ClaimStatusRow[] }) => {
                                <div className="text-[10px] text-gray-400 dark:text-slate-500 mt-0.5">{c.statusDate}</div>
                             </td>
                             <td className="px-4 py-3 align-top max-w-xs">
-                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium border
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium border mb-1
                                     ${c.statusCategory === 'F1' || c.statusCategory === 'F0' 
                                         ? 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400 border-green-200 dark:border-green-900/50' 
                                         : c.statusCategory === 'F2' 
@@ -71,11 +71,10 @@ export const ClaimStatusTable = ({ claims }: { claims: ClaimStatusRow[] }) => {
                                     }`}>
                                     {c.statusCategory}-{c.statusCode}
                                 </span>
-                                {STATUS_CODES[c.statusCode] && (
-                                    <div className="text-[10px] text-gray-500 dark:text-slate-400 mt-1 leading-tight">
-                                        {STATUS_CODES[c.statusCode]}
-                                    </div>
-                                )}
+                                <div className="text-[10px] text-gray-500 dark:text-slate-400 leading-tight">
+                                    {STATUS_CATEGORIES[c.statusCategory] ? <span className="block font-medium text-gray-700 dark:text-slate-300 mb-0.5">{STATUS_CATEGORIES[c.statusCategory]}</span> : null}
+                                    {STATUS_CODES[c.statusCode]}
+                                </div>
                             </td>
                             <td className="px-4 py-3 text-right font-mono text-gray-700 dark:text-slate-400 align-top">
                                 ${c.billedAmount}
@@ -122,11 +121,10 @@ export const ClaimStatusTable = ({ claims }: { claims: ClaimStatusRow[] }) => {
                                                                     <span className="text-gray-600 dark:text-slate-300 bg-gray-100 dark:bg-slate-700 px-1.5 py-0.5 rounded border border-gray-200 dark:border-slate-600 inline-block mb-1">
                                                                         {line.statusCategory}-{line.statusCode}
                                                                     </span>
-                                                                    {STATUS_CODES[line.statusCode] && (
-                                                                        <div className="text-gray-500 dark:text-slate-400 leading-tight">
-                                                                            {STATUS_CODES[line.statusCode]}
-                                                                        </div>
-                                                                    )}
+                                                                    <div className="text-gray-500 dark:text-slate-400 leading-tight">
+                                                                        {STATUS_CATEGORIES[line.statusCategory] ? <span className="block font-medium text-xs mb-0.5">{STATUS_CATEGORIES[line.statusCategory]}</span> : null}
+                                                                        {STATUS_CODES[line.statusCode]}
+                                                                    </div>
                                                                 </>
                                                             ) : '-'}
                                                         </td>
