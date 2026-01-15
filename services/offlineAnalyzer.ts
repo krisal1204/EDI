@@ -137,7 +137,7 @@ export const STATUS_CODES: Record<string, string> = {
 };
 
 // Claim Adjustment Group Codes (CAS01)
-const ADJUSTMENT_GROUP_CODES: Record<string, string> = {
+export const ADJUSTMENT_GROUP_CODES: Record<string, string> = {
     "CO": "Contractual Obligation",
     "CR": "Correction and Reversals",
     "OA": "Other adjustments",
@@ -147,7 +147,7 @@ const ADJUSTMENT_GROUP_CODES: Record<string, string> = {
 
 // Claim Adjustment Reason Codes (CARC) - CAS02
 // Source: https://x12.org/codes/claim-adjustment-reason-codes
-const ADJUSTMENT_REASON_CODES: Record<string, string> = {
+export const ADJUSTMENT_REASON_CODES: Record<string, string> = {
     "1": "Deductible Amount",
     "2": "Coinsurance Amount",
     "3": "Co-payment Amount",
@@ -169,6 +169,20 @@ const ADJUSTMENT_REASON_CODES: Record<string, string> = {
     "131": "Claim specific negotiated discount.",
     "197": "Precertification/authorization/notification absent.",
     "204": "This service/equipment/drug is not covered under the patient's current benefit plan."
+};
+
+// CLP02 Claim Status Codes (835)
+export const REMITTANCE_STATUS_CODES: Record<string, string> = {
+    "1": "Processed as Primary",
+    "2": "Processed as Secondary",
+    "3": "Processed as Tertiary",
+    "4": "Denied",
+    "19": "Processed as Primary, Forwarded to Additional Payer(s)",
+    "20": "Processed as Secondary, Forwarded to Additional Payer(s)",
+    "21": "Processed as Tertiary, Forwarded to Additional Payer(s)",
+    "22": "Reversal of Previous Payment",
+    "23": "Not Our Claim, Forwarded to Additional Payer(s)",
+    "25": "Predetermination Pricing Only - No Payment"
 };
 
 // Service Type Codes (EB03, EQ01)
