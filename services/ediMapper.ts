@@ -1,4 +1,5 @@
 
+
 import { EdiDocument, EdiSegment } from '../types';
 import { FormData270, FormData276, FormData837, FormData834, ServiceLine837, Member834 } from './ediBuilder';
 import { getElementDefinition, getProcedureDefinition } from './offlineAnalyzer';
@@ -486,97 +487,139 @@ export const mapEdiToForm834 = (doc: EdiDocument, targetId?: string): Partial<Fo
         dependents: []
     };
 
-    // Locate Anchor (INS segment)
-    let insIndex = -1;
-    if (targetId) {
-        insIndex = segments.findIndex(s => s.id === targetId);
-    }
-    if (insIndex === -1) insIndex = segments.findIndex(s => s.tag === 'INS');
-    
-    if (insIndex === -1) return data;
+    // 1. Identify Anchor Index
+    // If targetId is provided, we use it. If it points to a dependent, we find the parent subscriber.
+    let anchorIndex = -1;
+    let anchorSegment: EdiSegment | undefined;
 
-    // Headers (Look Backwards)
-    const sponsor = findBackwards(segments, insIndex, s => s.tag === 'N1' && s.elements[0]?.value === 'P5');
+    if (targetId) {
+        const idx = segments.findIndex(s => s.id === targetId);
+        if (idx !== -1) {
+            const seg = segments[idx];
+            if (seg.tag === 'INS') {
+                const rel = seg.elements[1]?.value; // INS02: 18=Self
+                if (rel === '18') {
+                    // It is a subscriber
+                    anchorIndex = idx;
+                } else {
+                    // It is a dependent, backtrack to subscriber
+                    const sub = findBackwards(segments, idx, s => s.tag === 'INS' && s.elements[1]?.value === '18');
+                    if (sub) {
+                        anchorIndex = segments.indexOf(sub);
+                    } else {
+                        // Orphan dependent - treat as anchor for now to show something
+                        anchorIndex = idx;
+                    }
+                }
+            }
+        }
+    }
+
+    // Default to first INS if no valid target found
+    if (anchorIndex === -1) {
+        anchorIndex = segments.findIndex(s => s.tag === 'INS');
+    }
+
+    if (anchorIndex === -1) return data; // No INS segments found in document
+
+    anchorSegment = segments[anchorIndex];
+
+    // 2. Map Global Headers (Backwards from anchor)
+    const sponsor = findBackwards(segments, anchorIndex, s => s.tag === 'N1' && s.elements[0]?.value === 'P5');
     if (sponsor) {
         data.sponsorName = sponsor.elements[1]?.value || '';
         data.sponsorTaxId = sponsor.elements[3]?.value || '';
     }
 
-    const payer = findBackwards(segments, insIndex, s => s.tag === 'N1' && s.elements[0]?.value === 'IN');
+    const payer = findBackwards(segments, anchorIndex, s => s.tag === 'N1' && s.elements[0]?.value === 'IN');
     if (payer) {
         data.payerName = payer.elements[1]?.value || '';
         data.payerId = payer.elements[3]?.value || '';
     }
 
-    // Process Member Loop (Forward from INS)
-    const ins = segments[insIndex];
-    const maintType = ins.elements[2]?.value;
-    const maintReason = ins.elements[3]?.value;
-    
-    // Member details are in the loop starting at INS
-    // Stop at next INS
-    const loopSegs: EdiSegment[] = [ins];
-    for (let i = insIndex + 1; i < segments.length; i++) {
-        const s = segments[i];
-        if (s.tag === 'INS' || s.tag === 'SE') break;
-        loopSegs.push(s);
-    }
+    // Helper to parse a Member Loop (Subscriber or Dependent)
+    // Starts at `startIndex` (INS), ends at next INS or SE
+    const parseMemberLoop = (startIndex: number): { member: Member834, nextIndex: number, extraData: any } => {
+        const ins = segments[startIndex];
+        const loopSegs: EdiSegment[] = [ins];
+        let nextIndex = startIndex + 1;
+        
+        while (nextIndex < segments.length) {
+            const s = segments[nextIndex];
+            if (s.tag === 'INS' || s.tag === 'SE' || s.tag === 'GE' || s.tag === 'IEA') break;
+            loopSegs.push(s);
+            nextIndex++;
+        }
 
-    const member: Member834 = {
-        id: '',
-        firstName: '',
-        lastName: '',
-        ssn: '',
-        dob: '',
-        gender: '',
-        relationship: ins.elements[1]?.value || '18'
+        const member: Member834 = {
+            id: '', firstName: '', lastName: '', ssn: '', dob: '', gender: '',
+            relationship: ins.elements[1]?.value || '18'
+        };
+
+        const ref0F = loopSegs.find(s => s.tag === 'REF' && s.elements[0]?.value === '0F');
+        if (ref0F) member.id = ref0F.elements[1]?.value || '';
+        
+        const refSY = loopSegs.find(s => s.tag === 'REF' && s.elements[0]?.value === 'SY');
+        if (refSY) member.ssn = refSY.elements[1]?.value || '';
+
+        const nm1 = loopSegs.find(s => s.tag === 'NM1' && (s.elements[0]?.value === 'IL' || s.elements[0]?.value === '74'));
+        if (nm1) {
+            member.lastName = nm1.elements[2]?.value || '';
+            member.firstName = nm1.elements[3]?.value || '';
+        }
+
+        const dmg = loopSegs.find(s => s.tag === 'DMG');
+        if (dmg) {
+            member.dob = formatDate(dmg.elements[1]?.value);
+            member.gender = dmg.elements[2]?.value || '';
+        }
+
+        // Extra info typically on Subscriber loop only
+        const extra: any = {};
+        if (ins.elements[1]?.value === '18') { // Only capture for Subscriber
+            extra.maintenanceType = ins.elements[2]?.value;
+            extra.maintenanceReason = ins.elements[3]?.value;
+            
+            const hd = loopSegs.find(s => s.tag === 'HD');
+            if (hd) {
+                extra.benefitStatus = hd.elements[0]?.value || '';
+                extra.coverageLevelCode = hd.elements[4]?.value || '';
+            }
+            
+            const ref1L = loopSegs.find(s => s.tag === 'REF' && s.elements[0]?.value === '1L');
+            if (ref1L) extra.policyNumber = ref1L.elements[1]?.value || '';
+            
+            const dtp = loopSegs.find(s => s.tag === 'DTP' && s.elements[0]?.value === '348');
+            if (dtp) extra.planEffectiveDate = formatDate(dtp.elements[2]?.value);
+        }
+
+        return { member, nextIndex, extraData: extra };
     };
 
-    const ref0F = loopSegs.find(s => s.tag === 'REF' && s.elements[0]?.value === '0F');
-    if (ref0F) member.id = ref0F.elements[1]?.value || '';
-    
-    const refSY = loopSegs.find(s => s.tag === 'REF' && s.elements[0]?.value === 'SY');
-    if (refSY) member.ssn = refSY.elements[1]?.value || '';
+    // 3. Map Subscriber Loop (The Anchor)
+    const subResult = parseMemberLoop(anchorIndex);
+    data.subscriber = subResult.member;
+    Object.assign(data, subResult.extraData);
 
-    const nm1 = loopSegs.find(s => s.tag === 'NM1' && s.elements[0]?.value === 'IL');
-    if (nm1) {
-        member.lastName = nm1.elements[2]?.value || '';
-        member.firstName = nm1.elements[3]?.value || '';
+    // 4. Map Dependents (Scan forward from Subscriber)
+    let scanIndex = subResult.nextIndex;
+    while (scanIndex < segments.length) {
+        const nextSeg = segments[scanIndex];
+        
+        // Stop if we hit end of file or a NEW Subscriber loop
+        if (nextSeg.tag === 'SE' || nextSeg.tag === 'GE' || nextSeg.tag === 'IEA') break;
+        if (nextSeg.tag === 'INS') {
+            const rel = nextSeg.elements[1]?.value;
+            if (rel === '18') break; // Found next subscriber, stop scanning
+            
+            // Found a dependent!
+            const depResult = parseMemberLoop(scanIndex);
+            data.dependents?.push(depResult.member);
+            scanIndex = depResult.nextIndex;
+        } else {
+            scanIndex++;
+        }
     }
-
-    const dmg = loopSegs.find(s => s.tag === 'DMG');
-    if (dmg) {
-        member.dob = formatDate(dmg.elements[1]?.value);
-        member.gender = dmg.elements[2]?.value || '';
-    }
-
-    // Since this is single record selection mode, we map this member as Subscriber for editing simplicity,
-    // or as a Dependent if relationship indicates, but usually 834 editing focuses on one life.
-    // However, to keep Form structure, we treat this record as the Primary.
-    
-    data.subscriber = member;
-    data.maintenanceType = maintType;
-    data.maintenanceReason = maintReason;
-    
-    const hd = loopSegs.find(s => s.tag === 'HD');
-    if (hd) {
-        data.benefitStatus = hd.elements[0]?.value || '';
-        data.coverageLevelCode = hd.elements[4]?.value || '';
-    }
-    
-    const ref1L = loopSegs.find(s => s.tag === 'REF' && s.elements[0]?.value === '1L');
-    if (ref1L) {
-        data.policyNumber = ref1L.elements[1]?.value || '';
-    }
-    
-    const dtp = loopSegs.find(s => s.tag === 'DTP' && s.elements[0]?.value === '348');
-    if (dtp) data.planEffectiveDate = formatDate(dtp.elements[2]?.value);
-
-    // Dependencies in 834 are usually sequential INS loops. 
-    // If we select a dependent, we just show that dependent.
-    // If we select a subscriber, we theoretically should show their dependents, but 834 format is flat.
-    // For simplicity in Record Selection mode, we treat each INS as an independent editable unit.
-    data.dependents = []; 
 
     return data;
 };
