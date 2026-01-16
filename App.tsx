@@ -199,6 +199,7 @@ function App() {
   // JSON Viewer State
   const [jsonExpandMode, setJsonExpandMode] = useState<'auto' | 'expanded' | 'collapsed'>('auto');
   const [jsonViewKey, setJsonViewKey] = useState(0);
+  const [jsonDisplayType, setJsonDisplayType] = useState<'structure' | 'simplified'>('structure');
 
   // Track which generator is currently active
   const [generatorMode, setGeneratorMode] = useState<'270' | '276' | '837' | '834'>('270');
@@ -515,6 +516,7 @@ function App() {
     setGeneratorMode('270');
     setJsonExpandMode('auto');
     setJsonViewKey(0);
+    setJsonDisplayType('structure');
   };
 
   const handleCopy = async (content: string) => {
@@ -643,6 +645,19 @@ function App() {
     };
     return doc.segments.map(enrichSegment);
   }, [doc]);
+
+  const simpleJson = useMemo(() => {
+    if (!doc) return null;
+    // Map based on transaction type to business object
+    if (doc.transactionType === '270') return mapEdiToForm(doc, selectedRecordId || undefined);
+    if (doc.transactionType === '276') return mapEdiToForm276(doc, selectedRecordId || undefined);
+    if (doc.transactionType === '837') return mapEdiToForm837(doc, selectedRecordId || undefined);
+    if (doc.transactionType === '834') return mapEdiToForm834(doc, selectedRecordId || undefined);
+    if (doc.transactionType === '271') return mapEdiToBenefits(doc);
+    if (doc.transactionType === '277') return mapEdiToClaimStatus(doc);
+    if (doc.transactionType === '835') return mapEdiToRemittance(doc);
+    return { info: "Simplified view not available for this transaction type" };
+  }, [doc, selectedRecordId]);
 
   if (currentPage === 'landing') {
       return (
@@ -773,14 +788,34 @@ function App() {
                         {viewMode === 'json' && (
                             <div className="w-full h-full bg-white dark:bg-slate-950 overflow-hidden flex flex-col relative">
                                 <div className="absolute top-2 right-4 z-10 flex gap-2">
+                                    <div className="flex bg-white dark:bg-slate-800 rounded-md shadow-sm border border-gray-200 dark:border-slate-700 mr-2">
+                                        <button 
+                                            onClick={() => { setJsonDisplayType('structure'); setJsonViewKey(k => k+1); }} 
+                                            className={`px-3 py-1.5 text-xs font-medium rounded-l-md transition-colors ${jsonDisplayType === 'structure' ? 'bg-gray-100 dark:bg-slate-700 text-black dark:text-white' : 'text-gray-500 hover:text-gray-900 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700/50'}`}
+                                        >
+                                            Segment Structure
+                                        </button>
+                                        <button 
+                                            onClick={() => { setJsonDisplayType('simplified'); setJsonViewKey(k => k+1); }} 
+                                            className={`px-3 py-1.5 text-xs font-medium rounded-r-md border-l border-gray-200 dark:border-slate-700 transition-colors ${jsonDisplayType === 'simplified' ? 'bg-gray-100 dark:bg-slate-700 text-black dark:text-white' : 'text-gray-500 hover:text-gray-900 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-700/50'}`}
+                                        >
+                                            Simplified Data
+                                        </button>
+                                    </div>
                                     <div className="flex bg-white dark:bg-slate-800 rounded-md shadow-sm border border-gray-200 dark:border-slate-700">
                                         <button onClick={() => toggleJsonExpand('expanded')} className="px-3 py-1.5 text-xs font-medium border-r border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 rounded-l-md transition-colors">Expand All</button>
                                         <button onClick={() => toggleJsonExpand('collapsed')} className="px-3 py-1.5 text-xs font-medium text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 rounded-r-md transition-colors">Collapse All</button>
                                     </div>
-                                    <button onClick={() => handleCopy(JSON.stringify(enrichedJson, null, 2))} className="flex items-center space-x-1.5 px-3 py-1.5 rounded-md border text-xs font-medium transition-all duration-200 bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-white shadow-sm"><span>Copy JSON</span></button>
+                                    <button onClick={() => handleCopy(JSON.stringify(jsonDisplayType === 'structure' ? enrichedJson : simpleJson, null, 2))} className="flex items-center space-x-1.5 px-3 py-1.5 rounded-md border text-xs font-medium transition-all duration-200 bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300 hover:text-gray-900 dark:hover:text-white shadow-sm"><span>Copy JSON</span></button>
                                 </div>
                                 <div className="flex-1 overflow-auto p-8 custom-scrollbar bg-gray-50 dark:bg-slate-900">
-                                    {enrichedJson ? <JsonViewer key={jsonViewKey} data={enrichedJson} initiallyOpen={jsonExpandMode === 'auto' ? undefined : (jsonExpandMode === 'expanded')} /> : <div className="text-gray-400 text-xs">No data available</div>}
+                                    {(jsonDisplayType === 'structure' ? enrichedJson : simpleJson) ? (
+                                        <JsonViewer 
+                                            key={jsonViewKey} 
+                                            data={jsonDisplayType === 'structure' ? enrichedJson : simpleJson} 
+                                            initiallyOpen={jsonExpandMode === 'auto' ? undefined : (jsonExpandMode === 'expanded')} 
+                                        />
+                                    ) : <div className="text-gray-400 text-xs">No data available</div>}
                                 </div>
                             </div>
                         )}
