@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { FormData270, FormData276, FormData837, FormData834, Member834, ServiceLine837 } from '../services/ediBuilder';
+import { FormData270, FormData276, FormData837, FormData834, Member834, ServiceLine837, FormData850, FormData810, OrderLineItem, FormData856, ShipNoticeLineItem } from '../services/ediBuilder';
 import { EdiSegment } from '../types';
 import { BenefitRow, ClaimStatusRow, PaymentInfo, RemittanceClaim } from '../services/ediMapper';
 import { BenefitTable } from './BenefitTable';
@@ -18,15 +18,22 @@ interface Props {
   onChange837: (data: FormData837) => void;
   formData834: FormData834;
   onChange834: (data: FormData834) => void;
+  formData850?: FormData850;
+  onChange850?: (data: FormData850) => void;
+  formData810?: FormData810;
+  onChange810?: (data: FormData810) => void;
+  formData856?: FormData856;
+  onChange856?: (data: FormData856) => void;
   transactionType?: string;
-  generatorMode: '270' | '276' | '837' | '834';
-  onSetGeneratorMode: (mode: '270' | '276' | '837' | '834') => void;
+  generatorMode: '270' | '276' | '837' | '834' | '850' | '810' | '856';
+  onSetGeneratorMode: (mode: '270' | '276' | '837' | '834' | '850' | '810' | '856') => void;
   benefits: BenefitRow[];
   claims: ClaimStatusRow[];
   remittanceInfo?: PaymentInfo | null;
   remittanceClaims?: RemittanceClaim[];
   selectedSegment: EdiSegment | null;
   onFieldFocus: (field: string) => void;
+  highlightedField?: string | null;
 }
 
 const InputField = ({ label, value, onChange, onFocus, type = 'text', className = '', placeholder, id }: { label: string, value: string, onChange: (val: string) => void, onFocus?: () => void, type?: string, className?: string, placeholder?: string, id?: string }) => (
@@ -130,7 +137,7 @@ const SectionHeader = ({ title, action }: { title: string, action?: React.ReactN
   </div>
 );
 
-// --- 834 Options ---
+// ... existing options constants ...
 const MAINT_TYPES = [
     { value: '021', label: '021 - Addition' },
     { value: '001', label: '001 - Change' },
@@ -170,50 +177,32 @@ export const EdiGenerator: React.FC<Props> = ({
   formData276, onChange276,
   formData837, onChange837,
   formData834, onChange834,
+  formData850, onChange850,
+  formData810, onChange810,
+  formData856, onChange856,
   transactionType,
   generatorMode, onSetGeneratorMode,
   benefits, claims,
   remittanceInfo, remittanceClaims,
   selectedSegment,
-  onFieldFocus
+  onFieldFocus,
+  highlightedField
 }) => {
   const activeMode = generatorMode;
 
-  // Sync Structure Selection -> Form Input Focus
+  // React to external highlighting requests (from Tree click)
   useEffect(() => {
-      if (!selectedSegment) return;
-      const s = selectedSegment;
-      let fieldToFocus = '';
-
-      if (s.tag === 'NM1') {
-          const type = s.elements.find(e => e.index === 1)?.value;
-          if (type === 'IL') fieldToFocus = 'subscriberFirstName';
-          else if (type === 'PR' || (type === 'IN' && activeMode === '834')) fieldToFocus = 'payerName';
-          else if (type === '1P' || type === '85') fieldToFocus = 'providerName';
-          else if (type === '03') fieldToFocus = 'dependentFirstName';
-          else if (type === 'P5') fieldToFocus = 'sponsorName';
-      }
-      else if (s.tag === 'CLM') fieldToFocus = 'claimId';
-      else if (s.tag === 'TRN') fieldToFocus = 'claimId'; // 276
-      else if (s.tag === 'DMG') {
-          fieldToFocus = 'subscriberDob'; 
-      }
-      else if (s.tag === 'DTP') {
-          const qual = s.elements.find(e => e.index === 1)?.value;
-          if (qual === '472' || qual === '291') fieldToFocus = 'serviceDate';
-          if (qual === '348') fieldToFocus = 'planEffectiveDate';
-      }
-      else if (s.tag === 'EQ') fieldToFocus = 'serviceTypeCodes';
-      else if (s.tag === 'INS') fieldToFocus = 'subscriberFirstName'; // 834 Member start
-      
-      if (fieldToFocus) {
-          const el = document.getElementById(fieldToFocus);
+      if (highlightedField) {
+          const el = document.getElementById(highlightedField);
           if (el) {
               el.focus();
               el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              // Optional: Add a temporary visual highlight class
+              el.classList.add('ring-2', 'ring-brand-500', 'bg-brand-50', 'dark:bg-brand-900/20');
+              setTimeout(() => el.classList.remove('ring-2', 'ring-brand-500', 'bg-brand-50', 'dark:bg-brand-900/20'), 2000);
           }
       }
-  }, [selectedSegment, activeMode]);
+  }, [highlightedField]);
 
   if (transactionType === '271') {
     return <BenefitTable benefits={benefits} />;
@@ -224,6 +213,278 @@ export const EdiGenerator: React.FC<Props> = ({
   if (transactionType === '835' && remittanceInfo && remittanceClaims) {
     return <PaymentTable info={remittanceInfo} claims={remittanceClaims} />;
   }
+
+  // --- 850 PO Form ---
+  const handleAddOrderLine = (isPO: boolean) => {
+      const newLine: OrderLineItem = {
+          lineNo: isPO ? String((formData850?.lines.length || 0) + 1) : String((formData810?.lines.length || 0) + 1),
+          qty: '1',
+          uom: 'EA',
+          price: '0.00',
+          partNumber: '',
+          description: ''
+      };
+      if (isPO && formData850 && onChange850) {
+          onChange850({ ...formData850, lines: [...formData850.lines, newLine] });
+      } else if (!isPO && formData810 && onChange810) {
+          onChange810({ ...formData810, lines: [...formData810.lines, newLine] });
+      }
+  };
+
+  const handleRemoveOrderLine = (idx: number, isPO: boolean) => {
+      if (isPO && formData850 && onChange850) {
+          const newLines = [...formData850.lines];
+          newLines.splice(idx, 1);
+          onChange850({ ...formData850, lines: newLines });
+      } else if (!isPO && formData810 && onChange810) {
+          const newLines = [...formData810.lines];
+          newLines.splice(idx, 1);
+          onChange810({ ...formData810, lines: newLines });
+      }
+  };
+
+  const updateOrderLine = (idx: number, field: keyof OrderLineItem, value: string, isPO: boolean) => {
+      if (isPO && formData850 && onChange850) {
+          const newLines = [...formData850.lines];
+          newLines[idx] = { ...newLines[idx], [field]: value };
+          onChange850({ ...formData850, lines: newLines });
+      } else if (!isPO && formData810 && onChange810) {
+          const newLines = [...formData810.lines];
+          newLines[idx] = { ...newLines[idx], [field]: value };
+          onChange810({ ...formData810, lines: newLines });
+      }
+  };
+
+  const renderForm850 = () => {
+      if (!formData850 || !onChange850) return null;
+      return (
+          <>
+            <SectionHeader title="Purchase Order Details" />
+            <div className="grid grid-cols-2 gap-4">
+                <InputField id="poNumber" label="PO Number" value={formData850.poNumber} onChange={v => onChange850({...formData850, poNumber: v})} onFocus={() => onFieldFocus('poNumber')} />
+                <div id="poDate">
+                    <DatePicker label="PO Date" value={formData850.poDate} onChange={v => onChange850({...formData850, poDate: v})} onFocus={() => onFieldFocus('poDate')} />
+                </div>
+            </div>
+
+            <SectionHeader title="Buyer & Seller" />
+            <div className="grid grid-cols-2 gap-4">
+                <InputField id="buyerName" label="Buyer Name" value={formData850.buyerName} onChange={v => onChange850({...formData850, buyerName: v})} onFocus={() => onFieldFocus('buyerName')} />
+                <InputField id="buyerId" label="Buyer ID" value={formData850.buyerId} onChange={v => onChange850({...formData850, buyerId: v})} onFocus={() => onFieldFocus('buyerId')} />
+                <InputField id="sellerName" label="Seller Name" value={formData850.sellerName} onChange={v => onChange850({...formData850, sellerName: v})} onFocus={() => onFieldFocus('sellerName')} />
+                <InputField id="sellerId" label="Seller ID" value={formData850.sellerId} onChange={v => onChange850({...formData850, sellerId: v})} onFocus={() => onFieldFocus('sellerId')} />
+            </div>
+
+            <SectionHeader title="Ship To" />
+            <div className="grid grid-cols-2 gap-4">
+                <InputField id="shipToName" label="Location Name" value={formData850.shipToName} onChange={v => onChange850({...formData850, shipToName: v})} onFocus={() => onFieldFocus('shipToName')} />
+                <InputField id="shipToAddress" label="Address" value={formData850.shipToAddress} onChange={v => onChange850({...formData850, shipToAddress: v})} onFocus={() => onFieldFocus('shipToAddress')} />
+                <InputField id="shipToCity" label="City" value={formData850.shipToCity} onChange={v => onChange850({...formData850, shipToCity: v})} onFocus={() => onFieldFocus('shipToCity')} />
+                <div className="grid grid-cols-2 gap-4">
+                    <InputField id="shipToState" label="State" value={formData850.shipToState} onChange={v => onChange850({...formData850, shipToState: v})} onFocus={() => onFieldFocus('shipToState')} />
+                    <InputField id="shipToZip" label="Zip" value={formData850.shipToZip} onChange={v => onChange850({...formData850, shipToZip: v})} onFocus={() => onFieldFocus('shipToZip')} />
+                </div>
+            </div>
+
+            <SectionHeader 
+                title="Line Items" 
+                action={
+                    <button 
+                        onClick={() => handleAddOrderLine(true)}
+                        className="text-[10px] bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-gray-900 dark:text-white px-3 py-1.5 rounded transition-colors font-medium border border-gray-200 dark:border-slate-700"
+                    >
+                        + Add Item
+                    </button>
+                }
+            />
+            <div className="space-y-4">
+                {formData850.lines.map((line, idx) => (
+                    <div key={idx} className="bg-gray-50 dark:bg-slate-800/50 rounded p-4 border border-gray-100 dark:border-slate-800 relative group">
+                        <button 
+                            onClick={() => handleRemoveOrderLine(idx, true)}
+                            className="absolute top-2 right-2 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-1"
+                            title="Remove Line"
+                        >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                        <div className="grid grid-cols-3 gap-4 mb-3">
+                            <InputField id={`line-${idx}-partNumber`} label="Part Number" value={line.partNumber} onChange={v => updateOrderLine(idx, 'partNumber', v, true)} onFocus={() => onFieldFocus(`line-${idx}-partNumber`)} />
+                            <div className="col-span-2">
+                                <InputField id={`line-${idx}-description`} label="Description" value={line.description} onChange={v => updateOrderLine(idx, 'description', v, true)} onFocus={() => onFieldFocus(`line-${idx}-description`)} />
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-4 gap-4">
+                            <InputField id={`line-${idx}-qty`} label="Qty" value={line.qty} onChange={v => updateOrderLine(idx, 'qty', v, true)} onFocus={() => onFieldFocus(`line-${idx}-qty`)} />
+                            <InputField id={`line-${idx}-uom`} label="UOM" value={line.uom} onChange={v => updateOrderLine(idx, 'uom', v, true)} onFocus={() => onFieldFocus(`line-${idx}-uom`)} />
+                            <InputField id={`line-${idx}-price`} label="Unit Price" value={line.price} onChange={v => updateOrderLine(idx, 'price', v, true)} onFocus={() => onFieldFocus(`line-${idx}-price`)} />
+                            <div className="pt-7 text-right font-mono font-medium text-gray-700 dark:text-slate-300">
+                                ${(parseFloat(line.qty) * parseFloat(line.price) || 0).toFixed(2)}
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+          </>
+      );
+  };
+
+  const renderForm810 = () => {
+      if (!formData810 || !onChange810) return null;
+      return (
+          <>
+            <SectionHeader title="Invoice Details" />
+            <div className="grid grid-cols-2 gap-4">
+                <InputField id="invoiceNumber" label="Invoice #" value={formData810.invoiceNumber} onChange={v => onChange810({...formData810, invoiceNumber: v})} onFocus={() => onFieldFocus('invoiceNumber')} />
+                <div id="invoiceDate">
+                    <DatePicker label="Invoice Date" value={formData810.invoiceDate} onChange={v => onChange810({...formData810, invoiceDate: v})} onFocus={() => onFieldFocus('invoiceDate')} />
+                </div>
+                <InputField id="poNumberRef" label="PO Reference" value={formData810.poNumber} onChange={v => onChange810({...formData810, poNumber: v})} onFocus={() => onFieldFocus('poNumberRef')} />
+            </div>
+
+            <SectionHeader title="Parties" />
+            <div className="grid grid-cols-2 gap-4">
+                <InputField id="sellerName" label="Seller (Remit To)" value={formData810.sellerName} onChange={v => onChange810({...formData810, sellerName: v})} onFocus={() => onFieldFocus('sellerName')} />
+                <InputField id="sellerId" label="Seller ID" value={formData810.sellerId} onChange={v => onChange810({...formData810, sellerId: v})} onFocus={() => onFieldFocus('sellerId')} />
+                <InputField id="buyerName" label="Buyer (Bill To)" value={formData810.buyerName} onChange={v => onChange810({...formData810, buyerName: v})} onFocus={() => onFieldFocus('buyerName')} />
+                <InputField id="buyerId" label="Buyer ID" value={formData810.buyerId} onChange={v => onChange810({...formData810, buyerId: v})} onFocus={() => onFieldFocus('buyerId')} />
+            </div>
+
+            <SectionHeader 
+                title="Line Items" 
+                action={
+                    <button 
+                        onClick={() => handleAddOrderLine(false)}
+                        className="text-[10px] bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-gray-900 dark:text-white px-3 py-1.5 rounded transition-colors font-medium border border-gray-200 dark:border-slate-700"
+                    >
+                        + Add Item
+                    </button>
+                }
+            />
+            <div className="space-y-4">
+                {formData810.lines.map((line, idx) => (
+                    <div key={idx} className="bg-gray-50 dark:bg-slate-800/50 rounded p-4 border border-gray-100 dark:border-slate-800 relative group">
+                        <button 
+                            onClick={() => handleRemoveOrderLine(idx, false)}
+                            className="absolute top-2 right-2 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-1"
+                            title="Remove Line"
+                        >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                        <div className="grid grid-cols-3 gap-4 mb-3">
+                            <InputField id={`line-${idx}-partNumber`} label="Part Number" value={line.partNumber} onChange={v => updateOrderLine(idx, 'partNumber', v, false)} onFocus={() => onFieldFocus(`line-${idx}-partNumber`)} />
+                            <div className="col-span-2">
+                                <InputField id={`line-${idx}-description`} label="Description" value={line.description} onChange={v => updateOrderLine(idx, 'description', v, false)} onFocus={() => onFieldFocus(`line-${idx}-description`)} />
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-4 gap-4">
+                            <InputField id={`line-${idx}-qty`} label="Qty" value={line.qty} onChange={v => updateOrderLine(idx, 'qty', v, false)} onFocus={() => onFieldFocus(`line-${idx}-qty`)} />
+                            <InputField id={`line-${idx}-uom`} label="UOM" value={line.uom} onChange={v => updateOrderLine(idx, 'uom', v, false)} onFocus={() => onFieldFocus(`line-${idx}-uom`)} />
+                            <InputField id={`line-${idx}-price`} label="Unit Price" value={line.price} onChange={v => updateOrderLine(idx, 'price', v, false)} onFocus={() => onFieldFocus(`line-${idx}-price`)} />
+                            <div className="pt-7 text-right font-mono font-medium text-gray-700 dark:text-slate-300">
+                                ${(parseFloat(line.qty) * parseFloat(line.price) || 0).toFixed(2)}
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+          </>
+      );
+  };
+
+  const handleAddShipLine = () => {
+      const newLine: ShipNoticeLineItem = {
+          lineNo: String((formData856?.lines.length || 0) + 1),
+          poNumber: '',
+          partNumber: '',
+          qty: '1',
+          uom: 'EA'
+      };
+      if (formData856 && onChange856) {
+          onChange856({ ...formData856, lines: [...formData856.lines, newLine] });
+      }
+  };
+
+  const handleRemoveShipLine = (idx: number) => {
+      if (formData856 && onChange856) {
+          const newLines = [...formData856.lines];
+          newLines.splice(idx, 1);
+          onChange856({ ...formData856, lines: newLines });
+      }
+  };
+
+  const updateShipLine = (idx: number, field: keyof ShipNoticeLineItem, value: string) => {
+      if (formData856 && onChange856) {
+          const newLines = [...formData856.lines];
+          newLines[idx] = { ...newLines[idx], [field]: value };
+          onChange856({ ...formData856, lines: newLines });
+      }
+  };
+
+  const renderForm856 = () => {
+      if (!formData856 || !onChange856) return null;
+      return (
+          <>
+            <SectionHeader title="Shipment Details" />
+            <div className="grid grid-cols-2 gap-4">
+                <InputField id="shipmentId" label="Shipment ID" value={formData856.shipmentId} onChange={v => onChange856({...formData856, shipmentId: v})} onFocus={() => onFieldFocus('shipmentId')} />
+                <div id="shipDate">
+                    <DatePicker label="Shipped Date" value={formData856.shipDate} onChange={v => onChange856({...formData856, shipDate: v})} onFocus={() => onFieldFocus('shipDate')} />
+                </div>
+                <InputField id="carrierCode" label="Carrier Code" value={formData856.carrierCode} onChange={v => onChange856({...formData856, carrierCode: v})} onFocus={() => onFieldFocus('carrierCode')} />
+                <InputField id="trackingNumber" label="Tracking / BOL" value={formData856.trackingNumber} onChange={v => onChange856({...formData856, trackingNumber: v})} onFocus={() => onFieldFocus('trackingNumber')} />
+            </div>
+
+            <SectionHeader title="Parties" />
+            <div className="grid grid-cols-2 gap-4">
+                <InputField id="sellerName" label="Seller (From)" value={formData856.sellerName} onChange={v => onChange856({...formData856, sellerName: v})} onFocus={() => onFieldFocus('sellerName')} />
+                <InputField id="sellerId" label="Seller ID" value={formData856.sellerId} onChange={v => onChange856({...formData856, sellerId: v})} onFocus={() => onFieldFocus('sellerId')} />
+            </div>
+            <SectionHeader title="Ship To" />
+            <div className="grid grid-cols-2 gap-4">
+                <InputField id="shipToName" label="Location Name" value={formData856.shipToName} onChange={v => onChange856({...formData856, shipToName: v})} onFocus={() => onFieldFocus('shipToName')} />
+                <InputField id="shipToAddress" label="Address" value={formData856.shipToAddress} onChange={v => onChange856({...formData856, shipToAddress: v})} onFocus={() => onFieldFocus('shipToAddress')} />
+                <InputField id="shipToCity" label="City" value={formData856.shipToCity} onChange={v => onChange856({...formData856, shipToCity: v})} onFocus={() => onFieldFocus('shipToCity')} />
+                <div className="grid grid-cols-2 gap-4">
+                    <InputField id="shipToState" label="State" value={formData856.shipToState} onChange={v => onChange856({...formData856, shipToState: v})} onFocus={() => onFieldFocus('shipToState')} />
+                    <InputField id="shipToZip" label="Zip" value={formData856.shipToZip} onChange={v => onChange856({...formData856, shipToZip: v})} onFocus={() => onFieldFocus('shipToZip')} />
+                </div>
+            </div>
+
+            <SectionHeader 
+                title="Shipment Items" 
+                action={
+                    <button 
+                        onClick={handleAddShipLine}
+                        className="text-[10px] bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-gray-900 dark:text-white px-3 py-1.5 rounded transition-colors font-medium border border-gray-200 dark:border-slate-700"
+                    >
+                        + Add Item
+                    </button>
+                }
+            />
+            <div className="space-y-4">
+                {formData856.lines.map((line, idx) => (
+                    <div key={idx} className="bg-gray-50 dark:bg-slate-800/50 rounded p-4 border border-gray-100 dark:border-slate-800 relative group">
+                        <button 
+                            onClick={() => handleRemoveShipLine(idx)}
+                            className="absolute top-2 right-2 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-1"
+                            title="Remove Line"
+                        >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                        <div className="grid grid-cols-2 gap-4 mb-3">
+                            <InputField id={`line-${idx}-poNumber`} label="PO Number" value={line.poNumber} onChange={v => updateShipLine(idx, 'poNumber', v)} onFocus={() => onFieldFocus(`line-${idx}-poNumber`)} />
+                            <InputField id={`line-${idx}-partNumber`} label="Part Number" value={line.partNumber} onChange={v => updateShipLine(idx, 'partNumber', v)} onFocus={() => onFieldFocus(`line-${idx}-partNumber`)} />
+                        </div>
+                        <div className="grid grid-cols-4 gap-4">
+                            <InputField id={`line-${idx}-qty`} label="Qty" value={line.qty} onChange={v => updateShipLine(idx, 'qty', v)} onFocus={() => onFieldFocus(`line-${idx}-qty`)} />
+                            <InputField id={`line-${idx}-uom`} label="UOM" value={line.uom} onChange={v => updateShipLine(idx, 'uom', v)} onFocus={() => onFieldFocus(`line-${idx}-uom`)} />
+                        </div>
+                    </div>
+                ))}
+            </div>
+          </>
+      );
+  };
 
   // --- 270 Eligibility Form ---
   const renderForm270 = () => (
@@ -489,18 +750,18 @@ export const EdiGenerator: React.FC<Props> = ({
                     
                     <div className="grid grid-cols-2 gap-4">
                         <AutocompleteField 
-                            id="procedureCode"
+                            id={`line-${idx}-procedureCode`}
                             label={`Procedure ${idx + 1}`} 
                             value={line.procedureCode} 
                             onChange={v => updateServiceLine(idx, 'procedureCode', v)} 
-                            onFocus={() => onFieldFocus('procedureCode')}
+                            onFocus={() => onFieldFocus(`line-${idx}-procedureCode`)}
                             options={PROCEDURE_CODES}
                             placeholder="CPT/HCPCS"
                         />
-                        <InputField id="lineCharge" label="Charge" value={line.lineCharge} onChange={v => updateServiceLine(idx, 'lineCharge', v)} onFocus={() => onFieldFocus('lineCharge')} />
-                        <InputField id="units" label="Units" value={line.units} onChange={v => updateServiceLine(idx, 'units', v)} onFocus={() => onFieldFocus('units')} />
-                        <div id="serviceDate">
-                            <DatePicker label="Date" value={line.serviceDate} onChange={v => updateServiceLine(idx, 'serviceDate', v)} onFocus={() => onFieldFocus('serviceDate')} placeholder="YYYY-MM-DD" />
+                        <InputField id={`line-${idx}-lineCharge`} label="Charge" value={line.lineCharge} onChange={v => updateServiceLine(idx, 'lineCharge', v)} onFocus={() => onFieldFocus(`line-${idx}-lineCharge`)} />
+                        <InputField id={`line-${idx}-units`} label="Units" value={line.units} onChange={v => updateServiceLine(idx, 'units', v)} onFocus={() => onFieldFocus(`line-${idx}-units`)} />
+                        <div id={`line-${idx}-serviceDate`}>
+                            <DatePicker label="Date" value={line.serviceDate} onChange={v => updateServiceLine(idx, 'serviceDate', v)} onFocus={() => onFieldFocus(`line-${idx}-serviceDate`)} placeholder="YYYY-MM-DD" />
                         </div>
                     </div>
                 </div>
@@ -592,18 +853,19 @@ export const EdiGenerator: React.FC<Props> = ({
                     </button>
                     
                     <div className="grid grid-cols-2 gap-3 mb-3">
-                        <InputField label="First Name" value={dep.firstName} onChange={v => updateDependent(idx, 'firstName', v)} />
-                        <InputField label="Last Name" value={dep.lastName} onChange={v => updateDependent(idx, 'lastName', v)} />
+                        <InputField id={`dependent-${idx}-firstName`} label="First Name" value={dep.firstName} onChange={v => updateDependent(idx, 'firstName', v)} onFocus={() => onFieldFocus(`dependent-${idx}-firstName`)} />
+                        <InputField id={`dependent-${idx}-lastName`} label="Last Name" value={dep.lastName} onChange={v => updateDependent(idx, 'lastName', v)} onFocus={() => onFieldFocus(`dependent-${idx}-lastName`)} />
                     </div>
                     <div className="grid grid-cols-3 gap-3">
                         <div className="col-span-1">
-                            <DatePicker label="DOB" value={dep.dob} onChange={v => updateDependent(idx, 'dob', v)} />
+                            <DatePicker label="DOB" value={dep.dob} onChange={v => updateDependent(idx, 'dob', v)} onFocus={() => onFieldFocus(`dependent-${idx}-dob`)} />
                         </div>
                         <div className="col-span-2">
                             <label className="block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1.5 uppercase tracking-wide">Relationship</label>
                             <select 
                                 value={dep.relationship}
                                 onChange={e => updateDependent(idx, 'relationship', e.target.value)}
+                                onFocus={() => onFieldFocus(`dependent-${idx}-relationship`)}
                                 className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded text-sm text-gray-900 dark:text-white focus:outline-none focus:border-black dark:focus:border-brand-500 focus:ring-1 focus:ring-black dark:focus:ring-brand-500 transition-colors"
                             >
                                 <option value="01">Spouse (01)</option>
@@ -626,6 +888,9 @@ export const EdiGenerator: React.FC<Props> = ({
           {activeMode === '276' && renderForm276()}
           {activeMode === '837' && renderForm837()}
           {activeMode === '834' && renderForm834()}
+          {activeMode === '850' && renderForm850()}
+          {activeMode === '810' && renderForm810()}
+          {activeMode === '856' && renderForm856()}
       </div>
     </div>
   );

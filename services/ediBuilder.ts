@@ -1,3 +1,4 @@
+
 export interface FormData270 {
   payerName: string;
   payerId: string;
@@ -105,6 +106,67 @@ export interface FormData834 {
     
     subscriber: Member834;
     dependents: Member834[];
+}
+
+// --- Manufacturing / Supply Chain Forms ---
+
+export interface OrderLineItem {
+    lineNo: string;
+    qty: string;
+    uom: string;
+    price: string;
+    partNumber: string;
+    description: string;
+}
+
+export interface FormData850 {
+    poNumber: string;
+    poDate: string;
+    buyerName: string;
+    buyerId: string;
+    sellerName: string;
+    sellerId: string;
+    shipToName: string;
+    shipToAddress: string;
+    shipToCity: string;
+    shipToState: string;
+    shipToZip: string;
+    lines: OrderLineItem[];
+}
+
+export interface FormData810 {
+    invoiceNumber: string;
+    invoiceDate: string;
+    poNumber: string;
+    buyerName: string; 
+    buyerId: string;
+    sellerName: string;
+    sellerId: string;
+    lines: OrderLineItem[];
+}
+
+export interface ShipNoticeLineItem {
+    lineNo: string;
+    poNumber: string;
+    partNumber: string;
+    qty: string;
+    uom: string;
+}
+
+export interface FormData856 {
+    shipmentId: string; // BSN02
+    shipDate: string; // BSN03
+    shipTime: string; // BSN04
+    carrierCode: string; // TD5
+    trackingNumber: string; // REF*CN or BM
+    sellerName: string;
+    sellerId: string;
+    shipToName: string;
+    shipToAddress: string;
+    shipToCity: string;
+    shipToState: string;
+    shipToZip: string;
+    lines: ShipNoticeLineItem[];
 }
 
 const getCurrentDate = () => new Date().toISOString().slice(0, 10).replace(/-/g, '');
@@ -402,6 +464,169 @@ export const build834 = (data: FormData834): string => {
         addMemberLoop(dep, false);
     });
 
+    segments.push(`SE*${segments.length - 1}*0001`);
+    segments.push(`GE*1*${gsControl}`);
+    segments.push(`IEA*1*${isaControl}`);
+
+    return segments.join('~') + '~';
+};
+
+export const build850 = (data: FormData850): string => {
+    const date = getCurrentDate();
+    const time = getCurrentTime();
+    const isaControl = Math.floor(Math.random() * 900000000) + 100000000;
+    const gsControl = Math.floor(Math.random() * 900000000) + 100000000;
+    
+    // Parse PO Date
+    const poDt = data.poDate ? data.poDate.replace(/-/g, '') : date;
+
+    const segments = [
+        `ISA*00*          *00*          *ZZ*${pad('BUYER', 15)}*ZZ*${pad('SELLER', 15)}*${date.slice(2)}*${time}*U*00401*${isaControl}*0*P*>`,
+        `GS*PO*BUYER*SELLER*${date}*${time}*${gsControl}*X*004010`,
+        `ST*850*0001`,
+        // BEG*00(Orig)*SA(StandAlone)*PoNum**Date
+        `BEG*00*SA*${data.poNumber}**${poDt}`,
+        // REF*DP*Department
+        `REF*DP*055`,
+        
+        // Loop N1 Buyer
+        `N1*BY*${data.buyerName}*92*${data.buyerId}`,
+        
+        // Loop N1 Seller
+        `N1*SE*${data.sellerName}*92*${data.sellerId}`,
+        
+        // Loop N1 Ship To
+        `N1*ST*${data.shipToName}`,
+        `N3*${data.shipToAddress}`,
+        `N4*${data.shipToCity}*${data.shipToState}*${data.shipToZip}`
+    ];
+
+    // PO1 Loop
+    data.lines.forEach((line) => {
+        // PO1*LineNo*Qty*UOM*Price**VP*PartNum...
+        segments.push(`PO1*${line.lineNo}*${line.qty}*${line.uom}*${line.price}**VP*${line.partNumber}*PO*${data.poNumber}`);
+        if (line.description) {
+            segments.push(`PID*F****${line.description}`);
+        }
+    });
+
+    // CTT*LineCount
+    segments.push(`CTT*${data.lines.length}`);
+    
+    segments.push(`SE*${segments.length - 1}*0001`);
+    segments.push(`GE*1*${gsControl}`);
+    segments.push(`IEA*1*${isaControl}`);
+
+    return segments.join('~') + '~';
+};
+
+export const build810 = (data: FormData810): string => {
+    const date = getCurrentDate();
+    const time = getCurrentTime();
+    const isaControl = Math.floor(Math.random() * 900000000) + 100000000;
+    const gsControl = Math.floor(Math.random() * 900000000) + 100000000;
+    
+    const invDt = data.invoiceDate ? data.invoiceDate.replace(/-/g, '') : date;
+    
+    // Calculate total amount from lines (qty * price) for TDS
+    const totalAmount = data.lines.reduce((acc, line) => {
+        return acc + (parseFloat(line.qty) * parseFloat(line.price));
+    }, 0);
+    // TDS expects amount * 100 usually, but simplified here we pass raw if no decimal logic enforced, 
+    // standard X12 often implies 2 decimals. Let's multiply by 100 for N2 format.
+    const tdsAmount = Math.round(totalAmount * 100).toString();
+
+    const segments = [
+        `ISA*00*          *00*          *ZZ*${pad('SELLER', 15)}*ZZ*${pad('BUYER', 15)}*${date.slice(2)}*${time}*U*00401*${isaControl}*0*P*>`,
+        `GS*IN*SELLER*BUYER*${date}*${time}*${gsControl}*X*004010`,
+        `ST*810*0001`,
+        // BIG*Date*InvNum*PODate*PONum
+        `BIG*${invDt}*${data.invoiceNumber}*${invDt}*${data.poNumber}`,
+        
+        // Loop N1 Remit To (Seller)
+        `N1*SE*${data.sellerName}*92*${data.sellerId}`,
+        
+        // Loop N1 Bill To (Buyer)
+        `N1*BY*${data.buyerName}*92*${data.buyerId}`,
+    ];
+
+    // IT1 Loop
+    data.lines.forEach((line) => {
+        // IT1*LineNo*Qty*UOM*Price**VP*PartNum
+        segments.push(`IT1*${line.lineNo}*${line.qty}*${line.uom}*${line.price}**VP*${line.partNumber}`);
+        if (line.description) {
+            segments.push(`PID*F****${line.description}`);
+        }
+    });
+
+    // TDS*Amount
+    segments.push(`TDS*${tdsAmount}`);
+    
+    // CTT*LineCount
+    segments.push(`CTT*${data.lines.length}`);
+    
+    segments.push(`SE*${segments.length - 1}*0001`);
+    segments.push(`GE*1*${gsControl}`);
+    segments.push(`IEA*1*${isaControl}`);
+
+    return segments.join('~') + '~';
+};
+
+export const build856 = (data: FormData856): string => {
+    const date = getCurrentDate();
+    const time = getCurrentTime();
+    const isaControl = Math.floor(Math.random() * 900000000) + 100000000;
+    const gsControl = Math.floor(Math.random() * 900000000) + 100000000;
+    const shipDt = data.shipDate ? data.shipDate.replace(/-/g, '') : date;
+    const shipTm = data.shipTime ? data.shipTime.replace(/:/g, '') : time;
+
+    let hlCount = 0;
+    const nextHl = () => { hlCount++; return hlCount; };
+
+    const segments = [
+        `ISA*00*          *00*          *ZZ*${pad('SELLER', 15)}*ZZ*${pad('BUYER', 15)}*${date.slice(2)}*${time}*U*00401*${isaControl}*0*P*>`,
+        `GS*SH*SELLER*BUYER*${date}*${time}*${gsControl}*X*004010`,
+        `ST*856*0001`,
+        `BSN*00*${data.shipmentId}*${shipDt}*${shipTm}*0001`,
+    ];
+
+    // HL 1: Shipment
+    const hlShip = nextHl();
+    segments.push(`HL*${hlShip}**S`);
+    if(data.carrierCode) segments.push(`TD5*B*2*${data.carrierCode}*M`);
+    if(data.trackingNumber) segments.push(`REF*CN*${data.trackingNumber}`);
+    
+    segments.push(`DTM*011*${shipDt}`); // Shipped Date
+    
+    segments.push(`N1*SF*${data.sellerName}*92*${data.sellerId}`);
+    segments.push(`N1*ST*${data.shipToName}`);
+    if(data.shipToAddress) segments.push(`N3*${data.shipToAddress}`);
+    if(data.shipToCity) segments.push(`N4*${data.shipToCity}*${data.shipToState}*${data.shipToZip}`);
+
+    // Group items by PO Number to create Order hierarchy
+    const groupedItems: Record<string, ShipNoticeLineItem[]> = {};
+    data.lines.forEach(line => {
+        const po = line.poNumber || 'NO_PO';
+        if(!groupedItems[po]) groupedItems[po] = [];
+        groupedItems[po].push(line);
+    });
+
+    Object.entries(groupedItems).forEach(([po, lines]) => {
+        // HL 2: Order
+        const hlOrder = nextHl();
+        segments.push(`HL*${hlOrder}*${hlShip}*O`);
+        segments.push(`PRF*${po}`);
+
+        lines.forEach(line => {
+            // HL 3: Item
+            const hlItem = nextHl();
+            segments.push(`HL*${hlItem}*${hlOrder}*I`);
+            segments.push(`LIN*${line.lineNo}*VP*${line.partNumber}`);
+            segments.push(`SN1*${line.lineNo}*${line.qty}*${line.uom}`);
+        });
+    });
+
+    segments.push(`CTT*${hlCount}`);
     segments.push(`SE*${segments.length - 1}*0001`);
     segments.push(`GE*1*${gsControl}`);
     segments.push(`IEA*1*${isaControl}`);

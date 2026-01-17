@@ -1,121 +1,121 @@
 
-
 import { EdiDocument, EdiSegment } from '../types';
-import { FormData270, FormData276, FormData837, FormData834, ServiceLine837, Member834 } from './ediBuilder';
-import { getElementDefinition, getProcedureDefinition } from './offlineAnalyzer';
+import { flattenTree } from './ediParser';
+import { 
+    FormData270, FormData276, FormData837, FormData834, 
+    ServiceLine837, Member834, FormData850, FormData810, 
+    OrderLineItem, FormData856, ShipNoticeLineItem
+} from './ediBuilder';
+import { getProcedureDefinition } from './offlineAnalyzer';
 
-/**
- * Data structure for the Benefits Table
- */
+// --- Interfaces ---
+
 export interface BenefitRow {
-  type: string;      // EB01
-  coverage: string;  // EB02
-  service: string;   // EB03
-  insuranceType: string; // EB04
-  timePeriod: string; // EB06
-  amount: string;    // EB07
-  percent: string;   // EB08
-  quantityQualifier: string; // EB09
-  quantity: string;  // EB10
-  authRequired: string; // EB11
-  network: string;   // EB12
-  messages: string[]; // MSG segments
-  dates: string[];   // DTP segments
-  reference: string; // e.g., "Subscriber" or "Dependent"
+  reference: string;
+  type: string;
+  service: string;
+  coverage: string;
+  dates: string[];
+  amount?: string;
+  percent?: string;
+  quantity?: string;
+  quantityQualifier?: string;
+  network?: string;
+  messages: string[];
+}
+
+export interface Adjustment {
+  groupCode: string;
+  reasonCode: string;
+  amount: string;
 }
 
 export interface ServiceLine {
-  lineId: string; // from REF*6R or derived
+  lineId: string;
   procedureCode: string;
   procedureDesc: string;
   chargeAmount: string;
   paymentAmount: string;
-  revenueCode: string;
+  date: string;
   units: string;
-  statusCategory: string; // STC01-1
-  statusCode: string; // STC01-2
-  statusDate: string;
+  adjustments: Adjustment[];
+  statusCategory?: string;
+  statusCode?: string;
 }
 
 export interface ClaimStatusRow {
-  entity: string; // Subscriber or Dependent
   patientName: string;
   patientId: string;
-  claimRef: string; // REF*1K or TRN
-  statusCategory: string; // STC01-1
-  statusCode: string; // STC01-2
-  statusDate: string; // STC02
-  billedAmount: string; // STC04
-  paidAmount: string; // STC05
-  checkNumber: string; // REF*CK
-  checkDate: string; // DTP*576
-  messages: string[]; // Free form text
+  entity: string;
+  claimRef: string;
+  statusCategory: string;
+  statusCode: string;
+  statusDate: string;
+  billedAmount: string;
+  paidAmount: string;
+  checkNumber: string;
+  checkDate: string;
   serviceLines: ServiceLine[];
 }
 
-export interface Adjustment {
-    groupCode: string; // CAS01
-    reasonCode: string; // CAS02
-    amount: string; // CAS03
-    quantity?: string; // CAS04
-}
-
 export interface RemittanceServiceLine {
-    procedureCode: string;
-    chargeAmount: string;
-    paidAmount: string;
-    revenueCode?: string;
-    units?: string;
-    date?: string;
-    adjustments: Adjustment[];
-    refId?: string; // LX or REF
+  procedureCode: string;
+  paidAmount: string;
+  chargeAmount: string;
+  date: string;
+  units: string;
+  adjustments: Adjustment[];
 }
 
 export interface RemittanceClaim {
-    claimId: string; // CLP01
-    status: string; // CLP02
-    chargeAmount: string; // CLP03
-    paidAmount: string; // CLP04
-    patientResp: string; // CLP05
-    claimType: string; // CLP06
-    payerControlNumber: string; // CLP07
-    patientName?: string;
-    patientId?: string;
-    serviceLines: RemittanceServiceLine[];
-    adjustments: Adjustment[]; // Claim level adjustments
-    startDate?: string;
-    endDate?: string;
+  claimId: string;
+  patientName: string;
+  patientId: string;
+  payerControlNumber: string;
+  status: string; // CLP02
+  chargeAmount: string;
+  paidAmount: string;
+  patientResp: string;
+  adjustments: Adjustment[];
+  serviceLines: RemittanceServiceLine[];
 }
 
 export interface PaymentInfo {
-    payerName: string;
-    payerId: string;
-    payeeName: string;
-    payeeNpi: string;
-    checkNumber: string; // TRN02 or BPR02
-    checkAmount: string; // BPR02
-    checkDate: string; // BPR16
-    productionDate: string; // GS04
-    paymentMethod: string; // BPR04
+  checkNumber: string;
+  checkAmount: string;
+  payerName: string;
+  checkDate: string;
 }
 
-/**
- * Helper to flatten tree for easier searching
- */
-const flattenSegments = (segments: EdiSegment[]): EdiSegment[] => {
-  let flat: EdiSegment[] = [];
-  segments.forEach(s => {
-    flat.push(s);
-    if (s.children && s.children.length > 0) {
-      flat = flat.concat(flattenSegments(s.children));
-    }
-  });
-  return flat;
+export interface OrderLine {
+    lineNumber: string;
+    partNumber: string;
+    description: string;
+    quantity: string;
+    uom: string;
+    unitPrice: string;
+}
+
+export interface OrderData {
+    id: string;
+    date: string;
+    type: string;
+    buyer: string;
+    seller: string;
+    shipTo: string;
+    lines: OrderLine[];
+    totalAmount: string;
+}
+
+// --- Helpers ---
+
+const flattenSegments = flattenTree;
+
+const formatDate = (dateStr: string | undefined): string => {
+    if (!dateStr || dateStr.length !== 8) return dateStr || '';
+    return `${dateStr.substring(0,4)}-${dateStr.substring(4,6)}-${dateStr.substring(6,8)}`;
 };
 
-/**
- * Find a segment backwards from a starting index
- */
 const findBackwards = (segments: EdiSegment[], startIndex: number, predicate: (s: EdiSegment) => boolean): EdiSegment | undefined => {
     for (let i = startIndex; i >= 0; i--) {
         if (predicate(segments[i])) return segments[i];
@@ -123,501 +123,364 @@ const findBackwards = (segments: EdiSegment[], startIndex: number, predicate: (s
     return undefined;
 };
 
-/**
- * Format YYYYMMDD to YYYY-MM-DD
- */
-const formatDate = (dateStr?: string): string => {
-  if (!dateStr || dateStr.length !== 8) return '';
-  return `${dateStr.substring(0, 4)}-${dateStr.substring(4, 6)}-${dateStr.substring(6, 8)}`;
-};
+// --- Mappers ---
 
-/**
- * Format DTP date range or single date
- */
-const formatDtpValue = (format: string, value: string): string => {
-    if (!value) return '';
-    if (format === 'D8') return formatDate(value);
-    if (format === 'RD8' && value.length === 17) { // YYYYMMDD-YYYYMMDD
-        const start = formatDate(value.substring(0, 8));
-        const end = formatDate(value.substring(9, 17));
-        return `${start} to ${end}`;
-    }
-    return value;
-}
+export const mapEdiToForm = (doc: EdiDocument, recordId?: string): Partial<FormData270> => {
+    const flat = flattenSegments(doc.segments);
+    const data: Partial<FormData270> = {
+        serviceTypeCodes: []
+    };
 
-/**
- * Handles mapping multiple repeated codes to a string list
- */
-const getRepeatedDefinition = (tag: string, index: number, element?: { value: string, repeats?: string[] }): string => {
-    if (!element) return '';
-    
-    if (element.repeats && element.repeats.length > 0) {
-        return element.repeats.map(val => {
-            const def = getElementDefinition(tag, index, val);
-            return def !== val ? def : `${val}`;
-        }).join(', ');
-    }
-    return getElementDefinition(tag, index, element.value);
-};
-
-export const mapEdiToForm = (doc: EdiDocument, targetId?: string): Partial<FormData270> => {
-  const segments = flattenSegments(doc.segments);
-  const data: Partial<FormData270> = {};
-
-  // If targetId is provided (e.g. specific HL segment for sub/dep), use it as anchor
-  let anchorIndex = segments.length - 1;
-  if (targetId) {
-      const idx = segments.findIndex(s => s.id === targetId);
-      if (idx !== -1) anchorIndex = idx;
-  }
-
-  // Payer and Provider are always "upstream" (backward) from the subscriber/dependent HL
-  const payerSeg = findBackwards(segments, anchorIndex, s => s.tag === 'NM1' && s.elements[0]?.value === 'PR');
-  if (payerSeg) {
-    data.payerName = payerSeg.elements[2]?.value || '';
-    data.payerId = payerSeg.elements[8]?.value || '';
-  }
-
-  const providerSeg = findBackwards(segments, anchorIndex, s => s.tag === 'NM1' && s.elements[0]?.value === '1P');
-  if (providerSeg) {
-    data.providerName = providerSeg.elements[2]?.value || '';
-    data.providerNpi = providerSeg.elements[8]?.value || '';
-  }
-
-  // Determine current level based on anchor segment
-  const anchorSeg = segments[anchorIndex];
-  const isSubscriberLevel = anchorSeg.tag === 'HL' && anchorSeg.elements[2]?.value === '22';
-  const isDependentLevel = anchorSeg.tag === 'HL' && anchorSeg.elements[2]?.value === '23';
-
-  // 1. Map Subscriber
-  let subSeg: EdiSegment | undefined;
-  if (isSubscriberLevel) {
-      // If we are at Subscriber HL, the Subscriber NM1 is FORWARD in this loop
-      for(let i = anchorIndex; i < segments.length; i++) {
-          // Stop if we hit next HL or SE
-          if (i > anchorIndex && (segments[i].tag === 'HL' || segments[i].tag === 'SE')) break;
-          if (segments[i].tag === 'NM1' && segments[i].elements[0]?.value === 'IL') {
-              subSeg = segments[i];
-              break;
-          }
-      }
-  } else {
-      // If we are at Dependent level (or deep inside), Subscriber is BACKWARD
-      subSeg = findBackwards(segments, anchorIndex, s => s.tag === 'NM1' && s.elements[0]?.value === 'IL');
-  }
-
-  if (subSeg) {
-    data.subscriberLastName = subSeg.elements[2]?.value || '';
-    data.subscriberFirstName = subSeg.elements[3]?.value || '';
-    data.subscriberId = subSeg.elements[8]?.value || '';
-
-    // Find DMG associated with this subscriber (usually immediately following)
-    const subIndex = segments.indexOf(subSeg);
-    const dmg = segments.slice(subIndex, subIndex + 5).find(s => s.tag === 'DMG');
-    if (dmg) {
-      data.subscriberDob = formatDate(dmg.elements[1]?.value);
-    }
-  }
-
-  // 2. Map Dependent
-  let depSeg: EdiSegment | undefined;
-  if (isDependentLevel) {
-       data.hasDependent = true;
-       // If we are at Dependent HL, Dependent NM1 is FORWARD
-       for(let i = anchorIndex; i < segments.length; i++) {
-           if (i > anchorIndex && (segments[i].tag === 'HL' || segments[i].tag === 'SE')) break;
-           if (segments[i].tag === 'NM1' && segments[i].elements[0]?.value === '03') {
-               depSeg = segments[i];
-               break;
-           }
-       }
-  } else {
-      // If we are at Subscriber level, we generally don't show Dependent info in the form 
-      // unless we want to support nested editing. The RecordList splits them into separate entries.
-      data.hasDependent = false; 
-  }
-
-  if (depSeg) {
-    data.dependentLastName = depSeg.elements[2]?.value || '';
-    data.dependentFirstName = depSeg.elements[3]?.value || '';
-
-    const depIndex = segments.indexOf(depSeg);
-    const dmg = segments.slice(depIndex, depIndex + 5).find(s => s.tag === 'DMG');
-    if (dmg) {
-      data.dependentDob = formatDate(dmg.elements[1]?.value);
-      data.dependentGender = dmg.elements[2]?.value || 'U';
-    }
-  }
-
-  // 3. Map Dates & Service Types (EQ)
-  // These belong to the *current* level (Subscriber or Dependent)
-  // Look FORWARD from anchor until next HL/SE
-  const eqSegs: EdiSegment[] = [];
-  data.serviceTypeCodes = []; 
-  
-  for (let i = anchorIndex; i < segments.length; i++) {
-      const s = segments[i];
-      if (i > anchorIndex && (s.tag === 'HL' || s.tag === 'SE')) break;
-      
-      if (s.tag === 'DTP' && s.elements[0]?.value === '291') {
-          data.serviceDate = formatDate(s.elements[2]?.value);
-      }
-      if (s.tag === 'EQ') {
-          eqSegs.push(s);
-      }
-  }
-  
-  if (eqSegs.length > 0) {
-    data.serviceTypeCodes = eqSegs.map(s => s.elements[0]?.value || '30');
-  }
-
-  return data;
-};
-
-export const mapEdiToForm276 = (doc: EdiDocument, targetId?: string): Partial<FormData276> => {
-  const segments = flattenSegments(doc.segments);
-  const data: Partial<FormData276> = {};
-
-  let anchorIndex = segments.length - 1;
-  if (targetId) {
-      const idx = segments.findIndex(s => s.id === targetId);
-      if (idx !== -1) anchorIndex = idx;
-  }
-
-  const payerSeg = findBackwards(segments, anchorIndex, s => s.tag === 'NM1' && s.elements[0]?.value === 'PR');
-  if (payerSeg) {
-    data.payerName = payerSeg.elements[2]?.value || '';
-    data.payerId = payerSeg.elements[8]?.value || '';
-  }
-
-  const providerSeg = findBackwards(segments, anchorIndex, s => s.tag === 'NM1' && (s.elements[0]?.value === '41' || s.elements[0]?.value === '1P'));
-  if (providerSeg) {
-    data.providerName = providerSeg.elements[2]?.value || '';
-    data.providerNpi = providerSeg.elements[8]?.value || '';
-  }
-
-  const subSeg = findBackwards(segments, anchorIndex, s => s.tag === 'NM1' && s.elements[0]?.value === 'IL');
-  if (subSeg) {
-    data.subscriberLastName = subSeg.elements[2]?.value || '';
-    data.subscriberFirstName = subSeg.elements[3]?.value || '';
-    data.subscriberId = subSeg.elements[8]?.value || '';
-  }
-
-  // Look for dependent in the hierarchy up to anchor
-  // If anchor is TRN inside a Dependent HL loop.
-  const depSeg = findBackwards(segments, anchorIndex, s => s.tag === 'NM1' && s.elements[0]?.value === '03');
-  // Check if depSeg is actually the parent of this anchor (not a previous sibling's dependent)
-  // Simplification: In 276, hierarchy is linear usually. If we found a Dep before this TRN and after the Sub, it applies.
-  if (depSeg && subSeg && segments.indexOf(depSeg) > segments.indexOf(subSeg)) {
-      data.hasDependent = true;
-      data.dependentLastName = depSeg.elements[2]?.value || '';
-      data.dependentFirstName = depSeg.elements[3]?.value || '';
-  } else {
-    data.hasDependent = false;
-  }
-
-  // Current Anchor should be TRN or close to it
-  let trnSeg = segments[anchorIndex];
-  if (trnSeg.tag !== 'TRN') {
-      // search forward slightly
-      const nextTrn = segments.slice(anchorIndex, anchorIndex + 5).find(s => s.tag === 'TRN');
-      if (nextTrn) trnSeg = nextTrn;
-  }
-
-  if (trnSeg && trnSeg.tag === 'TRN') {
-      data.claimId = trnSeg.elements[1]?.value || '';
-      const trnIndex = segments.indexOf(trnSeg);
-      
-      const amtSeg = segments.slice(trnIndex, trnIndex + 5).find(s => s.tag === 'AMT' && s.elements[0]?.value === 'T3');
-      if (amtSeg) {
-          data.chargeAmount = amtSeg.elements[1]?.value || '';
-      }
-
-      const dtpSeg = segments.slice(trnIndex, trnIndex + 5).find(s => s.tag === 'DTP' && s.elements[0]?.value === '472');
-      if (dtpSeg) {
-          data.serviceDate = formatDate(dtpSeg.elements[2]?.value);
-      }
-  }
-
-  return data;
-};
-
-export const mapEdiToForm837 = (doc: EdiDocument, targetId?: string): Partial<FormData837> => {
-    const segments = flattenSegments(doc.segments);
-    const data: Partial<FormData837> = {};
-    
-    // Attempt to detect type
-    const gs = segments.find(s => s.tag === 'GS');
-    const version = gs?.elements[7]?.value;
-    if (version?.includes('223')) data.type = 'Institutional';
-    else data.type = 'Professional';
-
-    // Locate Anchor (The specific CLM segment)
-    let clmIndex = -1;
-    if (targetId) {
-        clmIndex = segments.findIndex(s => s.id === targetId);
-    }
-    // Default to first CLM if not found or not provided
-    if (clmIndex === -1) {
-        clmIndex = segments.findIndex(s => s.tag === 'CLM');
+    let anchorIdx = 0;
+    if (recordId) {
+        anchorIdx = flat.findIndex(s => s.id === recordId);
+        if (anchorIdx === -1) anchorIdx = 0;
     }
 
-    if (clmIndex === -1) return data; // No claim found
+    // Identify Roles
+    const payerSeg = findBackwards(flat, anchorIdx > 0 ? anchorIdx : flat.length - 1, s => s.tag === 'NM1' && s.elements[0]?.value === 'PR');
+    if (payerSeg) {
+        data.payerName = payerSeg.elements[2]?.value;
+        data.payerId = payerSeg.elements[8]?.value;
+    }
 
-    // Look BACKWARDS for Header Info (Context)
-    
-    // Billing Provider (NM1*85) - nearest before CLM
-    const billing = findBackwards(segments, clmIndex, s => s.tag === 'NM1' && s.elements[0]?.value === '85');
-    if (billing) {
-        data.billingProviderName = billing.elements[2]?.value || '';
-        data.billingProviderNpi = billing.elements[8]?.value || '';
-        
-        const idx = segments.indexOf(billing);
-        // Usually N3/N4 follow immediately
-        const n3 = segments[idx + 1];
-        if (n3 && n3.tag === 'N3') data.billingProviderAddress = n3.elements[0]?.value || '';
-        const n4 = segments[idx + 2];
-        if (n4 && n4.tag === 'N4') {
-            data.billingProviderCity = n4.elements[0]?.value || '';
-            data.billingProviderState = n4.elements[1]?.value || '';
-            data.billingProviderZip = n4.elements[2]?.value || '';
+    const provSeg = findBackwards(flat, anchorIdx > 0 ? anchorIdx : flat.length - 1, s => s.tag === 'NM1' && s.elements[0]?.value === '1P');
+    if (provSeg) {
+        data.providerName = provSeg.elements[2]?.value;
+        data.providerNpi = provSeg.elements[8]?.value;
+    }
+
+    // Determine if anchor is Subscriber or Dependent
+    const anchorSeg = flat[anchorIdx];
+    let subscriberSeg = anchorSeg;
+    let dependentSeg = null;
+
+    if (anchorSeg && anchorSeg.tag === 'HL') {
+        const level = anchorSeg.elements[2]?.value; // HL03
+        if (level === '23') { // Dependent
+            // Find parent subscriber HL
+            const parentId = anchorSeg.elements[1]?.value;
+            const parentHL = flat.find(s => s.tag === 'HL' && s.elements[0]?.value === parentId);
+            if (parentHL) {
+                // Find Subscriber NM1 under parent HL
+                const parentIdx = flat.indexOf(parentHL);
+                subscriberSeg = flat.slice(parentIdx).find(s => s.tag === 'NM1' && s.elements[0]?.value === 'IL')!;
+            }
+            // Find Dependent NM1
+            dependentSeg = flat.slice(anchorIdx).find(s => s.tag === 'NM1' && s.elements[0]?.value === '03');
+            data.hasDependent = true;
+        } else if (level === '22') { // Subscriber
+            subscriberSeg = flat.slice(anchorIdx).find(s => s.tag === 'NM1' && s.elements[0]?.value === 'IL')!;
+            data.hasDependent = false;
         }
-        const ref = segments.slice(idx, idx+5).find(s => s.tag === 'REF' && s.elements[0]?.value === 'EI');
-        if (ref) data.billingTaxId = ref.elements[1]?.value || '';
+    } else {
+        // Fallback search
+        subscriberSeg = findBackwards(flat, flat.length - 1, s => s.tag === 'NM1' && s.elements[0]?.value === 'IL')!;
     }
 
-    // Subscriber (NM1*IL) - nearest before CLM
-    const sub = findBackwards(segments, clmIndex, s => s.tag === 'NM1' && s.elements[0]?.value === 'IL');
-    if (sub) {
-        data.subscriberLastName = sub.elements[2]?.value || '';
-        data.subscriberFirstName = sub.elements[3]?.value || '';
-        data.subscriberId = sub.elements[8]?.value || '';
+    if (subscriberSeg) {
+        data.subscriberLastName = subscriberSeg.elements[2]?.value;
+        data.subscriberFirstName = subscriberSeg.elements[3]?.value;
+        data.subscriberId = subscriberSeg.elements[8]?.value;
         
-        const idx = segments.indexOf(sub);
-        const dmg = segments.slice(idx, idx+5).find(s => s.tag === 'DMG');
+        // Find DOB (DMG) after subscriber NM1
+        const subIdx = flat.indexOf(subscriberSeg);
+        const dmg = flat.slice(subIdx, subIdx + 5).find(s => s.tag === 'DMG');
+        if (dmg) data.subscriberDob = formatDate(dmg.elements[1]?.value);
+    }
+
+    if (dependentSeg) {
+        const d = dependentSeg as EdiSegment;
+        data.dependentLastName = d.elements[2]?.value;
+        data.dependentFirstName = d.elements[3]?.value;
+        
+        const depIdx = flat.indexOf(d);
+        const dmg = flat.slice(depIdx, depIdx + 5).find(s => s.tag === 'DMG');
+        if (dmg) {
+            data.dependentDob = formatDate(dmg.elements[1]?.value);
+            data.dependentGender = dmg.elements[2]?.value;
+        }
+    }
+
+    // Find Service Date & Types (EQ)
+    // Usually near the end of the loop
+    const searchStart = dependentSeg ? flat.indexOf(dependentSeg) : (subscriberSeg ? flat.indexOf(subscriberSeg) : 0);
+    const searchEnd = flat.length;
+    
+    const dtp = flat.slice(searchStart, searchEnd).find(s => s.tag === 'DTP' && (s.elements[0]?.value === '291' || s.elements[0]?.value === '472'));
+    if (dtp) data.serviceDate = formatDate(dtp.elements[2]?.value);
+
+    const eqs = flat.slice(searchStart, searchEnd).filter(s => s.tag === 'EQ');
+    if (eqs.length > 0) {
+        data.serviceTypeCodes = eqs.map(e => e.elements[0]?.value).filter(Boolean);
+    }
+
+    return data;
+};
+
+export const mapEdiToForm276 = (doc: EdiDocument, recordId?: string): Partial<FormData276> => {
+    const flat = flattenSegments(doc.segments);
+    const data: Partial<FormData276> = {};
+
+    let anchorIdx = 0;
+    if (recordId) {
+        anchorIdx = flat.findIndex(s => s.id === recordId);
+        if (anchorIdx === -1) anchorIdx = 0;
+    }
+
+    // Payer/Provider same logic as 270
+    const payerSeg = findBackwards(flat, flat.length - 1, s => s.tag === 'NM1' && s.elements[0]?.value === 'PR');
+    if (payerSeg) {
+        data.payerName = payerSeg.elements[2]?.value;
+        data.payerId = payerSeg.elements[8]?.value;
+    }
+
+    const provSeg = findBackwards(flat, flat.length - 1, s => s.tag === 'NM1' && (s.elements[0]?.value === '1P' || s.elements[0]?.value === '41'));
+    if (provSeg) {
+        data.providerName = provSeg.elements[2]?.value;
+        data.providerNpi = provSeg.elements[8]?.value;
+    }
+
+    // Subscriber/Dependent logic similar to 270
+    // Simplified for now, just finding the nearest backward IL and 03
+    const subSeg = findBackwards(flat, anchorIdx > 0 ? anchorIdx : flat.length - 1, s => s.tag === 'NM1' && s.elements[0]?.value === 'IL');
+    if (subSeg) {
+        data.subscriberLastName = subSeg.elements[2]?.value;
+        data.subscriberFirstName = subSeg.elements[3]?.value;
+        data.subscriberId = subSeg.elements[8]?.value;
+    }
+
+    // Check if current loop is dependent
+    const depSeg = findBackwards(flat, anchorIdx > 0 ? anchorIdx : flat.length - 1, s => s.tag === 'NM1' && s.elements[0]?.value === '03');
+    // Ensure dependent is AFTER subscriber
+    if (depSeg && subSeg && flat.indexOf(depSeg) > flat.indexOf(subSeg)) {
+        data.hasDependent = true;
+        data.dependentLastName = depSeg.elements[2]?.value;
+        data.dependentFirstName = depSeg.elements[3]?.value;
+    }
+
+    // Claim Trace (TRN)
+    // Look forward from anchor if it's HL, or at anchor
+    let searchStart = anchorIdx;
+    if (flat[anchorIdx]?.tag === 'TRN') searchStart = anchorIdx;
+    
+    // Scan a bit around anchor
+    const trn = flat.slice(searchStart, searchStart + 10).find(s => s.tag === 'TRN');
+    if (trn) data.claimId = trn.elements[1]?.value;
+
+    const amt = flat.slice(searchStart, searchStart + 10).find(s => s.tag === 'AMT' && s.elements[0]?.value === 'T3');
+    if (amt) data.chargeAmount = amt.elements[1]?.value;
+
+    const dtp = flat.slice(searchStart, searchStart + 10).find(s => s.tag === 'DTP' && s.elements[0]?.value === '472');
+    if (dtp) data.serviceDate = formatDate(dtp.elements[2]?.value);
+
+    return data;
+};
+
+export const mapEdiToForm837 = (doc: EdiDocument, recordId?: string): Partial<FormData837> => {
+    const flat = flattenSegments(doc.segments);
+    const data: Partial<FormData837> = {
+        serviceLines: []
+    };
+
+    let anchorIdx = 0;
+    if (recordId) {
+        anchorIdx = flat.findIndex(s => s.id === recordId);
+        if (anchorIdx === -1) anchorIdx = 0;
+    }
+
+    // Basic Header Info
+    const submitter = flat.find(s => s.tag === 'NM1' && s.elements[0]?.value === '41');
+    const receiver = flat.find(s => s.tag === 'NM1' && s.elements[0]?.value === '40');
+    if (receiver) {
+        data.payerName = receiver.elements[2]?.value;
+        data.payerId = receiver.elements[8]?.value;
+    }
+
+    // Billing Provider (Loop 2000A)
+    const billProv = flat.find(s => s.tag === 'NM1' && s.elements[0]?.value === '85');
+    if (billProv) {
+        data.billingProviderName = billProv.elements[2]?.value;
+        data.billingProviderNpi = billProv.elements[8]?.value;
+        const bpIdx = flat.indexOf(billProv);
+        const n3 = flat[bpIdx + 1]?.tag === 'N3' ? flat[bpIdx + 1] : null;
+        const n4 = flat[bpIdx + 2]?.tag === 'N4' ? flat[bpIdx + 2] : null;
+        const refEi = flat.slice(bpIdx, bpIdx + 5).find(s => s.tag === 'REF' && s.elements[0]?.value === 'EI');
+        
+        if (n3) data.billingProviderAddress = n3.elements[0]?.value;
+        if (n4) {
+            data.billingProviderCity = n4.elements[0]?.value;
+            data.billingProviderState = n4.elements[1]?.value;
+            data.billingProviderZip = n4.elements[2]?.value;
+        }
+        if (refEi) data.billingTaxId = refEi.elements[1]?.value;
+    }
+
+    // Subscriber (Loop 2000B)
+    const subSeg = findBackwards(flat, anchorIdx > 0 ? anchorIdx : flat.length - 1, s => s.tag === 'NM1' && s.elements[0]?.value === 'IL');
+    if (subSeg) {
+        data.subscriberLastName = subSeg.elements[2]?.value;
+        data.subscriberFirstName = subSeg.elements[3]?.value;
+        data.subscriberId = subSeg.elements[8]?.value;
+        
+        const subIdx = flat.indexOf(subSeg);
+        const dmg = flat.slice(subIdx, subIdx + 5).find(s => s.tag === 'DMG');
         if (dmg) {
             data.subscriberDob = formatDate(dmg.elements[1]?.value);
-            data.subscriberGender = dmg.elements[2]?.value || '';
+            data.subscriberGender = dmg.elements[2]?.value;
         }
     }
 
-    // Payer (NM1*PR) - nearest before CLM (but usually after Subscriber)
-    const payer = findBackwards(segments, clmIndex, s => s.tag === 'NM1' && s.elements[0]?.value === 'PR');
-    if (payer) {
-        data.payerName = payer.elements[2]?.value || '';
-        data.payerId = payer.elements[8]?.value || '';
+    // Claim Info (Loop 2300)
+    // Find CLM near anchor
+    let clmSeg = flat[anchorIdx]?.tag === 'CLM' ? flat[anchorIdx] : null;
+    if (!clmSeg) {
+        // Look backwards if anchor is a line item
+        clmSeg = findBackwards(flat, anchorIdx, s => s.tag === 'CLM');
     }
-
-    // Claim (CLM) - Current Segment
-    const clm = segments[clmIndex];
-    if (clm && clm.tag === 'CLM') {
-        data.claimId = clm.elements[0]?.value || '';
-        data.totalCharge = clm.elements[1]?.value || '';
+    
+    if (clmSeg) {
+        data.claimId = clmSeg.elements[0]?.value;
+        data.totalCharge = clmSeg.elements[1]?.value;
         
-        const comp = clm.elements[4]?.value || '';
-        const parts = comp.split(':');
-        
-        if (data.type === 'Professional') {
-            data.placeOfService = parts[0] || '';
-        } else {
-            data.typeOfBill = parts[0] || '';
-        }
-    }
-
-    // Look FORWARD from CLM for Details (Diagnosis, Service Lines)
-    // Stop at next CLM or next Loop Header that breaks context (e.g. next HL)
-    const claimSegments: EdiSegment[] = [];
-    for (let i = clmIndex + 1; i < segments.length; i++) {
-        const s = segments[i];
-        if (s.tag === 'CLM' || s.tag === 'HL' || s.tag === 'SE') break;
-        claimSegments.push(s);
-    }
-
-    // HI (Diagnosis)
-    const hi = claimSegments.find(s => s.tag === 'HI');
-    if (hi) {
-        const diag1 = hi.elements[0]?.value || '';
-        data.diagnosisCode1 = diag1.split(':')[1] || '';
-        const diag2 = hi.elements[1]?.value;
-        if (diag2) data.diagnosisCode2 = diag2.split(':')[1] || '';
-    }
-
-    // Service Lines
-    data.serviceLines = [];
-    for (let i = 0; i < claimSegments.length; i++) {
-        const seg = claimSegments[i];
-        if (seg.tag === 'LX') {
-            const line: ServiceLine837 = {
-                procedureCode: '',
-                lineCharge: '',
-                units: '',
-                serviceDate: ''
-            };
-            
-            // Scan sub-loop
-            let j = i + 1;
-            while(j < claimSegments.length) {
-                const next = claimSegments[j];
-                if (next.tag === 'LX') break;
-                
-                if (next.tag === 'SV1') {
-                    const comp = next.elements[0]?.value || '';
-                    line.procedureCode = comp.split(':')[1] || comp;
-                    line.lineCharge = next.elements[1]?.value || '';
-                    line.units = next.elements[3]?.value || '';
-                } else if (next.tag === 'SV2') {
-                    line.procedureCode = next.elements[0]?.value || '';
-                    line.lineCharge = next.elements[2]?.value || '';
-                    line.units = next.elements[4]?.value || '';
-                } else if (next.tag === 'DTP' && next.elements[0]?.value === '472') {
-                    line.serviceDate = formatDate(next.elements[2]?.value);
-                }
-                j++;
+        // Composite 05 (Type of Bill or Place of Service)
+        const typeInfo = clmSeg.elements[4]?.value; // CLM05
+        if (typeInfo) {
+            const parts = typeInfo.split(':');
+            if (parts[0].length === 3) {
+                data.type = 'Institutional';
+                data.typeOfBill = parts[0];
+            } else {
+                data.type = 'Professional';
+                data.placeOfService = parts[0];
             }
-            data.serviceLines.push(line);
+        }
+
+        // Diagnosis (HI)
+        const clmIdx = flat.indexOf(clmSeg);
+        const hiSeg = flat.slice(clmIdx, clmIdx + 10).find(s => s.tag === 'HI');
+        if (hiSeg) {
+            // HI elements are composites: "ABK:R05"
+            // Extract first one
+            const diag1 = hiSeg.elements[0]?.value;
+            if (diag1) data.diagnosisCode1 = diag1.split(':')[1] || diag1;
+            const diag2 = hiSeg.elements[1]?.value;
+            if (diag2) data.diagnosisCode2 = diag2.split(':')[1] || diag2;
+        }
+
+        // Service Lines (LX Loops)
+        // Scan forward from CLM until next CLM or SE
+        for (let i = clmIdx + 1; i < flat.length; i++) {
+            const s = flat[i];
+            if (s.tag === 'CLM' || s.tag === 'SE') break;
+            
+            if (s.tag === 'SV1' || s.tag === 'SV2') {
+                const line: ServiceLine837 = {
+                    procedureCode: '',
+                    lineCharge: '',
+                    units: '',
+                    serviceDate: ''
+                };
+                
+                // SV1 Professional: HC:99213
+                // SV2 Institutional: 0320 (Rev) HC:99213 (Proc)
+                if (s.tag === 'SV1') {
+                    const proc = s.elements[0]?.value; // SV101
+                    line.procedureCode = proc?.split(':')[1] || proc;
+                    line.lineCharge = s.elements[1]?.value;
+                    line.units = s.elements[3]?.value;
+                } else {
+                    const proc = s.elements[1]?.value; // SV202
+                    line.procedureCode = proc?.split(':')[1] || proc;
+                    line.lineCharge = s.elements[2]?.value;
+                    line.units = s.elements[4]?.value;
+                }
+
+                // Date DTP*472
+                const dtp = flat[i+1]?.tag === 'DTP' ? flat[i+1] : null; // simplified check
+                if (dtp && dtp.elements[0]?.value === '472') {
+                    line.serviceDate = formatDate(dtp.elements[2]?.value);
+                }
+
+                data.serviceLines?.push(line);
+            }
         }
     }
 
     return data;
 };
 
-export const mapEdiToForm834 = (doc: EdiDocument, targetId?: string): Partial<FormData834> => {
-    const segments = flattenSegments(doc.segments);
+export const mapEdiToForm834 = (doc: EdiDocument, recordId?: string): Partial<FormData834> => {
+    const flat = flattenSegments(doc.segments);
     const data: Partial<FormData834> = {
+        subscriber: { id: '', firstName: '', lastName: '', ssn: '', dob: '', gender: '', relationship: '18' },
         dependents: []
     };
 
-    // 1. Identify Anchor Index
-    // If targetId is provided, we use it. If it points to a dependent, we find the parent subscriber.
-    let anchorIndex = -1;
-    let anchorSegment: EdiSegment | undefined;
-
-    if (targetId) {
-        const idx = segments.findIndex(s => s.id === targetId);
-        if (idx !== -1) {
-            const seg = segments[idx];
-            if (seg.tag === 'INS') {
-                const rel = seg.elements[1]?.value; // INS02: 18=Self
-                if (rel === '18') {
-                    // It is a subscriber
-                    anchorIndex = idx;
-                } else {
-                    // It is a dependent, backtrack to subscriber
-                    const sub = findBackwards(segments, idx, s => s.tag === 'INS' && s.elements[1]?.value === '18');
-                    if (sub) {
-                        anchorIndex = segments.indexOf(sub);
-                    } else {
-                        // Orphan dependent - treat as anchor for now to show something
-                        anchorIndex = idx;
-                    }
-                }
-            }
-        }
-    }
-
-    // Default to first INS if no valid target found
-    if (anchorIndex === -1) {
-        anchorIndex = segments.findIndex(s => s.tag === 'INS');
-    }
-
-    if (anchorIndex === -1) return data; // No INS segments found in document
-
-    anchorSegment = segments[anchorIndex];
-
-    // 2. Map Global Headers (Backwards from anchor)
-    const sponsor = findBackwards(segments, anchorIndex, s => s.tag === 'N1' && s.elements[0]?.value === 'P5');
+    // Header Info
+    const sponsor = flat.find(s => s.tag === 'N1' && s.elements[0]?.value === 'P5');
     if (sponsor) {
-        data.sponsorName = sponsor.elements[1]?.value || '';
-        data.sponsorTaxId = sponsor.elements[3]?.value || '';
+        data.sponsorName = sponsor.elements[1]?.value;
+        data.sponsorTaxId = sponsor.elements[3]?.value;
     }
-
-    const payer = findBackwards(segments, anchorIndex, s => s.tag === 'N1' && s.elements[0]?.value === 'IN');
+    const payer = flat.find(s => s.tag === 'N1' && s.elements[0]?.value === 'IN');
     if (payer) {
-        data.payerName = payer.elements[1]?.value || '';
-        data.payerId = payer.elements[3]?.value || '';
+        data.payerName = payer.elements[1]?.value;
+        data.payerId = payer.elements[3]?.value;
     }
 
-    // Helper to parse a Member Loop (Subscriber or Dependent)
-    // Starts at `startIndex` (INS), ends at next INS or SE
-    const parseMemberLoop = (startIndex: number): { member: Member834, nextIndex: number, extraData: any } => {
-        const ins = segments[startIndex];
-        const loopSegs: EdiSegment[] = [ins];
-        let nextIndex = startIndex + 1;
-        
-        while (nextIndex < segments.length) {
-            const s = segments[nextIndex];
-            if (s.tag === 'INS' || s.tag === 'SE' || s.tag === 'GE' || s.tag === 'IEA') break;
-            loopSegs.push(s);
-            nextIndex++;
+    // Locate the Record (Member Loop)
+    let insIdx = -1;
+    if (recordId) {
+        // If selected segment is INS or inside member loop
+        const selIdx = flat.findIndex(s => s.id === recordId);
+        if (selIdx !== -1) {
+            // Find backwards to nearest INS
+            const ins = findBackwards(flat, selIdx, s => s.tag === 'INS');
+            if (ins) insIdx = flat.indexOf(ins);
         }
+    }
+    
+    // If not found, just default to first INS
+    if (insIdx === -1) {
+        insIdx = flat.findIndex(s => s.tag === 'INS');
+    }
 
-        const member: Member834 = {
-            id: '', firstName: '', lastName: '', ssn: '', dob: '', gender: '',
-            relationship: ins.elements[1]?.value || '18'
-        };
+    if (insIdx !== -1) {
+        const insSeg = flat[insIdx];
+        data.maintenanceType = insSeg.elements[2]?.value;
+        data.maintenanceReason = insSeg.elements[3]?.value;
 
-        const ref0F = loopSegs.find(s => s.tag === 'REF' && s.elements[0]?.value === '0F');
-        if (ref0F) member.id = ref0F.elements[1]?.value || '';
-        
-        const refSY = loopSegs.find(s => s.tag === 'REF' && s.elements[0]?.value === 'SY');
-        if (refSY) member.ssn = refSY.elements[1]?.value || '';
+        // REF*0F (Subscriber ID)
+        // Scan forward
+        for (let i = insIdx + 1; i < flat.length; i++) {
+            const s = flat[i];
+            if (s.tag === 'INS' || s.tag === 'SE') break;
 
-        const nm1 = loopSegs.find(s => s.tag === 'NM1' && (s.elements[0]?.value === 'IL' || s.elements[0]?.value === '74'));
-        if (nm1) {
-            member.lastName = nm1.elements[2]?.value || '';
-            member.firstName = nm1.elements[3]?.value || '';
-        }
-
-        const dmg = loopSegs.find(s => s.tag === 'DMG');
-        if (dmg) {
-            member.dob = formatDate(dmg.elements[1]?.value);
-            member.gender = dmg.elements[2]?.value || '';
-        }
-
-        // Extra info typically on Subscriber loop only
-        const extra: any = {};
-        if (ins.elements[1]?.value === '18') { // Only capture for Subscriber
-            extra.maintenanceType = ins.elements[2]?.value;
-            extra.maintenanceReason = ins.elements[3]?.value;
-            
-            const hd = loopSegs.find(s => s.tag === 'HD');
-            if (hd) {
-                extra.benefitStatus = hd.elements[0]?.value || '';
-                extra.coverageLevelCode = hd.elements[4]?.value || '';
+            if (s.tag === 'REF' && s.elements[0]?.value === '0F') {
+                data.subscriber.id = s.elements[1]?.value;
             }
-            
-            const ref1L = loopSegs.find(s => s.tag === 'REF' && s.elements[0]?.value === '1L');
-            if (ref1L) extra.policyNumber = ref1L.elements[1]?.value || '';
-            
-            const dtp = loopSegs.find(s => s.tag === 'DTP' && s.elements[0]?.value === '348');
-            if (dtp) extra.planEffectiveDate = formatDate(dtp.elements[2]?.value);
-        }
-
-        return { member, nextIndex, extraData: extra };
-    };
-
-    // 3. Map Subscriber Loop (The Anchor)
-    const subResult = parseMemberLoop(anchorIndex);
-    data.subscriber = subResult.member;
-    Object.assign(data, subResult.extraData);
-
-    // 4. Map Dependents (Scan forward from Subscriber)
-    let scanIndex = subResult.nextIndex;
-    while (scanIndex < segments.length) {
-        const nextSeg = segments[scanIndex];
-        
-        // Stop if we hit end of file or a NEW Subscriber loop
-        if (nextSeg.tag === 'SE' || nextSeg.tag === 'GE' || nextSeg.tag === 'IEA') break;
-        if (nextSeg.tag === 'INS') {
-            const rel = nextSeg.elements[1]?.value;
-            if (rel === '18') break; // Found next subscriber, stop scanning
-            
-            // Found a dependent!
-            const depResult = parseMemberLoop(scanIndex);
-            data.dependents?.push(depResult.member);
-            scanIndex = depResult.nextIndex;
-        } else {
-            scanIndex++;
+            if (s.tag === 'REF' && s.elements[0]?.value === 'SY') {
+                data.subscriber.ssn = s.elements[1]?.value;
+            }
+            if (s.tag === 'REF' && s.elements[0]?.value === '1L') {
+                data.policyNumber = s.elements[1]?.value;
+            }
+            if (s.tag === 'NM1' && s.elements[0]?.value === 'IL') {
+                data.subscriber.lastName = s.elements[2]?.value;
+                data.subscriber.firstName = s.elements[3]?.value;
+            }
+            if (s.tag === 'DMG') {
+                data.subscriber.dob = formatDate(s.elements[1]?.value);
+                data.subscriber.gender = s.elements[2]?.value;
+            }
+            if (s.tag === 'HD') {
+                data.benefitStatus = s.elements[0]?.value;
+                data.coverageLevelCode = s.elements[4]?.value;
+            }
+            if (s.tag === 'DTP' && s.elements[0]?.value === '348') {
+                data.planEffectiveDate = formatDate(s.elements[2]?.value);
+            }
         }
     }
 
@@ -625,361 +488,615 @@ export const mapEdiToForm834 = (doc: EdiDocument, targetId?: string): Partial<Fo
 };
 
 export const mapEdiToBenefits = (doc: EdiDocument): BenefitRow[] => {
-    const rows: BenefitRow[] = [];
     const flat = flattenSegments(doc.segments);
+    const rows: BenefitRow[] = [];
+
+    // Context tracking
+    let currentSource = "";
+    let currentSubscriber = "";
     
-    let currentEntity = "Unknown";
-    
-    for (let i = 0; i < flat.length; i++) {
-        const seg = flat[i];
-        
-        if (seg.tag === 'HL') {
-            const level = seg.elements[2]?.value; // HL03
-            if (level === '22') currentEntity = "Subscriber";
-            else if (level === '23') currentEntity = "Dependent";
+    flat.forEach((s, i) => {
+        if (s.tag === 'NM1') {
+            const type = s.elements[0]?.value;
+            const name = s.elements[2]?.value;
+            if (type === 'PR') currentSource = name;
+            if (type === 'IL') currentSubscriber = `${s.elements[3]?.value || ''} ${name || ''}`.trim();
         }
-        
-        if (seg.tag === 'EB') {
+
+        if (s.tag === 'EB') {
+            // EB01: Benefit Info Code (1=Active, 6=Inactive, etc)
+            const typeCode = s.elements[0]?.value;
+            // EB03: Service Type Code
+            const serviceCode = s.elements[2]?.value;
+            // EB04: Insurance Type
+            const insType = s.elements[3]?.value;
+            
+            // Extract Amount/Qty if present
+            // EB07 (Amount), EB08 (Percent), EB09 (Qty Qual), EB10 (Qty)
+            // Note: Indices in array are 0-based, but element numbers are 1-based.
+            // EB segment: [code, covLevel, svcType, insType, planCov, timePeriod, amt, pct, qtyQual, qty, ...]
+            // elements array index: 0=EB01, 6=EB07
+            
             const row: BenefitRow = {
-                type: getRepeatedDefinition('EB', 1, seg.elements[0]), // Coverage Level/Type
-                coverage: getRepeatedDefinition('EB', 2, seg.elements[1]), // Coverage Description
-                service: getRepeatedDefinition('EB', 3, seg.elements[2]), // Service Type
-                insuranceType: getRepeatedDefinition('EB', 4, seg.elements[3]),
-                timePeriod: getRepeatedDefinition('EB', 6, seg.elements[5]),
-                amount: seg.elements[6]?.value,
-                percent: seg.elements[7]?.value,
-                quantityQualifier: getRepeatedDefinition('EB', 9, seg.elements[8]),
-                quantity: seg.elements[9]?.value,
-                authRequired: getRepeatedDefinition('EB', 11, seg.elements[10]),
-                network: getRepeatedDefinition('EB', 12, seg.elements[11]),
-                messages: [],
+                reference: currentSubscriber || "Unknown",
+                type: typeCode === '1' ? 'Active' : typeCode === '6' ? 'Inactive' : typeCode,
+                service: serviceCode || 'Health',
+                coverage: insType || '',
                 dates: [],
-                reference: currentEntity
+                messages: []
             };
 
-            let j = i + 1;
-            while(j < flat.length) {
-                const nextTag = flat[j].tag;
-                if (nextTag === 'EB' || nextTag === 'HL' || nextTag === 'EQ' || nextTag === 'SE') break;
+            // Values
+            if (s.elements[6]?.value) row.amount = s.elements[6].value;
+            if (s.elements[7]?.value) row.percent = s.elements[7].value;
+            if (s.elements[9]?.value) {
+                row.quantity = s.elements[9].value;
+                row.quantityQualifier = s.elements[8]?.value;
+            }
+            if (s.elements[11]?.value) {
+                row.network = s.elements[11].value === 'Y' ? 'Yes' : 'No';
+            }
 
-                if (nextTag === 'MSG') {
-                    const msg = flat[j].elements[0]?.value;
-                    if (msg) row.messages.push(msg);
+            // Look ahead for DTP or MSG
+            for (let k = i + 1; k < i + 10 && k < flat.length; k++) {
+                const next = flat[k];
+                if (next.tag === 'EB' || next.tag === 'HL' || next.tag === 'SE') break;
+                
+                if (next.tag === 'DTP') {
+                    const qual = next.elements[0]?.value;
+                    const date = formatDate(next.elements[2]?.value);
+                    if (qual === '307') row.dates.push(`Eligibility: ${date}`);
+                    if (qual === '348') row.dates.push(`Benefit Begin: ${date}`);
+                    if (qual === '349') row.dates.push(`Benefit End: ${date}`);
+                    if (qual === '291') row.dates.push(`Plan: ${date}`);
                 }
-                else if (nextTag === 'DTP') {
-                    const qualifier = getElementDefinition('DTP', 1, flat[j].elements[0]?.value);
-                    const format = flat[j].elements[1]?.value;
-                    const dateVal = flat[j].elements[2]?.value;
-                    
-                    if (qualifier && dateVal) {
-                        row.dates.push(`${qualifier}: ${formatDtpValue(format, dateVal)}`);
-                    }
+                if (next.tag === 'MSG') {
+                    if (next.elements[0]?.value) row.messages.push(next.elements[0].value);
                 }
-                j++;
             }
             rows.push(row);
         }
-    }
+    });
+
     return rows;
 };
 
 export const mapEdiToClaimStatus = (doc: EdiDocument): ClaimStatusRow[] => {
+    const flat = flattenSegments(doc.segments);
     const rows: ClaimStatusRow[] = [];
-    const flat = flattenSegments(doc.segments);
-    
-    let currentEntity = "Unknown";
-    let currentClaim: ClaimStatusRow | null = null;
-    let currentLine: ServiceLine | null = null;
 
-    let subName = "";
-    let subId = "";
-    let depName = "";
-    let depId = "";
+    // Context
+    let currentPatient = "";
+    let currentPatientId = "";
+    let currentEntity = ""; // Provider or Payer
 
-    const pushClaim = () => {
-        if (currentClaim) {
-            if (currentLine) {
-                currentClaim.serviceLines.push(currentLine);
-                currentLine = null;
-            }
-            rows.push(currentClaim);
-            currentClaim = null;
-        }
-    };
-
-    const pushLine = () => {
-        if (currentClaim && currentLine) {
-            currentClaim.serviceLines.push(currentLine);
-            currentLine = null;
-        }
-    };
-
-    for (let i = 0; i < flat.length; i++) {
-        const seg = flat[i];
-
-        // Track Hierarchy Entity (Subscriber vs Dependent)
-        if (seg.tag === 'HL') {
-            const level = seg.elements[2]?.value; 
-            if (level === '22') {
-                pushClaim(); // Close previous claim context if switching entity
-                currentEntity = "Subscriber";
-                subName = ""; subId = ""; // Reset
-                depName = ""; depId = ""; // Reset
-            } else if (level === '23') {
-                pushClaim();
-                currentEntity = "Dependent";
-                depName = ""; depId = ""; // Reset
+    flat.forEach((s, i) => {
+        if (s.tag === 'NM1') {
+            const type = s.elements[0]?.value;
+            if (type === 'IL' || type === 'QC') {
+                currentPatient = `${s.elements[3]?.value || ''} ${s.elements[2]?.value || ''}`.trim();
+                currentPatientId = s.elements[8]?.value || '';
+            } else if (type === 'PR') {
+                currentEntity = s.elements[2]?.value || '';
             }
         }
 
-        // Capture Names
-        if (seg.tag === 'NM1') {
-            const code = seg.elements[0]?.value;
-            if (code === 'IL' && currentEntity === 'Subscriber') {
-                subName = `${seg.elements[3]?.value || ''} ${seg.elements[2]?.value || ''}`.trim();
-                subId = seg.elements[8]?.value || '';
-            } else if ((code === '03' || code === 'QC') && currentEntity === 'Dependent') {
-                depName = `${seg.elements[3]?.value || ''} ${seg.elements[2]?.value || ''}`.trim();
-                depId = seg.elements[8]?.value || '';
-            }
-        }
-
-        // New Claim Trigger: TRN in Loop 2000D/2200D
-        if (seg.tag === 'TRN' && seg.elements[0]?.value === '2') {
-             pushClaim(); // Close previous claim
-             
-             const isDep = currentEntity === 'Dependent';
-
-             currentClaim = {
-                 entity: currentEntity,
-                 patientName: isDep ? depName : subName,
-                 patientId: isDep ? depId : subId,
-                 claimRef: seg.elements[1]?.value || "Unknown",
-                 statusCategory: "-",
-                 statusCode: "-",
-                 statusDate: "",
-                 billedAmount: "0",
-                 paidAmount: "0",
-                 checkNumber: "",
-                 checkDate: "",
-                 messages: [],
-                 serviceLines: []
-             };
-        }
-
-        // Claim or Line Status (STC)
-        if (seg.tag === 'STC') {
-            const stc01 = seg.elements[0]?.value || "";
-            const [cat, stat] = stc01.split(':');
-            const date = formatDate(seg.elements[1]?.value);
-            const amount = seg.elements[3]?.value || "0";
-            const payment = seg.elements[4]?.value || "0";
-
-            if (currentLine) {
-                // Line Status
-                currentLine.statusCategory = cat;
-                currentLine.statusCode = stat;
-                currentLine.statusDate = date;
-                // Prefer payment amount from STC if SVC didn't have it (rare in 277)
-            } else if (currentClaim) {
-                // Claim Status
-                currentClaim.statusCategory = cat;
-                currentClaim.statusCode = stat;
-                currentClaim.statusDate = date;
-                currentClaim.billedAmount = amount;
-                currentClaim.paidAmount = payment;
-            }
-        }
-
-        // Service Line Trigger (SVC)
-        if (seg.tag === 'SVC') {
-            pushLine(); // Push previous line if any
+        if (s.tag === 'STC') {
+            // STC01 is composite: Category:Status:Entity
+            const stc01 = s.elements[0]?.value || '';
+            const parts = stc01.split(':');
             
-            // SVC01 is composite: HC:99213 or NU:RevenueCode
-            const composite = seg.elements[0]?.value || "";
-            const parts = composite.split(':');
-            // part 0 is qualifier (HC, NU), part 1 is code
-            const code = parts.length > 1 ? parts[1] : parts[0]; 
-
-            currentLine = {
-                lineId: "",
-                procedureCode: code,
-                procedureDesc: getProcedureDefinition(code),
-                chargeAmount: seg.elements[1]?.value || "0",
-                paymentAmount: seg.elements[2]?.value || "0",
-                revenueCode: "", // SVC04
-                units: seg.elements[6]?.value || "",
-                statusCategory: "",
-                statusCode: "",
-                statusDate: ""
+            const row: ClaimStatusRow = {
+                patientName: currentPatient,
+                patientId: currentPatientId,
+                entity: currentEntity,
+                statusCategory: parts[0] || '',
+                statusCode: parts[1] || '',
+                statusDate: formatDate(s.elements[1]?.value),
+                claimRef: '',
+                billedAmount: s.elements[3]?.value || '0',
+                paidAmount: s.elements[4]?.value || '0',
+                checkNumber: s.elements[6]?.value || '',
+                checkDate: formatDate(s.elements[5]?.value),
+                serviceLines: []
             };
-        }
 
-        // Reference Numbers (Check, Line ID, Payer Claim ID)
-        if (seg.tag === 'REF') {
-             const qual = seg.elements[0]?.value;
-             const val = seg.elements[1]?.value;
+            // Find Claim Ref (TRN or REF) BACKWARDS
+            const trn = findBackwards(flat, i, s => s.tag === 'TRN');
+            if (trn) row.claimRef = trn.elements[1]?.value || '';
 
-             if (currentLine) {
-                 if (qual === '6R') currentLine.lineId = val;
-             } else if (currentClaim) {
-                 if (qual === '1K' && currentClaim.claimRef === 'Unknown') currentClaim.claimRef = val;
-                 if (qual === 'CK') currentClaim.checkNumber = val;
-             }
-        }
+            // Check for SVC lines following this STC (if detail level)
+            // Or if STC is inside a loop, lines might be adjacent
+            // Simplified: scan forward for SVC
+            for (let k = i + 1; k < i + 20 && k < flat.length; k++) {
+                const next = flat[k];
+                if (next.tag === 'STC' && next.elements[0]?.value?.includes(':')) break; // Next claim status
+                if (next.tag === 'HL' || next.tag === 'SE') break;
 
-        // Dates (Check Date)
-        if (seg.tag === 'DTP') {
-             // DTP*576 Check Date
-             const qual = seg.elements[0]?.value;
-             const date = formatDate(seg.elements[2]?.value);
-             if (currentClaim && !currentLine && qual === '576') {
-                 currentClaim.checkDate = date;
-             }
+                if (next.tag === 'SVC') {
+                    const proc = next.elements[0]?.value;
+                    const charge = next.elements[1]?.value;
+                    const paid = next.elements[2]?.value;
+                    
+                    // SVC Status usually in adjacent STC
+                    let lineStatus = "";
+                    let lineCat = "";
+                    if (flat[k+1]?.tag === 'STC') {
+                        const lParts = flat[k+1].elements[0]?.value.split(':');
+                        lineCat = lParts[0];
+                        lineStatus = lParts[1];
+                    }
+
+                    row.serviceLines.push({
+                        lineId: '',
+                        procedureCode: proc?.split(':')[1] || proc || '',
+                        procedureDesc: '',
+                        chargeAmount: charge || '0',
+                        paymentAmount: paid || '0',
+                        date: '',
+                        units: next.elements[4]?.value || '1',
+                        adjustments: [],
+                        statusCategory: lineCat,
+                        statusCode: lineStatus
+                    });
+                }
+            }
+
+            rows.push(row);
         }
-    }
-    
-    pushClaim(); // Close last claim
+    });
+
     return rows;
-}
+};
 
-export const mapEdiToRemittance = (doc: EdiDocument): { info: PaymentInfo, claims: RemittanceClaim[] } => {
+export const mapEdiToRemittance = (doc: EdiDocument): { info: PaymentInfo | null, claims: RemittanceClaim[] } => {
     const flat = flattenSegments(doc.segments);
-    
-    const info: PaymentInfo = {
-        payerName: '', payerId: '', payeeName: '', payeeNpi: '', 
-        checkNumber: '', checkAmount: '0.00', checkDate: '', productionDate: '', paymentMethod: ''
-    };
-    
     const claims: RemittanceClaim[] = [];
-    let currentClaim: RemittanceClaim | null = null;
-    let currentLine: RemittanceServiceLine | null = null;
+    let info: PaymentInfo | null = null;
 
-    // Helper to capture adjustments
-    const extractAdjustments = (seg: EdiSegment): Adjustment[] => {
-        const adjs: Adjustment[] = [];
-        const group = seg.elements[0]?.value;
-        // Pairs start at index 1 (reason) and 2 (amount)
-        for (let i = 1; i < seg.elements.length; i += 3) {
-            const reason = seg.elements[i]?.value;
-            const amount = seg.elements[i+1]?.value;
-            const qty = seg.elements[i+2]?.value; // Quantity usually not present or optional
-            if (reason && amount) {
-                adjs.push({ groupCode: group, reasonCode: reason, amount, quantity: qty });
-            }
-        }
-        return adjs;
-    };
-
-    // Global Header Info
-    const gs = flat.find(s => s.tag === 'GS');
-    if (gs) info.productionDate = formatDate(gs.elements[3]?.value);
-
+    // Header BPR (Check Info)
     const bpr = flat.find(s => s.tag === 'BPR');
-    if (bpr) {
-        info.checkAmount = bpr.elements[1]?.value || '0.00';
-        info.paymentMethod = bpr.elements[3]?.value || '';
-        info.checkDate = formatDate(bpr.elements[15]?.value);
-    }
-
-    const trn = flat.find(s => s.tag === 'TRN' && s.elements[0]?.value === '1');
-    if (trn) info.checkNumber = trn.elements[1]?.value || '';
-
-    // Loop 1000A Payer
+    const trn = flat.find(s => s.tag === 'TRN'); // TRN*1*CheckNum
     const payer = flat.find(s => s.tag === 'N1' && s.elements[0]?.value === 'PR');
-    if (payer) {
-        info.payerName = payer.elements[1]?.value || '';
-        info.payerId = payer.elements[3]?.value || '';
+    const dtms = flat.filter(s => s.tag === 'DTM'); // 405 = Check Date
+
+    if (bpr) {
+        info = {
+            checkAmount: bpr.elements[1]?.value || '0',
+            checkNumber: trn?.elements[1]?.value || 'Unknown',
+            payerName: payer?.elements[1]?.value || 'Unknown Payer',
+            checkDate: formatDate(bpr.elements[15]?.value || dtms.find(d => d.elements[0]?.value === '405')?.elements[1]?.value)
+        };
     }
 
-    // Loop 1000B Payee
-    const payee = flat.find(s => s.tag === 'N1' && s.elements[0]?.value === 'PE');
-    if (payee) {
-        info.payeeName = payee.elements[1]?.value || '';
-        info.payeeNpi = payee.elements[3]?.value || '';
-    }
-
-    // Process Claims (Loop 2100)
-    for (let i = 0; i < flat.length; i++) {
-        const seg = flat[i];
-
-        if (seg.tag === 'CLP') {
-            // New Claim
-            if (currentClaim) {
-                if (currentLine) currentClaim.serviceLines.push(currentLine);
-                claims.push(currentClaim);
-                currentLine = null;
-            }
-
-            currentClaim = {
-                claimId: seg.elements[0]?.value,
-                status: seg.elements[1]?.value,
-                chargeAmount: seg.elements[2]?.value,
-                paidAmount: seg.elements[3]?.value,
-                patientResp: seg.elements[4]?.value,
-                claimType: seg.elements[5]?.value,
-                payerControlNumber: seg.elements[6]?.value,
+    flat.forEach((s, i) => {
+        if (s.tag === 'CLP') {
+            const claim: RemittanceClaim = {
+                claimId: s.elements[0]?.value || '',
+                status: s.elements[1]?.value || '',
+                chargeAmount: s.elements[2]?.value || '0',
+                paidAmount: s.elements[3]?.value || '0',
+                patientResp: s.elements[4]?.value || '0',
+                payerControlNumber: s.elements[6]?.value || '',
+                patientName: '',
+                patientId: '',
                 adjustments: [],
                 serviceLines: []
             };
-        }
 
-        if (currentClaim) {
-            // Claim Level Names (NM1)
-            if (seg.tag === 'NM1' && seg.elements[0]?.value === 'QC') {
-                const first = seg.elements[3]?.value || '';
-                const last = seg.elements[2]?.value || '';
-                currentClaim.patientName = `${first} ${last}`.trim();
-                currentClaim.patientId = seg.elements[8]?.value || '';
+            // Find Patient Name (NM1*QC)
+            const nm1 = flat.slice(i, i + 5).find(x => x.tag === 'NM1' && x.elements[0]?.value === 'QC');
+            if (nm1) {
+                claim.patientName = `${nm1.elements[3]?.value || ''} ${nm1.elements[2]?.value || ''}`.trim();
+                claim.patientId = nm1.elements[8]?.value || '';
             }
 
-            // Claim Level Dates
-            if (seg.tag === 'DTM') {
-                if (seg.elements[0]?.value === '232') currentClaim.startDate = formatDate(seg.elements[1]?.value);
-                if (seg.elements[0]?.value === '233') currentClaim.endDate = formatDate(seg.elements[1]?.value);
-            }
-
-            // Claim Adjustments (CAS) - if no SVC active
-            if (seg.tag === 'CAS' && !currentLine) {
-                currentClaim.adjustments.push(...extractAdjustments(seg));
-            }
-
-            // Service Lines (SVC)
-            if (seg.tag === 'SVC') {
-                if (currentLine) currentClaim.serviceLines.push(currentLine);
+            // Find Claim Adjustments (CAS)
+            for (let k = i + 1; k < flat.length; k++) {
+                const next = flat[k];
+                if (next.tag === 'CLP' || next.tag === 'SE' || next.tag === 'LX' || next.tag === 'SVC') break; // End of claim header
                 
-                const comp = seg.elements[0]?.value.split(':');
-                const proc = comp.length > 1 ? comp[1] : comp[0];
-
-                currentLine = {
-                    procedureCode: proc,
-                    chargeAmount: seg.elements[1]?.value,
-                    paidAmount: seg.elements[2]?.value,
-                    revenueCode: seg.elements[3]?.value,
-                    units: seg.elements[4]?.value,
-                    adjustments: []
-                };
-            }
-
-            if (currentLine) {
-                if (seg.tag === 'DTM' && seg.elements[0]?.value === '472') {
-                    currentLine.date = formatDate(seg.elements[1]?.value);
-                }
-                if (seg.tag === 'CAS') {
-                    currentLine.adjustments.push(...extractAdjustments(seg));
-                }
-                if (seg.tag === 'REF' && seg.elements[0]?.value === '6R') {
-                    currentLine.refId = seg.elements[1]?.value;
+                if (next.tag === 'CAS') {
+                    // Multiple adjustments in one segment possible: Group*Reason*Amt*Qty*Reason*Amt...
+                    // Standard says: Group, Reason, Amt, Qty, Reason, Amt...
+                    const group = next.elements[0]?.value;
+                    // Loop pairs
+                    for(let el = 1; el < next.elements.length; el+=3) {
+                        const r = next.elements[el]?.value;
+                        const a = next.elements[el+1]?.value;
+                        if (r && a) {
+                            claim.adjustments.push({ groupCode: group, reasonCode: r, amount: a });
+                        }
+                    }
                 }
             }
+
+            // Find Service Lines (SVC loop)
+            // Loop until next CLP or SE
+            for (let k = i + 1; k < flat.length; k++) {
+                const next = flat[k];
+                if (next.tag === 'CLP' || next.tag === 'SE') break;
+
+                if (next.tag === 'SVC') {
+                    const proc = next.elements[0]?.value; // Composite HC:Code
+                    const svcLine: RemittanceServiceLine = {
+                        procedureCode: proc?.split(':')[1] || proc || '',
+                        chargeAmount: next.elements[1]?.value || '0',
+                        paidAmount: next.elements[2]?.value || '0',
+                        units: next.elements[4]?.value || '',
+                        date: '',
+                        adjustments: []
+                    };
+
+                    // Line Date
+                    const lineDtm = flat[k+1]?.tag === 'DTM' ? flat[k+1] : null;
+                    if (lineDtm && lineDtm.elements[0]?.value === '472') {
+                        svcLine.date = formatDate(lineDtm.elements[1]?.value);
+                    }
+
+                    // Line Adjustments
+                    // Scan small window
+                    for(let m = k + 1; m < k + 10 && m < flat.length; m++) {
+                        const sub = flat[m];
+                        if (sub.tag === 'SVC' || sub.tag === 'CLP') break;
+                        if (sub.tag === 'CAS') {
+                            const group = sub.elements[0]?.value;
+                            for(let el = 1; el < sub.elements.length; el+=3) {
+                                const r = sub.elements[el]?.value;
+                                const a = sub.elements[el+1]?.value;
+                                if (r && a) {
+                                    svcLine.adjustments.push({ groupCode: group, reasonCode: r, amount: a });
+                                }
+                            }
+                        }
+                    }
+                    claim.serviceLines.push(svcLine);
+                }
+            }
+
+            claims.push(claim);
         }
-    }
-
-    // Push final claim
-    if (currentClaim) {
-        if (currentLine) currentClaim.serviceLines.push(currentLine);
-        claims.push(currentClaim);
-    }
+    });
 
     return { info, claims };
+};
+
+export const mapEdiToOrder = (doc: EdiDocument): OrderData => {
+    const flat = flattenSegments(doc.segments);
+    const data: OrderData = {
+        id: 'Unknown',
+        date: '',
+        type: doc.transactionType === '850' ? 'Purchase Order' : doc.transactionType === '810' ? 'Invoice' : 'Ship Notice',
+        buyer: '',
+        seller: '',
+        shipTo: '',
+        lines: [],
+        totalAmount: '0.00'
+    };
+
+    // ID extraction
+    if (doc.transactionType === '850') {
+        const beg = flat.find(s => s.tag === 'BEG');
+        if (beg) {
+            data.id = beg.elements[2]?.value;
+            data.date = formatDate(beg.elements[4]?.value);
+        }
+    } else if (doc.transactionType === '810') {
+        const big = flat.find(s => s.tag === 'BIG');
+        if (big) {
+            data.id = big.elements[1]?.value;
+            data.date = formatDate(big.elements[0]?.value);
+        }
+    } else if (doc.transactionType === '856') {
+        const bsn = flat.find(s => s.tag === 'BSN');
+        if (bsn) {
+            data.id = bsn.elements[1]?.value;
+            data.date = formatDate(bsn.elements[2]?.value);
+        }
+    }
+
+    // Addresses
+    flat.forEach((s, idx) => {
+        if (s.tag === 'N1') {
+            const role = s.elements[0]?.value;
+            const name = s.elements[1]?.value;
+            const nextN3 = flat[idx+1]?.tag === 'N3' ? flat[idx+1] : null;
+            const nextN4 = flat[idx+2]?.tag === 'N4' ? flat[idx+2] : null;
+            
+            let addr = name || '';
+            if (nextN3) addr += `\n${nextN3.elements[0]?.value || ''}`;
+            if (nextN4) addr += `\n${nextN4.elements[0]?.value || ''}, ${nextN4.elements[1]?.value || ''} ${nextN4.elements[2]?.value || ''}`;
+
+            if (role === 'BY' || role === 'BT') data.buyer = addr;
+            if (role === 'SE' || role === 'VN') data.seller = addr;
+            if (role === 'ST') data.shipTo = addr;
+        }
+    });
+
+    // Lines
+    let totalCalc = 0;
+    flat.forEach((s, idx) => {
+        if (s.tag === 'PO1' || s.tag === 'IT1') {
+            const qty = s.elements[1]?.value || '0';
+            const price = s.elements[3]?.value || '0';
+            const line: OrderLine = {
+                lineNumber: s.elements[0]?.value || '',
+                quantity: qty,
+                uom: s.elements[2]?.value || '',
+                unitPrice: price,
+                partNumber: '',
+                description: ''
+            };
+
+            // Scan for part number (VP/BP)
+            for(let i=5; i < s.elements.length; i+=2) {
+                if (s.elements[i]?.value === 'VP' || s.elements[i]?.value === 'BP') {
+                    line.partNumber = s.elements[i+1]?.value;
+                    break;
+                }
+            }
+
+            // Description PID
+            const pid = flat.slice(idx, idx+5).find(x => x.tag === 'PID');
+            if (pid) line.description = pid.elements[4]?.value;
+
+            data.lines.push(line);
+            totalCalc += parseFloat(qty) * parseFloat(price);
+        }
+        else if (s.tag === 'LIN' && doc.transactionType === '856') {
+            // ASN Lines are tricky, usually LIN loop
+            const line: OrderLine = {
+                lineNumber: s.elements[0]?.value || '',
+                partNumber: '',
+                description: '',
+                quantity: '',
+                uom: '',
+                unitPrice: '0'
+            };
+            if (s.elements[1]?.value === 'VP') line.partNumber = s.elements[2]?.value;
+            
+            // SN1 follows for qty
+            const sn1 = flat.slice(idx, idx+5).find(x => x.tag === 'SN1');
+            if (sn1) {
+                line.quantity = sn1.elements[1]?.value;
+                line.uom = sn1.elements[2]?.value;
+            }
+            data.lines.push(line);
+        }
+    });
+
+    if (doc.transactionType === '810') {
+        const tds = flat.find(s => s.tag === 'TDS');
+        if (tds) {
+            // TDS is amount * 100 usually, but sometimes decimal.
+            // Simplified:
+            const val = parseFloat(tds.elements[0]?.value);
+            data.totalAmount = (val / 100).toFixed(2);
+        } else {
+            data.totalAmount = totalCalc.toFixed(2);
+        }
+    } else {
+        data.totalAmount = totalCalc.toFixed(2);
+    }
+
+    return data;
+};
+
+export const mapEdiToForm850 = (doc: EdiDocument): Partial<FormData850> => {
+    const flat = flattenSegments(doc.segments);
+    const data: Partial<FormData850> = {
+        lines: []
+    };
+
+    // Header BEG
+    const beg = flat.find(s => s.tag === 'BEG');
+    if (beg) {
+        data.poNumber = beg.elements[2]?.value || '';
+        data.poDate = formatDate(beg.elements[4]?.value);
+    }
+
+    // Header N1s
+    flat.forEach((s, idx) => {
+        if (s.tag === 'N1') {
+            const id = s.elements[0]?.value;
+            const name = s.elements[1]?.value;
+            const code = s.elements[3]?.value;
+
+            if (id === 'BY') {
+                data.buyerName = name;
+                data.buyerId = code;
+            } else if (id === 'SE') {
+                data.sellerName = name;
+                data.sellerId = code;
+            } else if (id === 'ST') {
+                data.shipToName = name;
+                // Look ahead for N3/N4
+                const n3 = flat[idx+1];
+                if (n3 && n3.tag === 'N3') data.shipToAddress = n3.elements[0]?.value;
+                const n4 = flat[idx+2];
+                if (n4 && n4.tag === 'N4') {
+                    data.shipToCity = n4.elements[0]?.value;
+                    data.shipToState = n4.elements[1]?.value;
+                    data.shipToZip = n4.elements[2]?.value;
+                }
+            }
+        }
+    });
+
+    // Lines PO1
+    flat.forEach((s, idx) => {
+        if (s.tag === 'PO1') {
+            const line: OrderLineItem = {
+                lineNo: s.elements[0]?.value || '',
+                qty: s.elements[1]?.value || '0',
+                uom: s.elements[2]?.value || 'EA',
+                price: s.elements[3]?.value || '0.00',
+                partNumber: '',
+                description: ''
+            };
+
+            // Part Number (VP)
+            for(let i=5; i < s.elements.length; i+=2) {
+                const qual = s.elements[i]?.value;
+                const val = s.elements[i+1]?.value;
+                if (qual === 'VP') {
+                    line.partNumber = val;
+                    break;
+                }
+            }
+
+            // Description (PID)
+            for(let k=1; k<=5; k++) {
+                const next = flat[idx+k];
+                if (!next || next.tag === 'PO1') break;
+                if (next.tag === 'PID' && next.elements[4]?.value) {
+                    line.description = next.elements[4].value;
+                    break;
+                }
+            }
+            data.lines?.push(line);
+        }
+    });
+
+    return data;
+};
+
+export const mapEdiToForm810 = (doc: EdiDocument): Partial<FormData810> => {
+    const flat = flattenSegments(doc.segments);
+    const data: Partial<FormData810> = {
+        lines: []
+    };
+
+    // Header BIG
+    const big = flat.find(s => s.tag === 'BIG');
+    if (big) {
+        data.invoiceDate = formatDate(big.elements[0]?.value);
+        data.invoiceNumber = big.elements[1]?.value;
+        data.poNumber = big.elements[3]?.value;
+    }
+
+    // Header N1s
+    flat.forEach((s) => {
+        if (s.tag === 'N1') {
+            const id = s.elements[0]?.value;
+            const name = s.elements[1]?.value;
+            const code = s.elements[3]?.value;
+
+            if (id === 'BY') {
+                data.buyerName = name;
+                data.buyerId = code;
+            } else if (id === 'SE') {
+                data.sellerName = name;
+                data.sellerId = code;
+            }
+        }
+    });
+
+    // Lines IT1
+    flat.forEach((s, idx) => {
+        if (s.tag === 'IT1') {
+            const line: OrderLineItem = {
+                lineNo: s.elements[0]?.value || '',
+                qty: s.elements[1]?.value || '0',
+                uom: s.elements[2]?.value || 'EA',
+                price: s.elements[3]?.value || '0.00',
+                partNumber: '',
+                description: ''
+            };
+
+            // Part Number (VP)
+            for(let i=5; i < s.elements.length; i+=2) {
+                const qual = s.elements[i]?.value;
+                const val = s.elements[i+1]?.value;
+                if (qual === 'VP') {
+                    line.partNumber = val;
+                    break;
+                }
+            }
+
+            // Description (PID)
+            for(let k=1; k<=5; k++) {
+                const next = flat[idx+k];
+                if (!next || next.tag === 'IT1') break;
+                if (next.tag === 'PID' && next.elements[4]?.value) {
+                    line.description = next.elements[4].value;
+                    break;
+                }
+            }
+            data.lines?.push(line);
+        }
+    });
+
+    return data;
+};
+
+export const mapEdiToForm856 = (doc: EdiDocument): Partial<FormData856> => {
+    const flat = flattenSegments(doc.segments);
+    const data: Partial<FormData856> = {
+        lines: []
+    };
+
+    const bsn = flat.find(s => s.tag === 'BSN');
+    if(bsn) {
+        data.shipmentId = bsn.elements[1]?.value;
+        data.shipDate = formatDate(bsn.elements[2]?.value);
+        data.shipTime = bsn.elements[3]?.value;
+    }
+
+    const td5 = flat.find(s => s.tag === 'TD5');
+    if(td5) data.carrierCode = td5.elements[2]?.value;
+
+    const refCn = flat.find(s => s.tag === 'REF' && (s.elements[0]?.value === 'CN' || s.elements[0]?.value === 'BM'));
+    if(refCn) data.trackingNumber = refCn.elements[1]?.value;
+
+    flat.forEach((s, idx) => {
+        if (s.tag === 'N1') {
+            const id = s.elements[0]?.value;
+            if (id === 'SF' || id === 'SE') {
+                data.sellerName = s.elements[1]?.value;
+                data.sellerId = s.elements[3]?.value;
+            } else if (id === 'ST') {
+                data.shipToName = s.elements[1]?.value;
+                const n3 = flat[idx+1]?.tag === 'N3' ? flat[idx+1] : null;
+                const n4 = flat[idx+2]?.tag === 'N4' ? flat[idx+2] : null;
+                if(n3) data.shipToAddress = n3.elements[0]?.value;
+                if(n4) {
+                    data.shipToCity = n4.elements[0]?.value;
+                    data.shipToState = n4.elements[1]?.value;
+                    data.shipToZip = n4.elements[2]?.value;
+                }
+            }
+        }
+    });
+
+    let currentPO = '';
+    flat.forEach((s, idx) => {
+        if(s.tag === 'PRF') {
+            currentPO = s.elements[0]?.value;
+        }
+        if(s.tag === 'LIN') {
+            const lineNo = s.elements[0]?.value;
+            let partNumber = '';
+            for(let i=1; i<s.elements.length; i+=2) {
+                if(s.elements[i]?.value === 'VP' || s.elements[i]?.value === 'BP') {
+                    partNumber = s.elements[i+1]?.value;
+                    break;
+                }
+            }
+            
+            const sn1 = flat[idx+1]?.tag === 'SN1' ? flat[idx+1] : null;
+            const qty = sn1 ? sn1.elements[1]?.value : '0';
+            const uom = sn1 ? sn1.elements[2]?.value : 'EA';
+
+            data.lines?.push({
+                lineNo: lineNo || '',
+                poNumber: currentPO,
+                partNumber,
+                qty,
+                uom
+            });
+        }
+    });
+
+    return data;
 };
