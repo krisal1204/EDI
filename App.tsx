@@ -432,6 +432,30 @@ function App() {
       processEdi(ediToUse, true, undefined, index !== -1 ? index : undefined);
   };
 
+  const resetState = () => {
+    setFormData(INITIAL_FORM_DATA);
+    setFormData276(INITIAL_FORM_DATA_276);
+    setFormData837(INITIAL_FORM_DATA_837);
+    setFormData834(INITIAL_FORM_DATA_834);
+    setFormData850(INITIAL_FORM_DATA_850);
+    setFormData810(INITIAL_FORM_DATA_810);
+    setFormData856(INITIAL_FORM_DATA_856);
+    setRawEdi('');
+    setOriginalEdi('');
+    setDoc(null);
+    setBenefits([]);
+    setClaims([]);
+    setRecords([]);
+    setPaymentInfo(null);
+    setRemittanceClaims([]);
+    setOrderData(null);
+    setSelectedRecordId(null);
+    setHighlightedField(null);
+    setJsonExpandMode('auto');
+    setJsonViewKey(0);
+    setJsonDisplayType('structure');
+  };
+
   const handleResetAll = () => {
      if (originalEdi) {
          setRawEdi(originalEdi);
@@ -551,31 +575,11 @@ function App() {
   };
 
   const handleClear = () => {
-    setFormData(INITIAL_FORM_DATA);
-    setFormData276(INITIAL_FORM_DATA_276);
-    setFormData837(INITIAL_FORM_DATA_837);
-    setFormData834(INITIAL_FORM_DATA_834);
-    setFormData850(INITIAL_FORM_DATA_850);
-    setFormData810(INITIAL_FORM_DATA_810);
-    setFormData856(INITIAL_FORM_DATA_856);
-    setRawEdi('');
-    setOriginalEdi('');
-    setDoc(null);
-    setBenefits([]);
-    setClaims([]);
-    setRecords([]);
-    setPaymentInfo(null);
-    setRemittanceClaims([]);
-    setOrderData(null);
-    setSelectedRecordId(null);
-    setHighlightedField(null);
+    resetState();
+    setGeneratorMode(industry === 'manufacturing' ? '850' : '270');
     setViewMode('inspector');
     setSidebarWidth(700); 
     setLastTransactionType('Unknown');
-    setGeneratorMode(industry === 'manufacturing' ? '850' : '270');
-    setJsonExpandMode('auto');
-    setJsonViewKey(0);
-    setJsonDisplayType('structure');
   };
 
   const handleCopy = async (content: string) => {
@@ -863,6 +867,7 @@ function App() {
       return (
         <Landing 
             onEnter={(ind) => { 
+                resetState();
                 setCurrentPage('workspace'); 
                 setIndustry(ind);
                 setGeneratorMode(ind === 'manufacturing' ? '850' : '270');
