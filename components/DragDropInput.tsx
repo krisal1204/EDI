@@ -9,12 +9,16 @@ import {
     sample835, 
     sample837Inst, 
     sample837Prof,
+    sample850,
+    sample810,
+    sample856,
     ADVANCED_SAMPLES,
     SampleScenario
 } from '../sample-data/samples';
 
 interface Props {
   onProcess: (text: string) => void;
+  industry: 'healthcare' | 'manufacturing';
 }
 
 const ButtonGroup = ({ title, children, scenarios, onScenarioSelect }: { 
@@ -56,7 +60,7 @@ const SampleButton = ({ code, label, onClick }: { code: string, label: string, o
     </button>
 );
 
-export const DragDropInput: React.FC<Props> = ({ onProcess }) => {
+export const DragDropInput: React.FC<Props> = ({ onProcess, industry }) => {
   const [text, setText] = useState('');
   const [isDragging, setIsDragging] = useState(false);
 
@@ -97,7 +101,7 @@ export const DragDropInput: React.FC<Props> = ({ onProcess }) => {
 
   return (
     <div className="h-full flex flex-col p-8 bg-white dark:bg-slate-950 overflow-y-auto custom-scrollbar">
-      <div className="max-w-4xl mx-auto w-full flex-1 flex flex-col justify-center">
+      <div className="max-w-5xl mx-auto w-full flex-1 flex flex-col justify-center">
         
         <div className="text-center mb-10">
             <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-3 tracking-tight">X12 EDI Inspector</h2>
@@ -150,29 +154,41 @@ export const DragDropInput: React.FC<Props> = ({ onProcess }) => {
         <div className="border-t border-gray-100 dark:border-slate-800 pt-8">
             <p className="text-center text-xs text-gray-400 dark:text-slate-500 mb-6 font-medium uppercase tracking-widest">Or load a sample transaction</p>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-6">
-                <ButtonGroup title="Enrollment" scenarios={scenarios.enrollment} onScenarioSelect={handleScenarioSelect}>
-                    <SampleButton code="834" label="Maintenance" onClick={() => { setText(sample834); onProcess(sample834); }} />
-                </ButtonGroup>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-6 justify-center">
+                {industry === 'manufacturing' && (
+                    <ButtonGroup title="Supply Chain">
+                        <SampleButton code="850" label="Purchase Order" onClick={() => { setText(sample850); onProcess(sample850); }} />
+                        <SampleButton code="810" label="Invoice" onClick={() => { setText(sample810); onProcess(sample810); }} />
+                        <SampleButton code="856" label="Ship Notice" onClick={() => { setText(sample856); onProcess(sample856); }} />
+                    </ButtonGroup>
+                )}
 
-                <ButtonGroup title="Eligibility" scenarios={scenarios.eligibility} onScenarioSelect={handleScenarioSelect}>
-                    <SampleButton code="270" label="Inquiry" onClick={() => { setText(sample270); onProcess(sample270); }} />
-                    <SampleButton code="271" label="Response" onClick={() => { setText(sample271); onProcess(sample271); }} />
-                </ButtonGroup>
+                {industry === 'healthcare' && (
+                    <>
+                        <ButtonGroup title="Enrollment" scenarios={scenarios.enrollment} onScenarioSelect={handleScenarioSelect}>
+                            <SampleButton code="834" label="Maintenance" onClick={() => { setText(sample834); onProcess(sample834); }} />
+                        </ButtonGroup>
 
-                <ButtonGroup title="File Claims" scenarios={scenarios.claims} onScenarioSelect={handleScenarioSelect}>
-                    <SampleButton code="837P" label="Professional" onClick={() => { setText(sample837Prof); onProcess(sample837Prof); }} />
-                    <SampleButton code="837I" label="Institutional" onClick={() => { setText(sample837Inst); onProcess(sample837Inst); }} />
-                </ButtonGroup>
-                
-                <ButtonGroup title="Claim Status" scenarios={scenarios.status} onScenarioSelect={handleScenarioSelect}>
-                    <SampleButton code="276" label="Status Req" onClick={() => { setText(sample276); onProcess(sample276); }} />
-                    <SampleButton code="277" label="Status Resp" onClick={() => { setText(sample277); onProcess(sample277); }} />
-                </ButtonGroup>
+                        <ButtonGroup title="Eligibility" scenarios={scenarios.eligibility} onScenarioSelect={handleScenarioSelect}>
+                            <SampleButton code="270" label="Inquiry" onClick={() => { setText(sample270); onProcess(sample270); }} />
+                            <SampleButton code="271" label="Response" onClick={() => { setText(sample271); onProcess(sample271); }} />
+                        </ButtonGroup>
 
-                <ButtonGroup title="Payment" scenarios={scenarios.payment} onScenarioSelect={handleScenarioSelect}>
-                    <SampleButton code="835" label="Remittance" onClick={() => { setText(sample835); onProcess(sample835); }} />
-                </ButtonGroup>
+                        <ButtonGroup title="File Claims" scenarios={scenarios.claims} onScenarioSelect={handleScenarioSelect}>
+                            <SampleButton code="837P" label="Professional" onClick={() => { setText(sample837Prof); onProcess(sample837Prof); }} />
+                            <SampleButton code="837I" label="Institutional" onClick={() => { setText(sample837Inst); onProcess(sample837Inst); }} />
+                        </ButtonGroup>
+                        
+                        <ButtonGroup title="Claim Status" scenarios={scenarios.status} onScenarioSelect={handleScenarioSelect}>
+                            <SampleButton code="276" label="Status Req" onClick={() => { setText(sample276); onProcess(sample276); }} />
+                            <SampleButton code="277" label="Status Resp" onClick={() => { setText(sample277); onProcess(sample277); }} />
+                        </ButtonGroup>
+
+                        <ButtonGroup title="Payment" scenarios={scenarios.payment} onScenarioSelect={handleScenarioSelect}>
+                            <SampleButton code="835" label="Remittance" onClick={() => { setText(sample835); onProcess(sample835); }} />
+                        </ButtonGroup>
+                    </>
+                )}
             </div>
         </div>
       </div>
