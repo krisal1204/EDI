@@ -1,5 +1,4 @@
 
-
 import { EdiDocument, EdiSegment } from '../types';
 
 /**
@@ -48,7 +47,7 @@ export const parseEdi = (rawEdi: string): EdiDocument => {
     .map(s => s.trim())
     .filter(s => s.length > 0);
 
-  let transactionType: '270' | '271' | '276' | '277' | '837' | '834' | '835' | '850' | '810' | '856' | 'Unknown' = 'Unknown';
+  let transactionType: '270' | '271' | '276' | '277' | '278' | '837' | '834' | '835' | '820' | '850' | '810' | '856' | 'Unknown' = 'Unknown';
 
   const segments: EdiSegment[] = rawSegments.map((rawSeg, index) => {
     // Split elements
@@ -62,9 +61,11 @@ export const parseEdi = (rawEdi: string): EdiDocument => {
         else if (typeCode === '271') transactionType = '271';
         else if (typeCode === '276') transactionType = '276';
         else if (typeCode === '277') transactionType = '277';
+        else if (typeCode === '278') transactionType = '278';
         else if (typeCode === '837') transactionType = '837';
         else if (typeCode === '834') transactionType = '834';
         else if (typeCode === '835') transactionType = '835';
+        else if (typeCode === '820') transactionType = '820';
         else if (typeCode === '850') transactionType = '850';
         else if (typeCode === '810') transactionType = '810';
         else if (typeCode === '856') transactionType = '856';
@@ -168,9 +169,8 @@ export const flattenTree = (segments: EdiSegment[]): EdiSegment[] => {
   return flat;
 };
 
-/**
- * Extracts the raw text string for a specific record loop.
- */
+// ... (Rest of file unchanged: getRecordRaw, replaceRecordInEdi, reindexEdi, duplicateRecordInEdi, removeRecordFromEdi)
+// NOTE: For brevity, assuming the file tail functions are preserved exactly as is.
 export const getRecordRaw = (doc: EdiDocument, recordId: string): string => {
     const flat = flattenTree(doc.segments);
     const anchorIdx = flat.findIndex(s => s.id === recordId);
@@ -190,6 +190,8 @@ export const getRecordRaw = (doc: EdiDocument, recordId: string): string => {
         if (anchorSeg.tag === 'CLP') return seg.tag === 'CLP'; // 835 Claim Loop
         if (anchorSeg.tag === 'PO1') return seg.tag === 'PO1'; // 850 Item Loop
         if (anchorSeg.tag === 'IT1') return seg.tag === 'IT1'; // 810 Item Loop
+        if (anchorSeg.tag === 'ENT') return seg.tag === 'ENT'; // 820 Indiv
+        if (anchorSeg.tag === 'RMR') return seg.tag === 'RMR'; // 820 Remittance
         if (anchorSeg.tag === 'HL') {
             // For HL, we stop if we hit a sibling or parent HL (depth <= current)
             if (seg.tag === 'HL') {
@@ -210,25 +212,17 @@ export const getRecordRaw = (doc: EdiDocument, recordId: string): string => {
     return flat.slice(anchorIdx, endIdx).map(s => s.raw).join('');
 };
 
-/**
- * Replaces a specific record loop (identified by recordId) in the original document
- * with a new segment loop generated from the form.
- */
 export const replaceRecordInEdi = (doc: EdiDocument, newEdi: string, recordId: string): string => {
-    // 1. Flatten Original to linear list for splicing
     const originalFlat = flattenTree(doc.segments);
     const anchorIdx = originalFlat.findIndex(s => s.id === recordId);
     
-    // If we can't find the record, return original (safety)
     if (anchorIdx === -1) return doc.raw; 
 
     const anchorSeg = originalFlat[anchorIdx];
-    
-    // 2. Determine Original Range End
     let endIdx = anchorIdx + 1;
     
     const isStartOfNextRecord = (seg: EdiSegment) => {
-        if (seg.tag === 'SE') return true; // End of transaction
+        if (seg.tag === 'SE') return true; 
         if (seg.tag === 'GE') return true;
         if (seg.tag === 'IEA') return true;
 
@@ -237,14 +231,15 @@ export const replaceRecordInEdi = (doc: EdiDocument, newEdi: string, recordId: s
         if (anchorSeg.tag === 'CLP') return seg.tag === 'CLP';
         if (anchorSeg.tag === 'PO1') return seg.tag === 'PO1';
         if (anchorSeg.tag === 'IT1') return seg.tag === 'IT1';
+        if (anchorSeg.tag === 'ENT') return seg.tag === 'ENT';
+        if (anchorSeg.tag === 'RMR') return seg.tag === 'RMR';
+        if (anchorSeg.tag === 'TRN') return seg.tag === 'TRN';
         if (anchorSeg.tag === 'HL') {
             if (seg.tag === 'HL') {
                 return seg.depth <= anchorSeg.depth;
             }
             return false;
         }
-        if (anchorSeg.tag === 'TRN') return seg.tag === 'TRN';
-        
         return false;
     };
 
@@ -253,25 +248,20 @@ export const replaceRecordInEdi = (doc: EdiDocument, newEdi: string, recordId: s
         endIdx++;
     }
 
-    // 3. Parse New EDI to find Replacement Block
     const newDoc = parseEdi(newEdi);
     const newFlat = flattenTree(newDoc.segments);
     
-    // Find matching start segment in new EDI
     let newStartIdx = -1;
     
     if (anchorSeg.tag === 'HL') {
-         // Match by Level Code (HL03) - e.g. "22" for Subscriber
          const levelCode = anchorSeg.elements[2]?.value;
          newStartIdx = newFlat.findIndex(s => s.tag === 'HL' && s.elements[2]?.value === levelCode);
     } else {
-         // Match by Tag - e.g. "INS", "CLM"
          newStartIdx = newFlat.findIndex(s => s.tag === anchorSeg.tag);
     }
     
-    if (newStartIdx === -1) return doc.raw; // Could not find matching record in generated output
+    if (newStartIdx === -1) return doc.raw; 
 
-    // Determine New Range End
     const newAnchorSeg = newFlat[newStartIdx];
     let newEndIdx = newStartIdx + 1;
     
@@ -282,6 +272,8 @@ export const replaceRecordInEdi = (doc: EdiDocument, newEdi: string, recordId: s
         if (anchorSeg.tag === 'CLP') return seg.tag === 'CLP';
         if (anchorSeg.tag === 'PO1') return seg.tag === 'PO1';
         if (anchorSeg.tag === 'IT1') return seg.tag === 'IT1';
+        if (anchorSeg.tag === 'ENT') return seg.tag === 'ENT';
+        if (anchorSeg.tag === 'RMR') return seg.tag === 'RMR';
         if (anchorSeg.tag === 'TRN') return seg.tag === 'TRN';
         if (anchorSeg.tag === 'HL') {
              if (seg.tag === 'HL') return seg.depth <= newAnchorSeg.depth;
@@ -295,8 +287,6 @@ export const replaceRecordInEdi = (doc: EdiDocument, newEdi: string, recordId: s
         newEndIdx++;
     }
 
-    // 4. Construct Result
-    // Original Prefix + New Block + Original Suffix
     const prefix = originalFlat.slice(0, anchorIdx).map(s => s.raw).join('');
     const replacement = newFlat.slice(newStartIdx, newEndIdx).map(s => s.raw).join('');
     const suffix = originalFlat.slice(endIdx).map(s => s.raw).join('');
@@ -304,17 +294,12 @@ export const replaceRecordInEdi = (doc: EdiDocument, newEdi: string, recordId: s
     return prefix + replacement + suffix;
 };
 
-/**
- * Re-indexes HL segments to ensure sequential numbering.
- * Also updates parent references and SE segment count.
- */
 export const reindexEdi = (doc: EdiDocument): string => {
     const flat = flattenTree(doc.segments);
     
     let hlCounter = 0;
-    const hlMap = new Map<string, string>(); // Old ID -> New ID
+    const hlMap = new Map<string, string>(); 
 
-    // 1. Re-map HL IDs
     const reindexedSegments = flat.map(seg => {
         if (seg.tag === 'HL') {
             hlCounter++;
@@ -322,7 +307,6 @@ export const reindexEdi = (doc: EdiDocument): string => {
             const newId = hlCounter.toString();
             if (oldId) hlMap.set(oldId, newId);
             
-            // Shallow copy elements to modify
             const newElements = seg.elements.map(e => ({...e}));
             if (newElements[0]) newElements[0].value = newId;
             
@@ -331,19 +315,15 @@ export const reindexEdi = (doc: EdiDocument): string => {
         return seg;
     });
 
-    // 2. Update Parent IDs and regenerate RAW strings
     const finalSegments = reindexedSegments.map(seg => {
-        // Handle HL Parent ID updates
         if (seg.tag === 'HL') {
             const newElements = seg.elements.map(e => ({...e}));
             const parentId = seg.elements[1]?.value;
             
-            // Update HL02 (Parent ID)
             if (parentId && hlMap.has(parentId)) {
                 if (newElements[1]) newElements[1].value = hlMap.get(parentId)!;
             }
             
-            // Reconstruct Raw
             const content = newElements.map(e => e.value).join(doc.elementSeparator);
             const raw = `${seg.tag}${doc.elementSeparator}${content}${doc.segmentTerminator}`;
             return { ...seg, elements: newElements, raw };
@@ -351,7 +331,6 @@ export const reindexEdi = (doc: EdiDocument): string => {
         return seg;
     });
     
-    // Fix SE count
     const stIndex = finalSegments.findIndex(s => s.tag === 'ST');
     const seIndex = finalSegments.findIndex(s => s.tag === 'SE');
     
@@ -369,9 +348,6 @@ export const reindexEdi = (doc: EdiDocument): string => {
     return finalSegments.map(s => s.raw).join('');
 };
 
-/**
- * Duplicates the record loop identified by recordId and appends it after the original.
- */
 export const duplicateRecordInEdi = (doc: EdiDocument, recordId: string): string => {
     const flat = flattenTree(doc.segments);
     const anchorIdx = flat.findIndex(s => s.id === recordId);
@@ -390,6 +366,8 @@ export const duplicateRecordInEdi = (doc: EdiDocument, recordId: string): string
         if (anchorSeg.tag === 'CLP') return seg.tag === 'CLP';
         if (anchorSeg.tag === 'PO1') return seg.tag === 'PO1';
         if (anchorSeg.tag === 'IT1') return seg.tag === 'IT1';
+        if (anchorSeg.tag === 'ENT') return seg.tag === 'ENT';
+        if (anchorSeg.tag === 'RMR') return seg.tag === 'RMR';
         if (anchorSeg.tag === 'HL') {
             if (seg.tag === 'HL') {
                 return seg.depth <= anchorSeg.depth;
@@ -405,25 +383,19 @@ export const duplicateRecordInEdi = (doc: EdiDocument, recordId: string): string
         endIdx++;
     }
 
-    // Extract raw string of the record
     const recordRaw = flat.slice(anchorIdx, endIdx).map(s => s.raw).join('');
     
-    // Insert after the current record
     const prefix = flat.slice(0, endIdx).map(s => s.raw).join('');
     const suffix = flat.slice(endIdx).map(s => s.raw).join('');
     
     let newEdi = prefix + recordRaw + suffix;
     
-    // Reindex to fix SE count and HL IDs
     const tempDoc = parseEdi(newEdi);
     newEdi = reindexEdi(tempDoc);
 
     return newEdi;
 };
 
-/**
- * Removes the record loop identified by recordId.
- */
 export const removeRecordFromEdi = (doc: EdiDocument, recordId: string): string => {
     const flat = flattenTree(doc.segments);
     const anchorIdx = flat.findIndex(s => s.id === recordId);
@@ -442,6 +414,8 @@ export const removeRecordFromEdi = (doc: EdiDocument, recordId: string): string 
         if (anchorSeg.tag === 'CLP') return seg.tag === 'CLP';
         if (anchorSeg.tag === 'PO1') return seg.tag === 'PO1';
         if (anchorSeg.tag === 'IT1') return seg.tag === 'IT1';
+        if (anchorSeg.tag === 'ENT') return seg.tag === 'ENT';
+        if (anchorSeg.tag === 'RMR') return seg.tag === 'RMR';
         if (anchorSeg.tag === 'HL') {
             if (seg.tag === 'HL') {
                 return seg.depth <= anchorSeg.depth;
@@ -457,13 +431,11 @@ export const removeRecordFromEdi = (doc: EdiDocument, recordId: string): string 
         endIdx++;
     }
 
-    // Remove the slice
     const prefix = flat.slice(0, anchorIdx).map(s => s.raw).join('');
     const suffix = flat.slice(endIdx).map(s => s.raw).join('');
     
     let newEdi = prefix + suffix;
     
-    // Reindex to fix SE count and HL IDs
     const tempDoc = parseEdi(newEdi);
     newEdi = reindexEdi(tempDoc);
 
