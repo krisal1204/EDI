@@ -4,7 +4,7 @@ import { flattenTree } from './ediParser';
 import { 
     FormData270, FormData276, FormData837, FormData834, 
     ServiceLine837, Member834, FormData850, FormData810, 
-    OrderLineItem, FormData856, ShipNoticeLineItem
+    OrderLineItem, FormData856, ShipNoticeLineItem, FormData278, FormData820, Remittance820
 } from './ediBuilder';
 import { getProcedureDefinition } from './offlineAnalyzer';
 
@@ -277,6 +277,64 @@ export const mapEdiToForm276 = (doc: EdiDocument, recordId?: string): Partial<Fo
     return data;
 };
 
+export const mapEdiToForm278 = (doc: EdiDocument): Partial<FormData278> => {
+    const flat = flattenSegments(doc.segments);
+    const data: Partial<FormData278> = {};
+
+    // UMO (Payer) - X3
+    const umo = flat.find(s => s.tag === 'NM1' && s.elements[0]?.value === 'X3');
+    if(umo) {
+        data.umoName = umo.elements[2]?.value;
+        data.umoId = umo.elements[8]?.value;
+    }
+
+    // Requester (Provider) - 1P
+    const req = flat.find(s => s.tag === 'NM1' && s.elements[0]?.value === '1P');
+    if(req) {
+        data.requesterName = req.elements[2]?.value;
+        data.requesterNpi = req.elements[8]?.value;
+    }
+
+    // Subscriber - IL
+    const sub = flat.find(s => s.tag === 'NM1' && s.elements[0]?.value === 'IL');
+    if(sub) {
+        data.subscriberLastName = sub.elements[2]?.value;
+        data.subscriberFirstName = sub.elements[3]?.value;
+        data.subscriberId = sub.elements[8]?.value;
+        
+        const subIdx = flat.indexOf(sub);
+        const dmg = flat.slice(subIdx, subIdx+5).find(s => s.tag === 'DMG');
+        if(dmg) data.subscriberDob = formatDate(dmg.elements[1]?.value);
+    }
+
+    // Event Info (UM, HSD, SV1)
+    const um = flat.find(s => s.tag === 'UM');
+    if(um) {
+        data.serviceType = um.elements[2]?.value; 
+    }
+
+    const sv1 = flat.find(s => s.tag === 'SV1');
+    if(sv1) {
+        // HC:Code
+        const proc = sv1.elements[0]?.value;
+        data.procedureCode = proc?.split(':')[1] || proc;
+        data.quantity = sv1.elements[1]?.value;
+    }
+
+    const dtp = flat.find(s => s.tag === 'DTP' && s.elements[0]?.value === '472');
+    if(dtp) data.serviceDate = formatDate(dtp.elements[2]?.value);
+
+    // HI Segment for Diagnosis
+    const hi = flat.find(s => s.tag === 'HI');
+    if(hi) {
+        // BK:R69 or BF:R69
+        const diag = hi.elements[0]?.value;
+        data.diagnosisCode = diag?.split(':')[1] || diag;
+    }
+
+    return data;
+};
+
 export const mapEdiToForm837 = (doc: EdiDocument, recordId?: string): Partial<FormData837> => {
     const flat = flattenSegments(doc.segments);
     const data: Partial<FormData837> = {
@@ -374,7 +432,8 @@ export const mapEdiToForm837 = (doc: EdiDocument, recordId?: string): Partial<Fo
             const s = flat[i];
             if (s.tag === 'CLM' || s.tag === 'SE') break;
             
-            if (s.tag === 'SV1' || s.tag === 'SV2') {
+            // Check for SV1 (Prof), SV2 (Inst), SV3 (Dental)
+            if (s.tag === 'SV1' || s.tag === 'SV2' || s.tag === 'SV3') {
                 const line: ServiceLine837 = {
                     procedureCode: '',
                     lineCharge: '',
@@ -384,16 +443,23 @@ export const mapEdiToForm837 = (doc: EdiDocument, recordId?: string): Partial<Fo
                 
                 // SV1 Professional: HC:99213
                 // SV2 Institutional: 0320 (Rev) HC:99213 (Proc)
+                // SV3 Dental: AD:D1110
                 if (s.tag === 'SV1') {
                     const proc = s.elements[0]?.value; // SV101
                     line.procedureCode = proc?.split(':')[1] || proc;
                     line.lineCharge = s.elements[1]?.value;
                     line.units = s.elements[3]?.value;
-                } else {
+                } else if (s.tag === 'SV2') {
                     const proc = s.elements[1]?.value; // SV202
                     line.procedureCode = proc?.split(':')[1] || proc;
                     line.lineCharge = s.elements[2]?.value;
                     line.units = s.elements[4]?.value;
+                } else if (s.tag === 'SV3') {
+                    const proc = s.elements[0]?.value;
+                    line.procedureCode = proc?.split(':')[1] || proc;
+                    line.lineCharge = s.elements[1]?.value;
+                    line.units = s.elements[5]?.value; // SV306 is units
+                    if (data.type !== 'Dental') data.type = 'Dental';
                 }
 
                 // Date DTP*472
@@ -487,6 +553,59 @@ export const mapEdiToForm834 = (doc: EdiDocument, recordId?: string): Partial<Fo
     return data;
 };
 
+export const mapEdiToForm820 = (doc: EdiDocument): Partial<FormData820> => {
+    const flat = flattenSegments(doc.segments);
+    const data: Partial<FormData820> = {
+        remittances: []
+    };
+
+    // BPR (Total)
+    const bpr = flat.find(s => s.tag === 'BPR');
+    if(bpr) {
+        data.totalPayment = bpr.elements[1]?.value;
+        data.checkDate = formatDate(bpr.elements[15]?.value);
+    }
+
+    const trn = flat.find(s => s.tag === 'TRN');
+    if(trn) data.checkNumber = trn.elements[1]?.value;
+
+    const pe = flat.find(s => s.tag === 'N1' && s.elements[0]?.value === 'PE'); // Payee
+    if(pe) {
+        data.premiumReceiverName = pe.elements[1]?.value;
+        data.premiumReceiverId = pe.elements[3]?.value;
+    }
+
+    const pr = flat.find(s => s.tag === 'N1' && s.elements[0]?.value === 'PR'); // Payer
+    if(pr) {
+        data.premiumPayerName = pr.elements[1]?.value;
+        data.premiumPayerId = pr.elements[3]?.value;
+    }
+
+    flat.forEach((s, idx) => {
+        if(s.tag === 'RMR') {
+            const refId = s.elements[1]?.value;
+            const amount = s.elements[3]?.value;
+            let name = "";
+            
+            // Check previous NM1*IL
+            const nm1 = flat[idx-1];
+            if(nm1 && nm1.tag === 'NM1' && nm1.elements[0]?.value === 'IL') {
+                name = `${nm1.elements[3]?.value} ${nm1.elements[2]?.value}`.trim();
+            }
+
+            data.remittances?.push({
+                refId,
+                amount,
+                name
+            });
+        }
+    });
+
+    return data;
+};
+
+// ... (Rest of file unchanged: mapEdiToBenefits, mapEdiToClaimStatus, mapEdiToRemittance, mapEdiToOrder, mapEdiToForm850/810/856)
+// NOTE: For brevity, assuming the rest of the file is preserved.
 export const mapEdiToBenefits = (doc: EdiDocument): BenefitRow[] => {
     const flat = flattenSegments(doc.segments);
     const rows: BenefitRow[] = [];

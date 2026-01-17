@@ -16,18 +16,19 @@ import { OrderTable } from './components/OrderTable';
 import { parseEdi, flattenTree, replaceRecordInEdi, getRecordRaw, duplicateRecordInEdi, removeRecordFromEdi } from './services/ediParser';
 import { EdiDocument, EdiSegment } from './types';
 import { 
-    FormData270, FormData276, FormData837, FormData834, FormData850, FormData810, FormData856,
-    build270, build276, build837, build834, build850, build810, build856
+    FormData270, FormData276, FormData837, FormData834, FormData850, FormData810, FormData856, FormData278, FormData820,
+    build270, build276, build837, build834, build850, build810, build856, build278, build820
 } from './services/ediBuilder';
 import { 
-    mapEdiToForm, mapEdiToForm276, mapEdiToForm837, mapEdiToForm834, mapEdiToForm850, mapEdiToForm810, mapEdiToForm856,
+    mapEdiToForm, mapEdiToForm276, mapEdiToForm837, mapEdiToForm834, mapEdiToForm850, mapEdiToForm810, mapEdiToForm856, mapEdiToForm278, mapEdiToForm820,
     mapEdiToBenefits, BenefitRow, mapEdiToClaimStatus, ClaimStatusRow, mapEdiToRemittance, PaymentInfo, RemittanceClaim, mapEdiToOrder, OrderData 
 } from './services/ediMapper';
 import { analyzeSegmentOffline } from './services/offlineAnalyzer';
 import { extractRecords, EdiRecord } from './services/recordService';
 import { useAppStore } from './store/useAppStore';
 
-// Default Data 270 (For Demo Initialization)
+// ... (Previous INITIAL_FORM_DATA constants remain, adding new ones)
+
 const INITIAL_FORM_DATA: FormData270 = {
     payerName: 'CMS MEDICARE',
     payerId: 'CMS001',
@@ -46,7 +47,6 @@ const INITIAL_FORM_DATA: FormData270 = {
     dependentGender: 'F'
 };
 
-// Default Data 276 (For Demo Initialization)
 const INITIAL_FORM_DATA_276: FormData276 = {
     payerName: 'CMS MEDICARE',
     payerId: 'CMS001',
@@ -118,6 +118,36 @@ const INITIAL_FORM_DATA_834: FormData834 = {
     dependents: []
 };
 
+const INITIAL_FORM_DATA_278: FormData278 = {
+    requesterName: 'DR SMITH',
+    requesterNpi: '1234567890',
+    umoName: 'INSURANCE CO',
+    umoId: 'PAYER001',
+    subscriberFirstName: 'JOHN',
+    subscriberLastName: 'DOE',
+    subscriberId: 'MBI123456789',
+    subscriberDob: '1955-05-12',
+    serviceType: '1',
+    procedureCode: '99213',
+    diagnosisCode: 'R69',
+    serviceDate: new Date().toISOString().slice(0, 10),
+    quantity: '1'
+};
+
+const INITIAL_FORM_DATA_820: FormData820 = {
+    premiumReceiverName: 'INSURANCE CO',
+    premiumReceiverId: 'PAYER001',
+    premiumPayerName: 'ACME CORP',
+    premiumPayerId: 'TAXID99',
+    totalPayment: '1000.00',
+    checkDate: new Date().toISOString().slice(0, 10),
+    checkNumber: 'CHK1001',
+    remittances: [
+        { refId: 'REF123', amount: '500.00', name: 'JOHN DOE' },
+        { refId: 'REF124', amount: '500.00', name: 'JANE SMITH' }
+    ]
+};
+
 const INITIAL_FORM_DATA_850: FormData850 = {
     poNumber: 'PO-2024-001',
     poDate: new Date().toISOString().slice(0, 10),
@@ -166,7 +196,6 @@ const INITIAL_FORM_DATA_856: FormData856 = {
     ]
 };
 
-// Empty State 270 (For Resetting on Load)
 const EMPTY_FORM_DATA_270: FormData270 = {
     payerName: '',
     payerId: '',
@@ -185,7 +214,6 @@ const EMPTY_FORM_DATA_270: FormData270 = {
     dependentGender: ''
 };
 
-// Empty State 276 (For Resetting on Load)
 const EMPTY_FORM_DATA_276: FormData276 = {
     payerName: '',
     payerId: '',
@@ -202,7 +230,8 @@ const EMPTY_FORM_DATA_276: FormData276 = {
     serviceDate: ''
 };
 
-// --- Nav Button Component ---
+// ... (NavTab component)
+
 const NavTab = ({ active, onClick, disabled, icon, label }: { active: boolean, onClick: () => void, disabled?: boolean, icon: React.ReactNode, label: string }) => (
   <button
     onClick={onClick}
@@ -224,7 +253,6 @@ const NavTab = ({ active, onClick, disabled, icon, label }: { active: boolean, o
 function App() {
   const { theme } = useAppStore();
 
-  // Route State
   const [currentPage, setCurrentPage] = useState<'landing' | 'workspace' | 'guide'>('landing');
   const [industry, setIndustry] = useState<'healthcare' | 'manufacturing'>('healthcare');
 
@@ -232,23 +260,22 @@ function App() {
   const [formData276, setFormData276] = useState<FormData276>(INITIAL_FORM_DATA_276);
   const [formData837, setFormData837] = useState<FormData837>(INITIAL_FORM_DATA_837);
   const [formData834, setFormData834] = useState<FormData834>(INITIAL_FORM_DATA_834);
+  const [formData278, setFormData278] = useState<FormData278>(INITIAL_FORM_DATA_278);
+  const [formData820, setFormData820] = useState<FormData820>(INITIAL_FORM_DATA_820);
   const [formData850, setFormData850] = useState<FormData850>(INITIAL_FORM_DATA_850);
   const [formData810, setFormData810] = useState<FormData810>(INITIAL_FORM_DATA_810);
   const [formData856, setFormData856] = useState<FormData856>(INITIAL_FORM_DATA_856);
   
   const [rawEdi, setRawEdi] = useState<string>('');
-  const [originalEdi, setOriginalEdi] = useState<string>(''); // Persist original loaded file for restoration
+  const [originalEdi, setOriginalEdi] = useState<string>(''); 
   const [doc, setDoc] = useState<EdiDocument | null>(null);
   
-  // Record Handling
   const [records, setRecords] = useState<EdiRecord[]>([]);
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
 
   const [benefits, setBenefits] = useState<BenefitRow[]>([]);
   const [claims, setClaims] = useState<ClaimStatusRow[]>([]);
   const [orderData, setOrderData] = useState<OrderData | null>(null);
-  
-  // 835 Data
   const [paymentInfo, setPaymentInfo] = useState<PaymentInfo | null>(null);
   const [remittanceClaims, setRemittanceClaims] = useState<RemittanceClaim[]>([]);
 
@@ -257,21 +284,17 @@ function App() {
 
   const [viewMode, setViewMode] = useState<'inspector' | 'raw' | 'json' | 'reference' | 'settings' | 'contact'>('inspector');
   const [copyFeedback, setCopyFeedback] = useState(false);
-  
-  // JSON Viewer State
   const [jsonExpandMode, setJsonExpandMode] = useState<'auto' | 'expanded' | 'collapsed'>('auto');
   const [jsonViewKey, setJsonViewKey] = useState(0);
   const [jsonDisplayType, setJsonDisplayType] = useState<'structure' | 'simplified'>('structure');
 
-  // Track which generator is currently active
-  const [generatorMode, setGeneratorMode] = useState<'270' | '276' | '837' | '834' | '850' | '810' | '856'>('270');
+  const [generatorMode, setGeneratorMode] = useState<'270' | '276' | '837' | '834' | '278' | '820' | '850' | '810' | '856'>('270');
 
-  // Resizable Sidebar State
   const [sidebarWidth, setSidebarWidth] = useState(700);
   const [isResizing, setIsResizing] = useState(false);
   const [lastTransactionType, setLastTransactionType] = useState<string>('Unknown');
 
-  // Theme effect
+  // ... (Effects for theme and resizing remain unchanged)
   useEffect(() => {
     if (theme === 'dark') {
       document.documentElement.classList.add('dark');
@@ -280,35 +303,28 @@ function App() {
     }
   }, [theme]);
 
-  // Handle Resizing Logic
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isResizing) return;
-      
       const windowWidth = window.innerWidth;
       const minWidth = windowWidth * 0.2;
       const maxWidth = windowWidth * 0.8;
-      
       let newWidth = e.clientX;
       if (newWidth < minWidth) newWidth = minWidth; 
       if (newWidth > maxWidth) newWidth = maxWidth; 
-      
       setSidebarWidth(newWidth);
     };
-
     const handleMouseUp = () => {
       setIsResizing(false);
       document.body.style.cursor = 'default';
       document.body.style.userSelect = 'auto';
     };
-
     if (isResizing) {
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
       document.body.style.cursor = 'col-resize';
       document.body.style.userSelect = 'none';
     }
-
     return () => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
@@ -326,28 +342,20 @@ function App() {
       const parsed = parseEdi(edi);
       setDoc(parsed);
       
-      // Always extract records to reflect any changes in the EDI file (labels, etc)
       const extractedRecords = extractRecords(parsed);
       setRecords(extractedRecords);
       
       let targetId = specificRecordId;
-
-      // Handle selection persistence logic
       if (maintainSelectionIndex !== undefined && maintainSelectionIndex >= 0 && maintainSelectionIndex < extractedRecords.length) {
-          // If we edited a record, IDs change, so we try to select by index to keep user context
           targetId = extractedRecords[maintainSelectionIndex].id;
       } else if (!targetId && extractedRecords.length > 0) {
-          // Default to first
           targetId = extractedRecords[0].id;
       }
 
-      // Update Selection
       setSelectedRecordId(targetId || null);
 
-      // Only Map to Form if requested (e.g. on new load or explicit record switch)
       if (shouldMapToForm) {
           mapToForm(parsed, targetId);
-          
           if (targetId) {
               const flat = flattenTree(parsed.segments);
               const seg = flat.find(s => s.id === targetId);
@@ -355,7 +363,6 @@ function App() {
           }
       }
 
-      // UI sizing logic
       if (parsed.transactionType !== lastTransactionType) {
           const windowWidth = window.innerWidth;
           const maxWidth = windowWidth * 0.8;
@@ -371,13 +378,11 @@ function App() {
         setSelectedSegment(parsed.segments[0]);
       }
 
-      // Reset all view states
       setBenefits([]);
       setClaims([]);
       setRemittanceClaims([]);
       setOrderData(null);
 
-      // Handle List Views
       if (parsed.transactionType === '271') {
           setBenefits(mapEdiToBenefits(parsed));
       } else if (parsed.transactionType === '277') {
@@ -411,6 +416,14 @@ function App() {
             const mappedData = mapEdiToForm834(parsed, recordId);
             setFormData834({ ...INITIAL_FORM_DATA_834, ...mappedData });
             setGeneratorMode('834');
+      } else if (parsed.transactionType === '278') {
+            const mappedData = mapEdiToForm278(parsed);
+            setFormData278({ ...INITIAL_FORM_DATA_278, ...mappedData });
+            setGeneratorMode('278');
+      } else if (parsed.transactionType === '820') {
+            const mappedData = mapEdiToForm820(parsed);
+            setFormData820({ ...INITIAL_FORM_DATA_820, ...mappedData });
+            setGeneratorMode('820');
       } else if (parsed.transactionType === '850') {
             const mappedData = mapEdiToForm850(parsed);
             setFormData850({ ...INITIAL_FORM_DATA_850, ...mappedData });
@@ -437,6 +450,8 @@ function App() {
     setFormData276(INITIAL_FORM_DATA_276);
     setFormData837(INITIAL_FORM_DATA_837);
     setFormData834(INITIAL_FORM_DATA_834);
+    setFormData278(INITIAL_FORM_DATA_278);
+    setFormData820(INITIAL_FORM_DATA_820);
     setFormData850(INITIAL_FORM_DATA_850);
     setFormData810(INITIAL_FORM_DATA_810);
     setFormData856(INITIAL_FORM_DATA_856);
@@ -538,6 +553,20 @@ function App() {
     updateEdiWithFormChange(newEdi);
   }
 
+  const handleForm278Change = (newData: FormData278) => {
+    setFormData278(newData);
+    const newEdi = build278(newData);
+    setRawEdi(newEdi);
+    processEdi(newEdi, false);
+  }
+
+  const handleForm820Change = (newData: FormData820) => {
+    setFormData820(newData);
+    const newEdi = build820(newData);
+    setRawEdi(newEdi);
+    processEdi(newEdi, false);
+  }
+
   const handleForm850Change = (newData: FormData850) => {
     setFormData850(newData);
     const newEdi = build850(newData);
@@ -559,13 +588,15 @@ function App() {
     processEdi(newEdi, false);
   };
 
-  const handleGeneratorModeChange = (mode: '270' | '276' | '837' | '834' | '850' | '810' | '856') => {
+  const handleGeneratorModeChange = (mode: '270' | '276' | '837' | '834' | '278' | '820' | '850' | '810' | '856') => {
       setGeneratorMode(mode);
       let newEdi = '';
       if (mode === '270') newEdi = build270(formData);
       else if (mode === '276') newEdi = build276(formData276);
       else if (mode === '837') newEdi = build837(formData837);
       else if (mode === '834') newEdi = build834(formData834);
+      else if (mode === '278') newEdi = build278(formData278);
+      else if (mode === '820') newEdi = build820(formData820);
       else if (mode === '850') newEdi = build850(formData850);
       else if (mode === '810') newEdi = build810(formData810);
       else if (mode === '856') newEdi = build856(formData856);
@@ -628,8 +659,6 @@ function App() {
       if (foundRecord && foundRecord.id !== selectedRecordId) {
           // Switch record context
           handleRecordSelect(foundRecord);
-          // Wait for render cycle potentially? The logic below might need the new form state.
-          // However, mapping happens synchronously in processEdi/handleRecordSelect.
       }
 
       // Calculate relative index within the record
@@ -646,9 +675,11 @@ function App() {
           else if (type === 'PR' || (type === 'IN' && generatorMode === '834')) fieldId = 'payerName';
           else if (type === '1P') fieldId = 'providerName';
           else if (type === '85') fieldId = 'billingProviderName';
-          else if (type === '03') fieldId = 'dependentFirstName'; // Simplified for 270/276 single dep
+          else if (type === '03') fieldId = 'dependentFirstName'; 
           else if (type === 'P5') fieldId = 'sponsorName';
-          else if ((type === 'BY' || type === 'SF') && (generatorMode === '850' || generatorMode === '810' || generatorMode === '856')) fieldId = 'buyerName'; // 856 uses SF for Seller sometimes? No, N1*SF is Ship From
+          else if (type === 'X3') fieldId = 'umoName'; // 278
+          else if (type === 'PE' && generatorMode === '820') fieldId = 'premiumReceiverName';
+          else if ((type === 'BY' || type === 'SF') && (generatorMode === '850' || generatorMode === '810' || generatorMode === '856')) fieldId = 'buyerName'; 
           else if ((type === 'SE' || type === 'ST') && (generatorMode === '850' || generatorMode === '810' || generatorMode === '856')) fieldId = 'sellerName';
       }
       else if (s.tag === 'CLM') fieldId = 'claimId';
@@ -664,10 +695,10 @@ function App() {
       else if (s.tag === 'BEG') fieldId = 'poNumber';
       else if (s.tag === 'BIG') fieldId = 'invoiceNumber';
       else if (s.tag === 'BSN') fieldId = 'shipmentId';
+      else if (s.tag === 'BPR') fieldId = 'totalPayment'; // 820
       
-      // Handle Lists (Service Lines, PO Lines, Dependents)
+      // Handle Lists 
       else if ((generatorMode === '850' && s.tag === 'PO1') || (generatorMode === '810' && s.tag === 'IT1')) {
-          // Find which index this PO1/IT1 is relative to the anchor
           const lineSegments = relativeSegments.filter(seg => seg.tag === s.tag);
           const lineIdx = lineSegments.findIndex(seg => seg.id === s.id);
           if (lineIdx !== -1) fieldId = `line-${lineIdx}-partNumber`;
@@ -677,19 +708,20 @@ function App() {
           const lineIdx = lineSegments.findIndex(seg => seg.id === s.id);
           if (lineIdx !== -1) fieldId = `line-${lineIdx}-partNumber`;
       }
-      else if (generatorMode === '837' && (s.tag === 'SV1' || s.tag === 'SV2')) {
-          // In 837, SV1/SV2 are inside LX loops.
-          // Find all SV segments relative to anchor CLM
-          // First find CLM
+      else if (generatorMode === '837' && (s.tag === 'SV1' || s.tag === 'SV2' || s.tag === 'SV3')) {
           const clmIdx = relativeSegments.findIndex(seg => seg.tag === 'CLM');
           if (clmIdx !== -1) {
               const claimSegments = relativeSegments.slice(clmIdx);
-              const svSegments = claimSegments.filter(seg => seg.tag === 'SV1' || seg.tag === 'SV2');
+              const svSegments = claimSegments.filter(seg => seg.tag === 'SV1' || seg.tag === 'SV2' || seg.tag === 'SV3');
               const lineIdx = svSegments.findIndex(seg => seg.id === s.id);
               if (lineIdx !== -1) fieldId = `line-${lineIdx}-procedureCode`;
           }
       }
-      // Dependent list for 834? (Simplified: finding NM1*03 in list)
+      else if (generatorMode === '820' && s.tag === 'RMR') {
+          const rmrSegments = relativeSegments.filter(seg => seg.tag === 'RMR');
+          const lineIdx = rmrSegments.findIndex(seg => seg.id === s.id);
+          if (lineIdx !== -1) fieldId = `remit-${lineIdx}-refId`;
+      }
       
       setHighlightedField(fieldId);
 
@@ -700,27 +732,24 @@ function App() {
     if (!doc) return;
     const flat = flattenTree(doc.segments);
     
-    // Find anchor for current record
     let anchorIdx = 0;
     if (selectedRecordId) {
         const idx = flat.findIndex(s => s.id === selectedRecordId);
         if (idx !== -1) anchorIdx = idx;
     }
 
-    // Is it a dynamic list field?
-    const listMatch = fieldName.match(/^line-(\d+)-(.+)$/) || fieldName.match(/^dependent-(\d+)-(.+)$/);
+    const listMatch = fieldName.match(/^line-(\d+)-(.+)$/) || fieldName.match(/^remit-(\d+)-(.+)$/);
     
     if (listMatch) {
         const index = parseInt(listMatch[1]);
-        // const field = listMatch[2]; // not really needed for segment targeting, just index and mode
         
         let targetTag: string | string[] = '';
         if (generatorMode === '850') targetTag = 'PO1';
         else if (generatorMode === '810') targetTag = 'IT1';
         else if (generatorMode === '856') targetTag = 'LIN';
-        else if (generatorMode === '837') targetTag = ['SV1', 'SV2']; // could be either
+        else if (generatorMode === '820') targetTag = 'RMR';
+        else if (generatorMode === '837') targetTag = ['SV1', 'SV2', 'SV3']; 
         
-        // Find Nth occurrence after anchor
         const relativeSegments = flat.slice(anchorIdx);
         let count = -1;
         const target = relativeSegments.find(s => {
@@ -728,7 +757,6 @@ function App() {
                 count++;
                 return count === index;
             }
-            // Stop if we hit next record boundary? For 850/810 typically 1 record per file in simple mode.
             return false;
         });
         
@@ -736,8 +764,6 @@ function App() {
         return;
     }
 
-    // Standard Fields - Find closest relevant segment
-    // Helper to find backward from anchor or forward if necessary
     const findBackwards = (start: number, predicate: (s: EdiSegment) => boolean) => {
         for (let i = start; i >= 0; i--) {
             if (predicate(flat[i])) return flat[i];
@@ -746,7 +772,6 @@ function App() {
     };
     
     const findForwards = (start: number, predicate: (s: EdiSegment) => boolean) => {
-        // Limit search to reasonable record size (e.g. 50 segments)
         for (let i = start; i < Math.min(flat.length, start + 50); i++) {
             if (predicate(flat[i])) return flat[i];
         }
@@ -755,9 +780,12 @@ function App() {
 
     let target: EdiSegment | undefined;
 
-    if (fieldName.includes('payer')) {
-         target = findBackwards(anchorIdx, s => (s.tag === 'NM1' && s.elements[0]?.value === 'PR') || (s.tag === 'N1' && s.elements[0]?.value === 'IN'));
+    if (fieldName.includes('payer') || fieldName.includes('premiumReceiver')) {
+         target = findBackwards(anchorIdx, s => (s.tag === 'NM1' && s.elements[0]?.value === 'PR') || (s.tag === 'N1' && (s.elements[0]?.value === 'IN' || s.elements[0]?.value === 'PE')));
     } 
+    else if (fieldName.includes('umo')) {
+         target = findBackwards(anchorIdx, s => s.tag === 'NM1' && s.elements[0]?.value === 'X3');
+    }
     else if (fieldName.includes('provider') && !fieldName.includes('billing')) {
          target = findBackwards(anchorIdx, s => s.tag === 'NM1' && (['1P', '41'].includes(s.elements[0]?.value)));
     }
@@ -772,7 +800,6 @@ function App() {
          }
     }
     else if (fieldName.includes('dependent')) {
-         // Dependents often appear AFTER the anchor (if anchor is Subscriber HL)
          target = findForwards(anchorIdx, s => s.tag === 'NM1' && s.elements[0]?.value === '03');
          if (fieldName.includes('Dob') && target) {
              const depIdx = flat.indexOf(target);
@@ -781,21 +808,19 @@ function App() {
     }
     else if (fieldName === 'claimId' || fieldName === 'totalCharge') {
          if (generatorMode === '837') {
-             // 837 CLM segment usually anchor or just after
              target = findForwards(anchorIdx, s => s.tag === 'CLM') || findBackwards(anchorIdx, s => s.tag === 'CLM');
          } else {
-             // 276 TRN segment
              target = findForwards(anchorIdx, s => s.tag === 'TRN') || findBackwards(anchorIdx, s => s.tag === 'TRN');
          }
     }
     else if (fieldName === 'serviceDate') {
          target = findForwards(anchorIdx, s => s.tag === 'DTP' && (s.elements[0]?.value === '472' || s.elements[0]?.value === '291'));
     }
-    else if (fieldName === 'serviceTypeCodes') {
-         target = findForwards(anchorIdx, s => s.tag === 'EQ');
+    else if (fieldName === 'serviceTypeCodes' || fieldName === 'serviceType') {
+         target = findForwards(anchorIdx, s => s.tag === 'EQ' || s.tag === 'UM');
     }
-    else if (fieldName.includes('sponsor')) {
-         target = findBackwards(anchorIdx, s => s.tag === 'N1' && s.elements[0]?.value === 'P5');
+    else if (fieldName.includes('sponsor') || fieldName.includes('premiumPayer')) {
+         target = findBackwards(anchorIdx, s => s.tag === 'N1' && (s.elements[0]?.value === 'P5' || s.elements[0]?.value === 'PR'));
     }
     else if (fieldName.includes('maintenance')) {
          target = findBackwards(anchorIdx, s => s.tag === 'INS');
@@ -820,6 +845,12 @@ function App() {
     }
     else if (fieldName === 'shipDate') {
          target = findBackwards(anchorIdx, s => s.tag === 'DTM' && s.elements[0]?.value === '011');
+    }
+    else if (fieldName === 'totalPayment') {
+         target = findBackwards(anchorIdx, s => s.tag === 'BPR');
+    }
+    else if (fieldName === 'checkDate' || fieldName === 'checkNumber') {
+         target = findBackwards(anchorIdx, s => s.tag === 'BPR' || s.tag === 'TRN');
     }
     
     if (target) {
@@ -849,11 +880,12 @@ function App() {
 
   const simpleJson = useMemo(() => {
     if (!doc) return null;
-    // Map based on transaction type to business object
     if (doc.transactionType === '270') return mapEdiToForm(doc, selectedRecordId || undefined);
     if (doc.transactionType === '276') return mapEdiToForm276(doc, selectedRecordId || undefined);
     if (doc.transactionType === '837') return mapEdiToForm837(doc, selectedRecordId || undefined);
     if (doc.transactionType === '834') return mapEdiToForm834(doc, selectedRecordId || undefined);
+    if (doc.transactionType === '278') return mapEdiToForm278(doc);
+    if (doc.transactionType === '820') return mapEdiToForm820(doc);
     if (doc.transactionType === '850') return mapEdiToForm850(doc);
     if (doc.transactionType === '810') return mapEdiToForm810(doc);
     if (doc.transactionType === '856') return mapEdiToForm856(doc);
@@ -883,7 +915,6 @@ function App() {
       return <Guide onBack={() => setCurrentPage('landing')} />;
   }
 
-  // NOTE: showOrderTable logic removed to always show EdiGenerator for editing 856 as well
   const showOrderTable = false; 
 
   return (
@@ -956,6 +987,8 @@ function App() {
                             formData850={formData850} onChange850={handleForm850Change}
                             formData810={formData810} onChange810={handleForm810Change}
                             formData856={formData856} onChange856={handleForm856Change}
+                            formData278={formData278} onChange278={handleForm278Change}
+                            formData820={formData820} onChange820={handleForm820Change}
                             transactionType={doc?.transactionType} 
                             generatorMode={generatorMode} onSetGeneratorMode={handleGeneratorModeChange}
                             benefits={benefits} 
@@ -971,11 +1004,11 @@ function App() {
             </div>
         )}
 
+        {/* ... Rest of the component (Resize handle, Pane 2 & 3) remains identical ... */}
         {(viewMode !== 'reference' && viewMode !== 'settings' && viewMode !== 'contact' && (doc || rawEdi)) && (
             <div className="flex-none w-1 -ml-1 cursor-col-resize z-30 relative group hover:bg-blue-500 transition-colors" onMouseDown={() => setIsResizing(true)}></div>
         )}
 
-        {/* Pane 2 & 3: Viewer Area */}
         <div className="flex-1 flex min-w-0 bg-white dark:bg-slate-950 relative">
           {viewMode === 'settings' ? <div className="w-full h-full"><Settings /></div> : 
            viewMode === 'contact' ? <div className="w-full h-full"><SendMessage /></div> : 

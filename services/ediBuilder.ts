@@ -39,6 +39,29 @@ export interface FormData276 {
   serviceDate: string; // YYYY-MM-DD
 }
 
+export interface FormData278 {
+    // Requester (Provider)
+    requesterName: string;
+    requesterNpi: string;
+    
+    // Utilization Management Org (Payer)
+    umoName: string;
+    umoId: string;
+    
+    // Subscriber
+    subscriberFirstName: string;
+    subscriberLastName: string;
+    subscriberId: string;
+    subscriberDob: string;
+    
+    // Event/Service
+    serviceType: string; // e.g. "1" Medical Care
+    procedureCode: string; // CPT
+    diagnosisCode: string; // ICD-10
+    serviceDate: string;
+    quantity: string;
+}
+
 export interface ServiceLine837 {
     procedureCode: string;
     lineCharge: string;
@@ -47,7 +70,7 @@ export interface ServiceLine837 {
 }
 
 export interface FormData837 {
-  type: 'Professional' | 'Institutional';
+  type: 'Professional' | 'Institutional' | 'Dental';
   // Billing Provider
   billingProviderName: string;
   billingProviderNpi: string;
@@ -106,6 +129,23 @@ export interface FormData834 {
     
     subscriber: Member834;
     dependents: Member834[];
+}
+
+export interface Remittance820 {
+    refId: string; // REF*1L or REF*0F
+    amount: string;
+    name?: string; // Optional
+}
+
+export interface FormData820 {
+    premiumReceiverName: string; // Payer
+    premiumReceiverId: string;
+    premiumPayerName: string; // Employer
+    premiumPayerId: string; // Tax ID
+    totalPayment: string;
+    checkDate: string;
+    checkNumber: string; // TRN02
+    remittances: Remittance820[];
 }
 
 // --- Manufacturing / Supply Chain Forms ---
@@ -316,6 +356,61 @@ export const build276 = (data: FormData276): string => {
   return segments.join('~') + '~';
 };
 
+export const build278 = (data: FormData278): string => {
+    const date = getCurrentDate();
+    const time = getCurrentTime();
+    const isaControl = Math.floor(Math.random() * 900000000) + 100000000;
+    const gsControl = Math.floor(Math.random() * 900000000) + 100000000;
+    const svcDate = data.serviceDate ? data.serviceDate.replace(/-/g, '') : date;
+
+    const segments = [
+        `ISA*00*          *00*          *ZZ*${pad('SENDER', 15)}*ZZ*${pad('RECEIVER', 15)}*${date.slice(2)}*${time}*^*00501*${isaControl}*0*T*:`,
+        `GS*HI*SENDER*RECEIVER*${date}*${time}*${gsControl}*X*005010X217`,
+        `ST*278*0001*005010X217`,
+        `BHT*0007*13*${isaControl}*${date}*${time}*RT`,
+        
+        // Loop 2000A Utilization Management Organization (UMO) - Source
+        `HL*1**20*1`,
+        `NM1*X3*2*${data.umoName}*****PI*${data.umoId}`,
+        
+        // Loop 2000B Requester (Provider) - Receiver
+        `HL*2*1*21*1`,
+        `NM1*1P*2*${data.requesterName}*****XX*${data.requesterNpi}`,
+        
+        // Loop 2000C Subscriber
+        `HL*3*2*22*1`,
+        `NM1*IL*1*${data.subscriberLastName}*${data.subscriberFirstName}****MI*${data.subscriberId}`,
+    ];
+    
+    if (data.subscriberDob) {
+        segments.push(`DMG*D8*${data.subscriberDob.replace(/-/g, '')}`);
+    }
+
+    // Loop 2000D Dependent (Skipped for simplicity in this builder version)
+
+    // Loop 2000E Service/Event
+    segments.push(`HL*4*3*EV*0`);
+    segments.push(`TRN*1*${uuid().slice(0,9)}`);
+    // UM01: Health Care Service Review (SC=Screening, AR=Admission Review)
+    // UM03: Service Type (1=Medical, 2=Surgical)
+    segments.push(`UM*SC*I*${data.serviceType || '1'}*21:B`); 
+    segments.push(`DTP*472*D8*${svcDate}`);
+    
+    // SV1 Professional Service
+    if (data.procedureCode) {
+        segments.push(`HI*BF:${data.diagnosisCode || 'R69'}`);
+        segments.push(`SV1*HC:${data.procedureCode}*${data.quantity || 1}*UN*1`);
+    }
+
+    segments.push(`SE*${segments.length - 1}*0001`);
+    segments.push(`GE*1*${gsControl}`);
+    segments.push(`IEA*1*${isaControl}`);
+
+    return segments.join('~') + '~';
+};
+
+const uuid = () => Math.random().toString(36).substr(2, 9);
+
 export const build837 = (data: FormData837): string => {
     const date = getCurrentDate();
     const time = getCurrentTime();
@@ -323,7 +418,13 @@ export const build837 = (data: FormData837): string => {
     const gsControl = Math.floor(Math.random() * 900000000) + 100000000;
     
     const isProf = data.type === 'Professional';
-    const version = isProf ? '005010X222A1' : '005010X223A2';
+    const isInst = data.type === 'Institutional';
+    const isDent = data.type === 'Dental';
+    
+    let version = '005010X222A1'; // Prof
+    if (isInst) version = '005010X223A2';
+    if (isDent) version = '005010X224A2';
+
     const subDob = data.subscriberDob.replace(/-/g, '');
     
     const segments = [
@@ -355,7 +456,7 @@ export const build837 = (data: FormData837): string => {
         
         // Loop 2300 Claim Information
         // CLM*ClaimID*TotalCharge***Type:Freq:YN*Y*A*Y*Y
-        isProf 
+        isProf || isDent
             ? `CLM*${data.claimId}*${data.totalCharge}***${data.placeOfService}:B:1*Y*A*Y*Y`
             : `CLM*${data.claimId}*${data.totalCharge}***${data.typeOfBill || '111'}*Y*A*Y*Y`,
         
@@ -372,6 +473,8 @@ export const build837 = (data: FormData837): string => {
         
         if (isProf) {
             segments.push(`SV1*HC:${line.procedureCode}*${line.lineCharge}*UN*${line.units || 1}***1`);
+        } else if (isDent) {
+            segments.push(`SV3*AD:${line.procedureCode}*${line.lineCharge}**UN*${line.units || 1}`);
         } else {
             segments.push(`SV2*${line.procedureCode}*HC*${line.lineCharge}*UN*${line.units || 1}`);
         }
@@ -380,8 +483,6 @@ export const build837 = (data: FormData837): string => {
     });
     
     // Footer
-    // SE count includes ST through SE.
-    // ISA (0), GS (1). Count = Total - 2 (for ISA/GS) + 1 (for SE itself) = Total - 1.
     segments.push(`SE*${segments.length - 1}*0001`);
     segments.push(`GE*1*${gsControl}`);
     segments.push(`IEA*1*${isaControl}`);
@@ -462,6 +563,51 @@ export const build834 = (data: FormData834): string => {
     // Add Dependents
     data.dependents.forEach(dep => {
         addMemberLoop(dep, false);
+    });
+
+    segments.push(`SE*${segments.length - 1}*0001`);
+    segments.push(`GE*1*${gsControl}`);
+    segments.push(`IEA*1*${isaControl}`);
+
+    return segments.join('~') + '~';
+};
+
+export const build820 = (data: FormData820): string => {
+    const date = getCurrentDate();
+    const time = getCurrentTime();
+    const isaControl = Math.floor(Math.random() * 900000000) + 100000000;
+    const gsControl = Math.floor(Math.random() * 900000000) + 100000000;
+    
+    const checkDt = data.checkDate ? data.checkDate.replace(/-/g, '') : date;
+
+    const segments = [
+        `ISA*00*          *00*          *ZZ*${pad('SENDER', 15)}*ZZ*${pad('RECEIVER', 15)}*${date.slice(2)}*${time}*^*00501*${isaControl}*0*P*:`,
+        `GS*RA*SENDER*RECEIVER*${date}*${time}*${gsControl}*X*005010X218`,
+        `ST*820*0001*005010X218`,
+        `BPR*I*${data.totalPayment}*C*ACH*CCP*01*043000261*DA*123456789*1234567890**01*999999999*DA*987654321*${checkDt}`,
+        `TRN*1*${data.checkNumber}*1999999999`,
+        
+        // Loop 1000A Premium Receiver
+        `N1*PE*${data.premiumReceiverName}*FI*${data.premiumReceiverId}`,
+        
+        // Loop 1000B Premium Payer
+        `N1*PR*${data.premiumPayerName}*FI*${data.premiumPayerId}`,
+    ];
+
+    // Loop 2000B - Individual Remittance (Standard RMR)
+    // For simplicity, grouping all remittances under one parent org loop if needed, but 820 is flexible.
+    // We will use Organization Summary Loop 2000A (ENT) + 2300A (RMR) if it were summary, 
+    // but Individual is Loop 2000B (ENT*IND)
+    
+    data.remittances.forEach((remit, idx) => {
+        segments.push(`ENT*${idx + 1}*2J*TE*1`); // 2J=Individual
+        if (remit.name) {
+            segments.push(`NM1*IL*1*${remit.name.split(' ')[1] || ''}*${remit.name.split(' ')[0] || ''}`);
+        }
+        // RMR*ReferenceIDQual*RefID*PaymentAction*Amount
+        // IV = Seller's Invoice Number, AZ = Health Ins Policy
+        segments.push(`RMR*AZ*${remit.refId}*PI*${remit.amount}`); 
+        segments.push(`DTM*009*${checkDt}`); // Process Date
     });
 
     segments.push(`SE*${segments.length - 1}*0001`);

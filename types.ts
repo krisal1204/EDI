@@ -28,8 +28,8 @@ export interface EdiDocument {
   componentSeparator: string;
   repetitionSeparator?: string;
   raw: string;
-  // Added 850, 810, 856 types to resolve comparison errors
-  transactionType: '270' | '271' | '276' | '277' | '837' | '834' | '835' | '850' | '810' | '856' | 'Unknown';
+  // Added 278, 820
+  transactionType: '270' | '271' | '276' | '277' | '278' | '837' | '834' | '835' | '820' | '850' | '810' | '856' | 'Unknown';
 }
 
 export interface SegmentAnalysis {

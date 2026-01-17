@@ -12,6 +12,8 @@ import {
     sample850,
     sample810,
     sample856,
+    sample278,
+    sample820,
     ADVANCED_SAMPLES,
     SampleScenario
 } from '../sample-data/samples';
@@ -96,6 +98,8 @@ export const DragDropInput: React.FC<Props> = ({ onProcess, industry }) => {
           claims: ADVANCED_SAMPLES.filter(s => s.type === '837'),
           status: ADVANCED_SAMPLES.filter(s => s.type === '276' || s.type === '277'),
           payment: ADVANCED_SAMPLES.filter(s => s.type === '835'),
+          auth: ADVANCED_SAMPLES.filter(s => s.type === '278'),
+          premium: ADVANCED_SAMPLES.filter(s => s.type === '820'),
       };
   }, []);
 
@@ -154,7 +158,7 @@ export const DragDropInput: React.FC<Props> = ({ onProcess, industry }) => {
         <div className="border-t border-gray-100 dark:border-slate-800 pt-8">
             <p className="text-center text-xs text-gray-400 dark:text-slate-500 mb-6 font-medium uppercase tracking-widest">Or load a sample transaction</p>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-6 justify-center">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-7 gap-4 justify-center">
                 {industry === 'manufacturing' && (
                     <ButtonGroup title="Supply Chain">
                         <SampleButton code="850" label="Purchase Order" onClick={() => { setText(sample850); onProcess(sample850); }} />
@@ -174,6 +178,10 @@ export const DragDropInput: React.FC<Props> = ({ onProcess, industry }) => {
                             <SampleButton code="271" label="Response" onClick={() => { setText(sample271); onProcess(sample271); }} />
                         </ButtonGroup>
 
+                        <ButtonGroup title="Authorization" scenarios={scenarios.auth} onScenarioSelect={handleScenarioSelect}>
+                            <SampleButton code="278" label="Request" onClick={() => { setText(sample278); onProcess(sample278); }} />
+                        </ButtonGroup>
+
                         <ButtonGroup title="File Claims" scenarios={scenarios.claims} onScenarioSelect={handleScenarioSelect}>
                             <SampleButton code="837P" label="Professional" onClick={() => { setText(sample837Prof); onProcess(sample837Prof); }} />
                             <SampleButton code="837I" label="Institutional" onClick={() => { setText(sample837Inst); onProcess(sample837Inst); }} />
@@ -187,6 +195,10 @@ export const DragDropInput: React.FC<Props> = ({ onProcess, industry }) => {
                         <ButtonGroup title="Payment" scenarios={scenarios.payment} onScenarioSelect={handleScenarioSelect}>
                             <SampleButton code="835" label="Remittance" onClick={() => { setText(sample835); onProcess(sample835); }} />
                         </ButtonGroup>
+
+                        <ButtonGroup title="Premiums" scenarios={scenarios.premium} onScenarioSelect={handleScenarioSelect}>
+                            <SampleButton code="820" label="Payment" onClick={() => { setText(sample820); onProcess(sample820); }} />
+                        </ButtonGroup>
                     </>
                 )}
             </div>
@@ -195,3 +207,4 @@ export const DragDropInput: React.FC<Props> = ({ onProcess, industry }) => {
     </div>
   );
 };
+    

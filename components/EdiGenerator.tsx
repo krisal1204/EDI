@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { FormData270, FormData276, FormData837, FormData834, Member834, ServiceLine837, FormData850, FormData810, OrderLineItem, FormData856, ShipNoticeLineItem } from '../services/ediBuilder';
+import { FormData270, FormData276, FormData837, FormData834, Member834, ServiceLine837, FormData850, FormData810, OrderLineItem, FormData856, ShipNoticeLineItem, FormData278, FormData820, Remittance820 } from '../services/ediBuilder';
 import { EdiSegment } from '../types';
 import { BenefitRow, ClaimStatusRow, PaymentInfo, RemittanceClaim } from '../services/ediMapper';
 import { BenefitTable } from './BenefitTable';
@@ -18,6 +18,10 @@ interface Props {
   onChange837: (data: FormData837) => void;
   formData834: FormData834;
   onChange834: (data: FormData834) => void;
+  formData278?: FormData278;
+  onChange278?: (data: FormData278) => void;
+  formData820?: FormData820;
+  onChange820?: (data: FormData820) => void;
   formData850?: FormData850;
   onChange850?: (data: FormData850) => void;
   formData810?: FormData810;
@@ -25,8 +29,8 @@ interface Props {
   formData856?: FormData856;
   onChange856?: (data: FormData856) => void;
   transactionType?: string;
-  generatorMode: '270' | '276' | '837' | '834' | '850' | '810' | '856';
-  onSetGeneratorMode: (mode: '270' | '276' | '837' | '834' | '850' | '810' | '856') => void;
+  generatorMode: '270' | '276' | '837' | '834' | '278' | '820' | '850' | '810' | '856';
+  onSetGeneratorMode: (mode: '270' | '276' | '837' | '834' | '278' | '820' | '850' | '810' | '856') => void;
   benefits: BenefitRow[];
   claims: ClaimStatusRow[];
   remittanceInfo?: PaymentInfo | null;
@@ -137,7 +141,6 @@ const SectionHeader = ({ title, action }: { title: string, action?: React.ReactN
   </div>
 );
 
-// ... existing options constants ...
 const MAINT_TYPES = [
     { value: '021', label: '021 - Addition' },
     { value: '001', label: '001 - Change' },
@@ -177,6 +180,8 @@ export const EdiGenerator: React.FC<Props> = ({
   formData276, onChange276,
   formData837, onChange837,
   formData834, onChange834,
+  formData278, onChange278,
+  formData820, onChange820,
   formData850, onChange850,
   formData810, onChange810,
   formData856, onChange856,
@@ -197,7 +202,6 @@ export const EdiGenerator: React.FC<Props> = ({
           if (el) {
               el.focus();
               el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              // Optional: Add a temporary visual highlight class
               el.classList.add('ring-2', 'ring-brand-500', 'bg-brand-50', 'dark:bg-brand-900/20');
               setTimeout(() => el.classList.remove('ring-2', 'ring-brand-500', 'bg-brand-50', 'dark:bg-brand-900/20'), 2000);
           }
@@ -213,6 +217,42 @@ export const EdiGenerator: React.FC<Props> = ({
   if (transactionType === '835' && remittanceInfo && remittanceClaims) {
     return <PaymentTable info={remittanceInfo} claims={remittanceClaims} />;
   }
+
+  // --- 837 Service Lines ---
+  const handleAddServiceLine = () => {
+      const newLine: ServiceLine837 = { procedureCode: '', lineCharge: '0.00', units: '1', serviceDate: '' };
+      onChange837({ ...formData837, serviceLines: [...formData837.serviceLines, newLine] });
+  };
+
+  const handleRemoveServiceLine = (idx: number) => {
+      const newLines = [...formData837.serviceLines];
+      newLines.splice(idx, 1);
+      onChange837({ ...formData837, serviceLines: newLines });
+  };
+
+  const updateServiceLine = (idx: number, field: keyof ServiceLine837, value: string) => {
+      const newLines = [...formData837.serviceLines];
+      newLines[idx] = { ...newLines[idx], [field]: value };
+      onChange837({ ...formData837, serviceLines: newLines });
+  };
+
+  // --- 834 Dependents ---
+  const handleAddDependent = () => {
+      const newDep: Member834 = { id: '', firstName: '', lastName: '', ssn: '', dob: '', gender: '', relationship: '19' };
+      onChange834({ ...formData834, dependents: [...formData834.dependents, newDep] });
+  };
+
+  const handleRemoveDependent = (idx: number) => {
+      const newDeps = [...formData834.dependents];
+      newDeps.splice(idx, 1);
+      onChange834({ ...formData834, dependents: newDeps });
+  };
+
+  const updateDependent = (idx: number, field: keyof Member834, value: string) => {
+      const newDeps = [...formData834.dependents];
+      newDeps[idx] = { ...newDeps[idx], [field]: value };
+      onChange834({ ...formData834, dependents: newDeps });
+  };
 
   // --- 850 PO Form ---
   const handleAddOrderLine = (isPO: boolean) => {
@@ -254,6 +294,290 @@ export const EdiGenerator: React.FC<Props> = ({
           onChange810({ ...formData810, lines: newLines });
       }
   };
+
+  const renderForm270 = () => (
+      <>
+        <SectionHeader title="Source & Receiver" />
+        <div className="grid grid-cols-2 gap-4">
+            <InputField id="payerName" label="Payer Name" value={formData.payerName} onChange={v => onChange({...formData, payerName: v})} onFocus={() => onFieldFocus('payerName')} />
+            <InputField id="payerId" label="Payer ID" value={formData.payerId} onChange={v => onChange({...formData, payerId: v})} onFocus={() => onFieldFocus('payerId')} />
+            <InputField id="providerName" label="Provider Name" value={formData.providerName} onChange={v => onChange({...formData, providerName: v})} onFocus={() => onFieldFocus('providerName')} />
+            <InputField id="providerNpi" label="Provider NPI" value={formData.providerNpi} onChange={v => onChange({...formData, providerNpi: v})} onFocus={() => onFieldFocus('providerNpi')} />
+        </div>
+
+        <SectionHeader title="Subscriber Information" />
+        <div className="grid grid-cols-2 gap-4">
+            <InputField id="subscriberFirstName" label="First Name" value={formData.subscriberFirstName} onChange={v => onChange({...formData, subscriberFirstName: v})} onFocus={() => onFieldFocus('subscriberFirstName')} />
+            <InputField id="subscriberLastName" label="Last Name" value={formData.subscriberLastName} onChange={v => onChange({...formData, subscriberLastName: v})} onFocus={() => onFieldFocus('subscriberLastName')} />
+            <InputField id="subscriberId" label="Member ID" value={formData.subscriberId} onChange={v => onChange({...formData, subscriberId: v})} onFocus={() => onFieldFocus('subscriberId')} />
+            <div id="subscriberDob">
+                <DatePicker label="Date of Birth" value={formData.subscriberDob} onChange={v => onChange({...formData, subscriberDob: v})} onFocus={() => onFieldFocus('subscriberDob')} />
+            </div>
+        </div>
+
+        <div className="my-4 pt-4 border-t border-gray-100 dark:border-slate-800">
+            <label className="flex items-center space-x-2 cursor-pointer">
+                <input 
+                    type="checkbox" 
+                    className="form-checkbox h-4 w-4 text-brand-600 rounded border-gray-300 focus:ring-brand-500"
+                    checked={formData.hasDependent}
+                    onChange={e => onChange({...formData, hasDependent: e.target.checked})}
+                />
+                <span className="text-sm font-medium text-gray-700 dark:text-slate-300">Patient is a Dependent</span>
+            </label>
+        </div>
+
+        {formData.hasDependent && (
+            <div className="pl-4 border-l-2 border-gray-200 dark:border-slate-700 mb-6 animate-fade-in-up">
+                <SectionHeader title="Dependent Information" />
+                <div className="grid grid-cols-2 gap-4">
+                    <InputField id="dependentFirstName" label="First Name" value={formData.dependentFirstName} onChange={v => onChange({...formData, dependentFirstName: v})} onFocus={() => onFieldFocus('dependentFirstName')} />
+                    <InputField id="dependentLastName" label="Last Name" value={formData.dependentLastName} onChange={v => onChange({...formData, dependentLastName: v})} onFocus={() => onFieldFocus('dependentLastName')} />
+                    <div id="dependentDob">
+                        <DatePicker label="Date of Birth" value={formData.dependentDob} onChange={v => onChange({...formData, dependentDob: v})} onFocus={() => onFieldFocus('dependentDob')} />
+                    </div>
+                    <SelectField 
+                        id="dependentGender"
+                        label="Gender" 
+                        value={formData.dependentGender} 
+                        onChange={v => onChange({...formData, dependentGender: v})} 
+                        onFocus={() => onFieldFocus('dependentGender')}
+                        options={GENDER_OPTIONS}
+                    />
+                </div>
+            </div>
+        )}
+
+        <SectionHeader title="Eligibility Request" />
+        <div className="grid grid-cols-2 gap-4">
+            <div id="serviceDate">
+                <DatePicker label="Service Date" value={formData.serviceDate} onChange={v => onChange({...formData, serviceDate: v})} onFocus={() => onFieldFocus('serviceDate')} />
+            </div>
+            <div>
+                <label className="block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1.5 uppercase tracking-wide">Service Type Code</label>
+                <select 
+                    id="serviceTypeCodes"
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded text-sm text-gray-900 dark:text-white focus:outline-none focus:border-black dark:focus:border-brand-500 focus:ring-1 focus:ring-black dark:focus:ring-brand-500 transition-colors"
+                    value={formData.serviceTypeCodes[0] || '30'}
+                    onChange={e => onChange({...formData, serviceTypeCodes: [e.target.value]})}
+                    onFocus={() => onFieldFocus('serviceTypeCodes')}
+                >
+                    {Object.entries(SERVICE_TYPE_CODES).map(([code, desc]) => (
+                        <option key={code} value={code}>{code} - {desc}</option>
+                    ))}
+                </select>
+            </div>
+        </div>
+      </>
+  );
+
+  const renderForm276 = () => (
+      <>
+        <SectionHeader title="Payer & Provider" />
+        <div className="grid grid-cols-2 gap-4">
+            <InputField id="payerName" label="Payer Name" value={formData276.payerName} onChange={v => onChange276({...formData276, payerName: v})} onFocus={() => onFieldFocus('payerName')} />
+            <InputField id="payerId" label="Payer ID" value={formData276.payerId} onChange={v => onChange276({...formData276, payerId: v})} onFocus={() => onFieldFocus('payerId')} />
+            <InputField id="providerName" label="Provider Name" value={formData276.providerName} onChange={v => onChange276({...formData276, providerName: v})} onFocus={() => onFieldFocus('providerName')} />
+            <InputField id="providerNpi" label="Provider NPI" value={formData276.providerNpi} onChange={v => onChange276({...formData276, providerNpi: v})} onFocus={() => onFieldFocus('providerNpi')} />
+        </div>
+
+        <SectionHeader title="Subscriber" />
+        <div className="grid grid-cols-2 gap-4">
+            <InputField id="subscriberFirstName" label="First Name" value={formData276.subscriberFirstName} onChange={v => onChange276({...formData276, subscriberFirstName: v})} onFocus={() => onFieldFocus('subscriberFirstName')} />
+            <InputField id="subscriberLastName" label="Last Name" value={formData276.subscriberLastName} onChange={v => onChange276({...formData276, subscriberLastName: v})} onFocus={() => onFieldFocus('subscriberLastName')} />
+            <InputField id="subscriberId" label="Member ID" value={formData276.subscriberId} onChange={v => onChange276({...formData276, subscriberId: v})} onFocus={() => onFieldFocus('subscriberId')} />
+        </div>
+
+        <div className="my-4 pt-4 border-t border-gray-100 dark:border-slate-800">
+            <label className="flex items-center space-x-2 cursor-pointer">
+                <input 
+                    type="checkbox" 
+                    className="form-checkbox h-4 w-4 text-brand-600 rounded border-gray-300 focus:ring-brand-500"
+                    checked={formData276.hasDependent}
+                    onChange={e => onChange276({...formData276, hasDependent: e.target.checked})}
+                />
+                <span className="text-sm font-medium text-gray-700 dark:text-slate-300">Patient is a Dependent</span>
+            </label>
+        </div>
+
+        {formData276.hasDependent && (
+            <div className="pl-4 border-l-2 border-gray-200 dark:border-slate-700 mb-6 animate-fade-in-up">
+                <SectionHeader title="Dependent Information" />
+                <div className="grid grid-cols-2 gap-4">
+                    <InputField id="dependentFirstName" label="First Name" value={formData276.dependentFirstName} onChange={v => onChange276({...formData276, dependentFirstName: v})} onFocus={() => onFieldFocus('dependentFirstName')} />
+                    <InputField id="dependentLastName" label="Last Name" value={formData276.dependentLastName} onChange={v => onChange276({...formData276, dependentLastName: v})} onFocus={() => onFieldFocus('dependentLastName')} />
+                </div>
+            </div>
+        )}
+
+        <SectionHeader title="Claim Details" />
+        <div className="grid grid-cols-2 gap-4">
+            <InputField id="claimId" label="Claim ID / Trace #" value={formData276.claimId} onChange={v => onChange276({...formData276, claimId: v})} onFocus={() => onFieldFocus('claimId')} />
+            <InputField id="chargeAmount" label="Charge Amount" value={formData276.chargeAmount} onChange={v => onChange276({...formData276, chargeAmount: v})} onFocus={() => onFieldFocus('chargeAmount')} />
+            <div id="serviceDate" className="col-span-2">
+                <DatePicker label="Service Date" value={formData276.serviceDate} onChange={v => onChange276({...formData276, serviceDate: v})} onFocus={() => onFieldFocus('serviceDate')} />
+            </div>
+        </div>
+      </>
+  );
+
+  const renderForm837 = () => (
+      <>
+        <SectionHeader title="Billing Provider" />
+        <div className="grid grid-cols-2 gap-4">
+            <InputField id="billingProviderName" label="Organization Name" value={formData837.billingProviderName} onChange={v => onChange837({...formData837, billingProviderName: v})} onFocus={() => onFieldFocus('billingProviderName')} />
+            <InputField id="billingProviderNpi" label="NPI" value={formData837.billingProviderNpi} onChange={v => onChange837({...formData837, billingProviderNpi: v})} onFocus={() => onFieldFocus('billingProviderNpi')} />
+            <InputField id="billingTaxId" label="Tax ID (EIN)" value={formData837.billingTaxId} onChange={v => onChange837({...formData837, billingTaxId: v})} onFocus={() => onFieldFocus('billingTaxId')} />
+        </div>
+        <div className="mt-3">
+            <InputField id="billingProviderAddress" label="Street Address" value={formData837.billingProviderAddress} onChange={v => onChange837({...formData837, billingProviderAddress: v})} onFocus={() => onFieldFocus('billingProviderAddress')} />
+            <div className="grid grid-cols-3 gap-4">
+                <InputField id="billingProviderCity" label="City" value={formData837.billingProviderCity} onChange={v => onChange837({...formData837, billingProviderCity: v})} onFocus={() => onFieldFocus('billingProviderCity')} />
+                <InputField id="billingProviderState" label="State" value={formData837.billingProviderState} onChange={v => onChange837({...formData837, billingProviderState: v})} onFocus={() => onFieldFocus('billingProviderState')} />
+                <InputField id="billingProviderZip" label="Zip" value={formData837.billingProviderZip} onChange={v => onChange837({...formData837, billingProviderZip: v})} onFocus={() => onFieldFocus('billingProviderZip')} />
+            </div>
+        </div>
+
+        <SectionHeader title="Subscriber" />
+        <div className="grid grid-cols-2 gap-4">
+            <InputField id="subscriberFirstName" label="First Name" value={formData837.subscriberFirstName} onChange={v => onChange837({...formData837, subscriberFirstName: v})} onFocus={() => onFieldFocus('subscriberFirstName')} />
+            <InputField id="subscriberLastName" label="Last Name" value={formData837.subscriberLastName} onChange={v => onChange837({...formData837, subscriberLastName: v})} onFocus={() => onFieldFocus('subscriberLastName')} />
+            <InputField id="subscriberId" label="Member ID" value={formData837.subscriberId} onChange={v => onChange837({...formData837, subscriberId: v})} onFocus={() => onFieldFocus('subscriberId')} />
+            <div id="subscriberDob">
+                <DatePicker label="DOB" value={formData837.subscriberDob} onChange={v => onChange837({...formData837, subscriberDob: v})} onFocus={() => onFieldFocus('subscriberDob')} />
+            </div>
+            <SelectField id="subscriberGender" label="Gender" value={formData837.subscriberGender} onChange={v => onChange837({...formData837, subscriberGender: v})} onFocus={() => onFieldFocus('subscriberGender')} options={GENDER_OPTIONS} />
+        </div>
+
+        <SectionHeader title="Claim Information" />
+        <div className="grid grid-cols-2 gap-4">
+            <InputField id="payerName" label="Payer Name" value={formData837.payerName} onChange={v => onChange837({...formData837, payerName: v})} onFocus={() => onFieldFocus('payerName')} />
+            <InputField id="payerId" label="Payer ID" value={formData837.payerId} onChange={v => onChange837({...formData837, payerId: v})} onFocus={() => onFieldFocus('payerId')} />
+            <InputField id="claimId" label="Claim ID" value={formData837.claimId} onChange={v => onChange837({...formData837, claimId: v})} onFocus={() => onFieldFocus('claimId')} />
+            <InputField id="totalCharge" label="Total Charge" value={formData837.totalCharge} onChange={v => onChange837({...formData837, totalCharge: v})} onFocus={() => onFieldFocus('totalCharge')} />
+            <AutocompleteField id="diagnosisCode1" label="Primary Diagnosis" value={formData837.diagnosisCode1} onChange={v => onChange837({...formData837, diagnosisCode1: v})} onFocus={() => onFieldFocus('diagnosisCode1')} options={ICD10_CODES} placeholder="e.g. R05" />
+            <AutocompleteField id="diagnosisCode2" label="Secondary Diagnosis" value={formData837.diagnosisCode2} onChange={v => onChange837({...formData837, diagnosisCode2: v})} onFocus={() => onFieldFocus('diagnosisCode2')} options={ICD10_CODES} placeholder="Optional" />
+        </div>
+
+        <SectionHeader 
+            title="Service Lines" 
+            action={
+                <button 
+                    onClick={handleAddServiceLine}
+                    className="text-[10px] bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-gray-900 dark:text-white px-3 py-1.5 rounded transition-colors font-medium border border-gray-200 dark:border-slate-700"
+                >
+                    + Add Service
+                </button>
+            }
+        />
+        <div className="space-y-4">
+            {formData837.serviceLines.map((line, idx) => (
+                <div key={idx} className="bg-gray-50 dark:bg-slate-800/50 rounded p-4 border border-gray-100 dark:border-slate-800 relative group">
+                    <button 
+                        onClick={() => handleRemoveServiceLine(idx)}
+                        className="absolute top-2 right-2 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-1"
+                        title="Remove Line"
+                    >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                    <div className="grid grid-cols-2 gap-4 mb-2">
+                        <div id={`line-${idx}-serviceDate`}>
+                            <DatePicker label="Date" value={line.serviceDate} onChange={v => updateServiceLine(idx, 'serviceDate', v)} onFocus={() => onFieldFocus(`line-${idx}-serviceDate`)} />
+                        </div>
+                        <AutocompleteField 
+                            id={`line-${idx}-procedureCode`}
+                            label="Procedure Code" 
+                            value={line.procedureCode} 
+                            onChange={v => updateServiceLine(idx, 'procedureCode', v)} 
+                            onFocus={() => onFieldFocus(`line-${idx}-procedureCode`)}
+                            options={PROCEDURE_CODES}
+                            placeholder="CPT/HCPCS"
+                        />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <InputField id={`line-${idx}-lineCharge`} label="Charge ($)" value={line.lineCharge} onChange={v => updateServiceLine(idx, 'lineCharge', v)} onFocus={() => onFieldFocus(`line-${idx}-lineCharge`)} />
+                        <InputField id={`line-${idx}-units`} label="Units" value={line.units} onChange={v => updateServiceLine(idx, 'units', v)} onFocus={() => onFieldFocus(`line-${idx}-units`)} />
+                    </div>
+                </div>
+            ))}
+        </div>
+      </>
+  );
+
+  const renderForm834 = () => (
+      <>
+        <SectionHeader title="Sponsor & Payer" />
+        <div className="grid grid-cols-2 gap-4">
+            <InputField id="sponsorName" label="Sponsor Name" value={formData834.sponsorName} onChange={v => onChange834({...formData834, sponsorName: v})} onFocus={() => onFieldFocus('sponsorName')} />
+            <InputField id="sponsorTaxId" label="Sponsor Tax ID" value={formData834.sponsorTaxId} onChange={v => onChange834({...formData834, sponsorTaxId: v})} onFocus={() => onFieldFocus('sponsorTaxId')} />
+            <InputField id="payerName" label="Payer Name" value={formData834.payerName} onChange={v => onChange834({...formData834, payerName: v})} onFocus={() => onFieldFocus('payerName')} />
+            <InputField id="payerId" label="Payer ID" value={formData834.payerId} onChange={v => onChange834({...formData834, payerId: v})} onFocus={() => onFieldFocus('payerId')} />
+        </div>
+
+        <SectionHeader title="Enrollment Action" />
+        <div className="grid grid-cols-2 gap-4">
+            <SelectField id="maintenanceType" label="Type" value={formData834.maintenanceType} onChange={v => onChange834({...formData834, maintenanceType: v})} onFocus={() => onFieldFocus('maintenanceType')} options={MAINT_TYPES} />
+            <SelectField id="maintenanceReason" label="Reason" value={formData834.maintenanceReason} onChange={v => onChange834({...formData834, maintenanceReason: v})} onFocus={() => onFieldFocus('maintenanceReason')} options={MAINT_REASONS} />
+            <div id="planEffectiveDate" className="col-span-2">
+                <DatePicker label="Effective Date" value={formData834.planEffectiveDate} onChange={v => onChange834({...formData834, planEffectiveDate: v})} onFocus={() => onFieldFocus('planEffectiveDate')} />
+            </div>
+        </div>
+
+        <SectionHeader title="Subscriber" />
+        <div className="grid grid-cols-2 gap-4">
+            <InputField id="subFirstName" label="First Name" value={formData834.subscriber.firstName} onChange={v => onChange834({...formData834, subscriber: {...formData834.subscriber, firstName: v}})} onFocus={() => onFieldFocus('subFirstName')} />
+            <InputField id="subLastName" label="Last Name" value={formData834.subscriber.lastName} onChange={v => onChange834({...formData834, subscriber: {...formData834.subscriber, lastName: v}})} onFocus={() => onFieldFocus('subLastName')} />
+            <InputField id="subId" label="Member ID" value={formData834.subscriber.id} onChange={v => onChange834({...formData834, subscriber: {...formData834.subscriber, id: v}})} onFocus={() => onFieldFocus('subId')} />
+            <InputField id="subSsn" label="SSN" value={formData834.subscriber.ssn} onChange={v => onChange834({...formData834, subscriber: {...formData834.subscriber, ssn: v}})} onFocus={() => onFieldFocus('subSsn')} />
+            <div id="subDob">
+                <DatePicker label="DOB" value={formData834.subscriber.dob} onChange={v => onChange834({...formData834, subscriber: {...formData834.subscriber, dob: v}})} onFocus={() => onFieldFocus('subDob')} />
+            </div>
+            <SelectField id="subGender" label="Gender" value={formData834.subscriber.gender} onChange={v => onChange834({...formData834, subscriber: {...formData834.subscriber, gender: v}})} onFocus={() => onFieldFocus('subGender')} options={GENDER_OPTIONS} />
+        </div>
+
+        <SectionHeader title="Coverage" />
+        <div className="grid grid-cols-2 gap-4">
+            <InputField id="policyNumber" label="Policy Number" value={formData834.policyNumber} onChange={v => onChange834({...formData834, policyNumber: v})} onFocus={() => onFieldFocus('policyNumber')} />
+            <SelectField id="coverageLevelCode" label="Level" value={formData834.coverageLevelCode} onChange={v => onChange834({...formData834, coverageLevelCode: v})} onFocus={() => onFieldFocus('coverageLevelCode')} options={COVERAGE_LEVELS} />
+        </div>
+
+        <SectionHeader 
+            title="Dependents" 
+            action={
+                <button 
+                    onClick={handleAddDependent}
+                    className="text-[10px] bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-gray-900 dark:text-white px-3 py-1.5 rounded transition-colors font-medium border border-gray-200 dark:border-slate-700"
+                >
+                    + Add Dependent
+                </button>
+            }
+        />
+        <div className="space-y-4">
+            {formData834.dependents.map((dep, idx) => (
+                <div key={idx} className="bg-gray-50 dark:bg-slate-800/50 rounded p-4 border border-gray-100 dark:border-slate-800 relative group">
+                    <button 
+                        onClick={() => handleRemoveDependent(idx)}
+                        className="absolute top-2 right-2 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-1"
+                        title="Remove Dependent"
+                    >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                    <div className="grid grid-cols-2 gap-4 mb-3">
+                        <InputField id={`dep-${idx}-firstName`} label="First Name" value={dep.firstName} onChange={v => updateDependent(idx, 'firstName', v)} onFocus={() => onFieldFocus(`dep-${idx}-firstName`)} />
+                        <InputField id={`dep-${idx}-lastName`} label="Last Name" value={dep.lastName} onChange={v => updateDependent(idx, 'lastName', v)} onFocus={() => onFieldFocus(`dep-${idx}-lastName`)} />
+                    </div>
+                    <div className="grid grid-cols-3 gap-4">
+                        <div id={`dep-${idx}-dob`}>
+                            <DatePicker label="DOB" value={dep.dob} onChange={v => updateDependent(idx, 'dob', v)} onFocus={() => onFieldFocus(`dep-${idx}-dob`)} />
+                        </div>
+                        <SelectField id={`dep-${idx}-gender`} label="Gender" value={dep.gender} onChange={v => updateDependent(idx, 'gender', v)} onFocus={() => onFieldFocus(`dep-${idx}-gender`)} options={GENDER_OPTIONS} />
+                        <InputField id={`dep-${idx}-rel`} label="Rel Code" value={dep.relationship} onChange={v => updateDependent(idx, 'relationship', v)} onFocus={() => onFieldFocus(`dep-${idx}-rel`)} placeholder="19=Child" />
+                    </div>
+                </div>
+            ))}
+        </div>
+      </>
+  );
 
   const renderForm850 = () => {
       if (!formData850 || !onChange850) return null;
@@ -486,412 +810,167 @@ export const EdiGenerator: React.FC<Props> = ({
       );
   };
 
-  // --- 270 Eligibility Form ---
-  const renderForm270 = () => (
-    <>
-      <SectionHeader title="Payer & Provider" />
-      <div className="grid grid-cols-2 gap-4">
-        <InputField id="payerName" label="Payer Name" value={formData.payerName} onChange={v => onChange({...formData, payerName: v})} onFocus={() => onFieldFocus('payerName')} />
-        <InputField id="payerId" label="Payer ID" value={formData.payerId} onChange={v => onChange({...formData, payerId: v})} onFocus={() => onFieldFocus('payerId')} />
-        <InputField id="providerName" label="Provider Name" value={formData.providerName} onChange={v => onChange({...formData, providerName: v})} onFocus={() => onFieldFocus('providerName')} />
-        <InputField id="providerNpi" label="Provider NPI" value={formData.providerNpi} onChange={v => onChange({...formData, providerNpi: v})} onFocus={() => onFieldFocus('providerNpi')} />
-      </div>
-
-      <SectionHeader title="Subscriber" />
-      <div className="grid grid-cols-2 gap-4">
-        <InputField id="subscriberFirstName" label="First Name" value={formData.subscriberFirstName} onChange={v => onChange({...formData, subscriberFirstName: v})} onFocus={() => onFieldFocus('subscriberFirstName')} />
-        <InputField id="subscriberLastName" label="Last Name" value={formData.subscriberLastName} onChange={v => onChange({...formData, subscriberLastName: v})} onFocus={() => onFieldFocus('subscriberLastName')} />
-        <InputField id="subscriberId" label="Member ID" value={formData.subscriberId} onChange={v => onChange({...formData, subscriberId: v})} onFocus={() => onFieldFocus('subscriberId')} />
-        <div id="subscriberDob">
-            <DatePicker label="DOB" value={formData.subscriberDob} onChange={v => onChange({...formData, subscriberDob: v})} onFocus={() => onFieldFocus('subscriberDob')} />
-        </div>
-      </div>
-
-      <div className="mt-4 mb-4 flex items-center">
-        <input 
-            type="checkbox" 
-            id="hasDependent" 
-            checked={formData.hasDependent} 
-            onChange={e => onChange({...formData, hasDependent: e.target.checked})}
-            className="rounded border-gray-300 dark:border-slate-700 text-brand-600 focus:ring-brand-500"
-        />
-        <label htmlFor="hasDependent" className="ml-2 text-sm text-gray-700 dark:text-slate-300 font-medium">Dependent is Patient</label>
-      </div>
-
-      {formData.hasDependent && (
-        <>
-            <SectionHeader title="Dependent" />
+  const renderForm278 = () => {
+      if (!formData278 || !onChange278) return null;
+      return (
+          <>
+            <SectionHeader title="Review Details" />
             <div className="grid grid-cols-2 gap-4">
-                <InputField id="dependentFirstName" label="First Name" value={formData.dependentFirstName} onChange={v => onChange({...formData, dependentFirstName: v})} onFocus={() => onFieldFocus('dependentFirstName')} />
-                <InputField id="dependentLastName" label="Last Name" value={formData.dependentLastName} onChange={v => onChange({...formData, dependentLastName: v})} onFocus={() => onFieldFocus('dependentLastName')} />
-                <div id="dependentDob">
-                    <DatePicker label="DOB" value={formData.dependentDob} onChange={v => onChange({...formData, dependentDob: v})} onFocus={() => onFieldFocus('dependentDob')} />
+                <InputField id="requesterName" label="Requesting Provider" value={formData278.requesterName} onChange={v => onChange278({...formData278, requesterName: v})} onFocus={() => onFieldFocus('requesterName')} />
+                <InputField id="requesterNpi" label="Requester NPI" value={formData278.requesterNpi} onChange={v => onChange278({...formData278, requesterNpi: v})} onFocus={() => onFieldFocus('requesterNpi')} />
+                <InputField id="umoName" label="Utilization Mgmt Org" value={formData278.umoName} onChange={v => onChange278({...formData278, umoName: v})} onFocus={() => onFieldFocus('umoName')} />
+                <InputField id="umoId" label="UMO ID" value={formData278.umoId} onChange={v => onChange278({...formData278, umoId: v})} onFocus={() => onFieldFocus('umoId')} />
+            </div>
+
+            <SectionHeader title="Patient" />
+            <div className="grid grid-cols-2 gap-4">
+                <InputField id="subscriberFirstName" label="First Name" value={formData278.subscriberFirstName} onChange={v => onChange278({...formData278, subscriberFirstName: v})} onFocus={() => onFieldFocus('subscriberFirstName')} />
+                <InputField id="subscriberLastName" label="Last Name" value={formData278.subscriberLastName} onChange={v => onChange278({...formData278, subscriberLastName: v})} onFocus={() => onFieldFocus('subscriberLastName')} />
+                <InputField id="subscriberId" label="Member ID" value={formData278.subscriberId} onChange={v => onChange278({...formData278, subscriberId: v})} onFocus={() => onFieldFocus('subscriberId')} />
+                <div id="subscriberDob">
+                    <DatePicker label="DOB" value={formData278.subscriberDob} onChange={v => onChange278({...formData278, subscriberDob: v})} onFocus={() => onFieldFocus('subscriberDob')} />
                 </div>
-                <SelectField id="dependentGender" label="Gender" value={formData.dependentGender} onChange={v => onChange({...formData, dependentGender: v})} onFocus={() => onFieldFocus('dependentGender')} options={GENDER_OPTIONS} />
             </div>
-        </>
-      )}
 
-      <SectionHeader title="Request Details" />
-      <div className="space-y-4">
-        <div id="serviceDate">
-            <DatePicker label="Service Date" value={formData.serviceDate} onChange={v => onChange({...formData, serviceDate: v})} onFocus={() => onFieldFocus('serviceDate')} />
-        </div>
-        
-        <div id="serviceTypeCodes">
-            <label className="block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1.5 uppercase tracking-wide">Service Types</label>
-            <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded p-3">
-                <div className="flex flex-wrap gap-2 mb-3">
-                    {formData.serviceTypeCodes.map(code => (
-                        <span key={code} className="inline-flex items-center px-2 py-1 rounded bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs border border-blue-100 dark:border-blue-800">
-                            <span className="font-mono font-bold mr-1.5">{code}</span>
-                            <span className="mr-1.5 truncate max-w-[200px] hidden sm:inline">{SERVICE_TYPE_CODES[code] || 'Unknown'}</span>
-                            <button 
-                                onClick={() => {
-                                    const newCodes = formData.serviceTypeCodes.filter(c => c !== code);
-                                    onChange({...formData, serviceTypeCodes: newCodes});
-                                }}
-                                className="ml-0.5 text-blue-400 hover:text-red-500 dark:text-blue-400 dark:hover:text-red-400 font-bold"
-                            >
-                                ×
-                            </button>
-                        </span>
-                    ))}
-                    {formData.serviceTypeCodes.length === 0 && (
-                        <span className="text-gray-400 text-xs italic">No service types selected (Defaults to 30)</span>
-                    )}
+            <SectionHeader title="Service Request" />
+            <div className="grid grid-cols-2 gap-4">
+                <AutocompleteField 
+                    id="diagnosisCode"
+                    label="Diagnosis" 
+                    value={formData278.diagnosisCode} 
+                    onChange={v => onChange278({...formData278, diagnosisCode: v})} 
+                    onFocus={() => onFieldFocus('diagnosisCode')}
+                    options={ICD10_CODES}
+                    placeholder="e.g. R69"
+                />
+                <AutocompleteField 
+                    id="procedureCode"
+                    label="Procedure" 
+                    value={formData278.procedureCode} 
+                    onChange={v => onChange278({...formData278, procedureCode: v})} 
+                    onFocus={() => onFieldFocus('procedureCode')}
+                    options={PROCEDURE_CODES}
+                    placeholder="e.g. 99213"
+                />
+                <InputField id="quantity" label="Quantity/Units" value={formData278.quantity} onChange={v => onChange278({...formData278, quantity: v})} onFocus={() => onFieldFocus('quantity')} />
+                <div id="serviceDate">
+                    <DatePicker label="Date" value={formData278.serviceDate} onChange={v => onChange278({...formData278, serviceDate: v})} onFocus={() => onFieldFocus('serviceDate')} />
                 </div>
-                
-                <select
-                    className="w-full px-3 py-2 bg-gray-50 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded text-sm text-gray-900 dark:text-white focus:outline-none focus:border-black dark:focus:border-brand-500 transition-colors"
-                    onChange={(e) => {
-                        if (e.target.value && !formData.serviceTypeCodes.includes(e.target.value)) {
-                            onChange({...formData, serviceTypeCodes: [...formData.serviceTypeCodes, e.target.value]});
-                            e.target.value = ""; // Reset select
-                        }
-                    }}
-                    onFocus={() => onFieldFocus('serviceTypeCodes')}
-                    value=""
-                >
-                    <option value="" disabled>+ Add Service Type...</option>
-                    {Object.entries(SERVICE_TYPE_CODES).map(([code, desc]) => (
-                        <option key={code} value={code} disabled={formData.serviceTypeCodes.includes(code)}>
-                            {code} - {desc}
-                        </option>
-                    ))}
-                </select>
             </div>
-        </div>
-      </div>
-    </>
-  );
+          </>
+      );
+  };
 
-  // --- 276 Claim Status Form ---
-  const renderForm276 = () => (
-    <>
-      <SectionHeader title="Payer & Provider" />
-      <div className="grid grid-cols-2 gap-4">
-        <InputField id="payerName" label="Payer Name" value={formData276.payerName} onChange={v => onChange276({...formData276, payerName: v})} onFocus={() => onFieldFocus('payerName')} />
-        <InputField id="payerId" label="Payer ID" value={formData276.payerId} onChange={v => onChange276({...formData276, payerId: v})} onFocus={() => onFieldFocus('payerId')} />
-        <InputField id="providerName" label="Provider Name" value={formData276.providerName} onChange={v => onChange276({...formData276, providerName: v})} onFocus={() => onFieldFocus('providerName')} />
-        <InputField id="providerNpi" label="Provider NPI" value={formData276.providerNpi} onChange={v => onChange276({...formData276, providerNpi: v})} onFocus={() => onFieldFocus('providerNpi')} />
-      </div>
+  const handleAddRemit = () => {
+      const newItem: Remittance820 = { refId: '', amount: '0.00', name: '' };
+      if (formData820 && onChange820) {
+          onChange820({ ...formData820, remittances: [...formData820.remittances, newItem] });
+      }
+  };
 
-      <SectionHeader title="Subscriber" />
-      <div className="grid grid-cols-2 gap-4">
-        <InputField id="subscriberFirstName" label="First Name" value={formData276.subscriberFirstName} onChange={v => onChange276({...formData276, subscriberFirstName: v})} onFocus={() => onFieldFocus('subscriberFirstName')} />
-        <InputField id="subscriberLastName" label="Last Name" value={formData276.subscriberLastName} onChange={v => onChange276({...formData276, subscriberLastName: v})} onFocus={() => onFieldFocus('subscriberLastName')} />
-        <InputField id="subscriberId" label="Member ID" value={formData276.subscriberId} onChange={v => onChange276({...formData276, subscriberId: v})} onFocus={() => onFieldFocus('subscriberId')} />
-      </div>
+  const handleRemoveRemit = (idx: number) => {
+      if (formData820 && onChange820) {
+          const newItems = [...formData820.remittances];
+          newItems.splice(idx, 1);
+          onChange820({ ...formData820, remittances: newItems });
+      }
+  };
 
-      <div className="mt-4 mb-4 flex items-center">
-        <input 
-            type="checkbox" 
-            id="hasDependent276" 
-            checked={formData276.hasDependent} 
-            onChange={e => onChange276({...formData276, hasDependent: e.target.checked})}
-            className="rounded border-gray-300 dark:border-slate-700 text-brand-600 focus:ring-brand-500"
-        />
-        <label htmlFor="hasDependent276" className="ml-2 text-sm text-gray-700 dark:text-slate-300 font-medium">Dependent is Patient</label>
-      </div>
+  const updateRemit = (idx: number, field: keyof Remittance820, value: string) => {
+      if (formData820 && onChange820) {
+          const newItems = [...formData820.remittances];
+          newItems[idx] = { ...newItems[idx], [field]: value };
+          onChange820({ ...formData820, remittances: newItems });
+      }
+  };
 
-      {formData276.hasDependent && (
-        <>
-            <SectionHeader title="Dependent" />
+  const renderForm820 = () => {
+      if (!formData820 || !onChange820) return null;
+      return (
+          <>
+            <SectionHeader title="Payment Information" />
             <div className="grid grid-cols-2 gap-4">
-                <InputField id="dependentFirstName" label="First Name" value={formData276.dependentFirstName} onChange={v => onChange276({...formData276, dependentFirstName: v})} onFocus={() => onFieldFocus('dependentFirstName')} />
-                <InputField id="dependentLastName" label="Last Name" value={formData276.dependentLastName} onChange={v => onChange276({...formData276, dependentLastName: v})} onFocus={() => onFieldFocus('dependentLastName')} />
+                <InputField id="totalPayment" label="Total Amount" value={formData820.totalPayment} onChange={v => onChange820({...formData820, totalPayment: v})} onFocus={() => onFieldFocus('totalPayment')} />
+                <InputField id="checkNumber" label="Check/Trace #" value={formData820.checkNumber} onChange={v => onChange820({...formData820, checkNumber: v})} onFocus={() => onFieldFocus('checkNumber')} />
+                <div id="checkDate">
+                    <DatePicker label="Effective Date" value={formData820.checkDate} onChange={v => onChange820({...formData820, checkDate: v})} onFocus={() => onFieldFocus('checkDate')} />
+                </div>
             </div>
-        </>
-      )}
 
-      <SectionHeader title="Claim Details" />
-      <div className="grid grid-cols-2 gap-4">
-        <InputField id="claimId" label="Claim ID (Trace)" value={formData276.claimId} onChange={v => onChange276({...formData276, claimId: v})} onFocus={() => onFieldFocus('claimId')} />
-        <InputField id="chargeAmount" label="Charge Amount" value={formData276.chargeAmount} onChange={v => onChange276({...formData276, chargeAmount: v})} onFocus={() => onFieldFocus('chargeAmount')} />
-        <div id="serviceDate">
-            <DatePicker label="Service Date" value={formData276.serviceDate} onChange={v => onChange276({...formData276, serviceDate: v})} onFocus={() => onFieldFocus('serviceDate')} />
-        </div>
-      </div>
-    </>
-  );
-
-  // --- 837 Claim Form ---
-  const handleAddServiceLine = () => {
-    const newLine: ServiceLine837 = {
-        procedureCode: '',
-        lineCharge: '',
-        units: '1',
-        serviceDate: ''
-    };
-    onChange837({ ...formData837, serviceLines: [...formData837.serviceLines, newLine] });
-  };
-
-  const handleRemoveServiceLine = (idx: number) => {
-    const newLines = [...formData837.serviceLines];
-    newLines.splice(idx, 1);
-    onChange837({ ...formData837, serviceLines: newLines });
-  };
-
-  const updateServiceLine = (idx: number, field: keyof ServiceLine837, value: string) => {
-    const newLines = [...formData837.serviceLines];
-    newLines[idx] = { ...newLines[idx], [field]: value };
-    onChange837({ ...formData837, serviceLines: newLines });
-  };
-
-  const renderForm837 = () => (
-      <>
-        <SectionHeader title="Claim Type" />
-        <div className="flex gap-4 mb-4">
-             <button 
-                onClick={() => onChange837({...formData837, type: 'Professional'})}
-                className={`flex-1 py-2 text-sm font-medium rounded border ${formData837.type === 'Professional' ? 'bg-black dark:bg-brand-600 text-white border-transparent' : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-300 border-gray-200 dark:border-slate-700'}`}
-             >
-                 Professional (CMS-1500)
-             </button>
-             <button 
-                onClick={() => onChange837({...formData837, type: 'Institutional'})}
-                className={`flex-1 py-2 text-sm font-medium rounded border ${formData837.type === 'Institutional' ? 'bg-black dark:bg-brand-600 text-white border-transparent' : 'bg-white dark:bg-slate-800 text-gray-600 dark:text-slate-300 border-gray-200 dark:border-slate-700'}`}
-             >
-                 Institutional (UB-04)
-             </button>
-        </div>
-
-        <SectionHeader title="Billing Provider" />
-        <div className="grid grid-cols-2 gap-4">
-            <InputField id="billingProviderName" label="Name" value={formData837.billingProviderName} onChange={v => onChange837({...formData837, billingProviderName: v})} onFocus={() => onFieldFocus('billingProviderName')} />
-            <InputField id="billingProviderNpi" label="NPI" value={formData837.billingProviderNpi} onChange={v => onChange837({...formData837, billingProviderNpi: v})} onFocus={() => onFieldFocus('billingProviderNpi')} />
-            <InputField id="billingTaxId" label="Tax ID" value={formData837.billingTaxId} onChange={v => onChange837({...formData837, billingTaxId: v})} onFocus={() => onFieldFocus('billingTaxId')} />
-            <InputField id="billingProviderAddress" label="Address" value={formData837.billingProviderAddress} onChange={v => onChange837({...formData837, billingProviderAddress: v})} onFocus={() => onFieldFocus('billingProviderAddress')} />
-            <InputField id="billingProviderCity" label="City" value={formData837.billingProviderCity} onChange={v => onChange837({...formData837, billingProviderCity: v})} onFocus={() => onFieldFocus('billingProviderCity')} />
+            <SectionHeader title="Parties" />
             <div className="grid grid-cols-2 gap-4">
-                <InputField id="billingProviderState" label="State" value={formData837.billingProviderState} onChange={v => onChange837({...formData837, billingProviderState: v})} onFocus={() => onFieldFocus('billingProviderState')} />
-                <InputField id="billingProviderZip" label="Zip" value={formData837.billingProviderZip} onChange={v => onChange837({...formData837, billingProviderZip: v})} onFocus={() => onFieldFocus('billingProviderZip')} />
+                <InputField id="premiumPayerName" label="Employer (Payer)" value={formData820.premiumPayerName} onChange={v => onChange820({...formData820, premiumPayerName: v})} onFocus={() => onFieldFocus('premiumPayerName')} />
+                <InputField id="premiumPayerId" label="Employer Tax ID" value={formData820.premiumPayerId} onChange={v => onChange820({...formData820, premiumPayerId: v})} onFocus={() => onFieldFocus('premiumPayerId')} />
+                <InputField id="premiumReceiverName" label="Insurer (Receiver)" value={formData820.premiumReceiverName} onChange={v => onChange820({...formData820, premiumReceiverName: v})} onFocus={() => onFieldFocus('premiumReceiverName')} />
+                <InputField id="premiumReceiverId" label="Insurer ID" value={formData820.premiumReceiverId} onChange={v => onChange820({...formData820, premiumReceiverId: v})} onFocus={() => onFieldFocus('premiumReceiverId')} />
             </div>
-        </div>
 
-        <SectionHeader title="Subscriber" />
-        <div className="grid grid-cols-2 gap-4">
-            <InputField id="subscriberFirstName" label="First Name" value={formData837.subscriberFirstName} onChange={v => onChange837({...formData837, subscriberFirstName: v})} onFocus={() => onFieldFocus('subscriberFirstName')} />
-            <InputField id="subscriberLastName" label="Last Name" value={formData837.subscriberLastName} onChange={v => onChange837({...formData837, subscriberLastName: v})} onFocus={() => onFieldFocus('subscriberLastName')} />
-            <InputField id="subscriberId" label="Member ID" value={formData837.subscriberId} onChange={v => onChange837({...formData837, subscriberId: v})} onFocus={() => onFieldFocus('subscriberId')} />
-            <div id="subscriberDob">
-                <DatePicker label="DOB" value={formData837.subscriberDob} onChange={v => onChange837({...formData837, subscriberDob: v})} onFocus={() => onFieldFocus('subscriberDob')} />
-            </div>
-            <InputField id="subscriberGender" label="Gender" value={formData837.subscriberGender} onChange={v => onChange837({...formData837, subscriberGender: v})} onFocus={() => onFieldFocus('subscriberGender')} />
-        </div>
-
-        <SectionHeader title="Claim Info" />
-        <div className="grid grid-cols-2 gap-4">
-            <InputField id="claimId" label="Claim ID" value={formData837.claimId} onChange={v => onChange837({...formData837, claimId: v})} onFocus={() => onFieldFocus('claimId')} />
-            <InputField id="totalCharge" label="Total Charge" value={formData837.totalCharge} onChange={v => onChange837({...formData837, totalCharge: v})} onFocus={() => onFieldFocus('totalCharge')} />
-            {formData837.type === 'Professional' ? (
-                <InputField id="placeOfService" label="Place of Service" value={formData837.placeOfService} onChange={v => onChange837({...formData837, placeOfService: v})} onFocus={() => onFieldFocus('placeOfService')} />
-            ) : (
-                <InputField id="typeOfBill" label="Type of Bill" value={formData837.typeOfBill} onChange={v => onChange837({...formData837, typeOfBill: v})} onFocus={() => onFieldFocus('typeOfBill')} />
-            )}
-            <AutocompleteField 
-                id="diagnosisCode1"
-                label="Diagnosis 1" 
-                value={formData837.diagnosisCode1} 
-                onChange={v => onChange837({...formData837, diagnosisCode1: v})} 
-                onFocus={() => onFieldFocus('diagnosisCode1')}
-                options={ICD10_CODES}
-                placeholder="e.g. R05"
+            <SectionHeader 
+                title="Individual Remittances" 
+                action={
+                    <button 
+                        onClick={handleAddRemit}
+                        className="text-[10px] bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-gray-900 dark:text-white px-3 py-1.5 rounded transition-colors font-medium border border-gray-200 dark:border-slate-700"
+                    >
+                        + Add Member
+                    </button>
+                }
             />
-        </div>
-
-        <SectionHeader 
-            title="Service Lines" 
-            action={
-                <button 
-                    onClick={handleAddServiceLine}
-                    className="text-[10px] bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-gray-900 dark:text-white px-3 py-1.5 rounded transition-colors font-medium border border-gray-200 dark:border-slate-700"
-                >
-                    + Add Line
-                </button>
-            }
-        />
-        <div className="space-y-4">
-            {formData837.serviceLines.length === 0 && (
-                <div className="text-xs text-gray-400 dark:text-slate-500 italic p-2 border border-dashed border-gray-200 dark:border-slate-800 rounded text-center">
-                    No service lines added.
-                </div>
-            )}
-            {formData837.serviceLines.map((line, idx) => (
-                <div key={idx} className="bg-gray-50 dark:bg-slate-800/50 rounded p-4 border border-gray-100 dark:border-slate-800 relative group">
-                    <button 
-                        onClick={() => handleRemoveServiceLine(idx)}
-                        className="absolute top-2 right-2 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-1"
-                        title="Remove Line"
-                    >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                    </button>
-                    
-                    <div className="grid grid-cols-2 gap-4">
-                        <AutocompleteField 
-                            id={`line-${idx}-procedureCode`}
-                            label={`Procedure ${idx + 1}`} 
-                            value={line.procedureCode} 
-                            onChange={v => updateServiceLine(idx, 'procedureCode', v)} 
-                            onFocus={() => onFieldFocus(`line-${idx}-procedureCode`)}
-                            options={PROCEDURE_CODES}
-                            placeholder="CPT/HCPCS"
-                        />
-                        <InputField id={`line-${idx}-lineCharge`} label="Charge" value={line.lineCharge} onChange={v => updateServiceLine(idx, 'lineCharge', v)} onFocus={() => onFieldFocus(`line-${idx}-lineCharge`)} />
-                        <InputField id={`line-${idx}-units`} label="Units" value={line.units} onChange={v => updateServiceLine(idx, 'units', v)} onFocus={() => onFieldFocus(`line-${idx}-units`)} />
-                        <div id={`line-${idx}-serviceDate`}>
-                            <DatePicker label="Date" value={line.serviceDate} onChange={v => updateServiceLine(idx, 'serviceDate', v)} onFocus={() => onFieldFocus(`line-${idx}-serviceDate`)} placeholder="YYYY-MM-DD" />
+            <div className="space-y-4">
+                {formData820.remittances.map((remit, idx) => (
+                    <div key={idx} className="bg-gray-50 dark:bg-slate-800/50 rounded p-4 border border-gray-100 dark:border-slate-800 relative group">
+                        <button 
+                            onClick={() => handleRemoveRemit(idx)}
+                            className="absolute top-2 right-2 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-1"
+                            title="Remove"
+                        >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                        <div className="grid grid-cols-3 gap-4">
+                            <InputField id={`remit-${idx}-name`} label="Member Name" value={remit.name || ''} onChange={v => updateRemit(idx, 'name', v)} onFocus={() => onFieldFocus(`remit-${idx}-name`)} />
+                            <InputField id={`remit-${idx}-refId`} label="Reference ID" value={remit.refId} onChange={v => updateRemit(idx, 'refId', v)} onFocus={() => onFieldFocus(`remit-${idx}-refId`)} />
+                            <InputField id={`remit-${idx}-amount`} label="Amount" value={remit.amount} onChange={v => updateRemit(idx, 'amount', v)} onFocus={() => onFieldFocus(`remit-${idx}-amount`)} />
                         </div>
                     </div>
-                </div>
-            ))}
-        </div>
-      </>
-  );
-
-  // --- 834 Enrollment Form ---
-  const handleAddDependent = () => {
-      const newDep: Member834 = {
-          id: '', firstName: '', lastName: '', ssn: '', dob: '', gender: 'U', relationship: '19'
-      };
-      onChange834({ ...formData834, dependents: [...formData834.dependents, newDep] });
-  };
-
-  const handleRemoveDependent = (idx: number) => {
-      const newDeps = [...formData834.dependents];
-      newDeps.splice(idx, 1);
-      onChange834({ ...formData834, dependents: newDeps });
-  };
-
-  const updateDependent = (idx: number, field: keyof Member834, value: string) => {
-      const newDeps = [...formData834.dependents];
-      newDeps[idx] = { ...newDeps[idx], [field]: value };
-      onChange834({ ...formData834, dependents: newDeps });
-  };
-
-  const renderForm834 = () => (
-      <>
-        <SectionHeader title="Sponsor & Payer" />
-        <div className="grid grid-cols-2 gap-4">
-             <InputField id="sponsorName" label="Sponsor Name" value={formData834.sponsorName} onChange={v => onChange834({...formData834, sponsorName: v})} onFocus={() => onFieldFocus('sponsorName')} />
-             <InputField id="sponsorTaxId" label="Sponsor Tax ID" value={formData834.sponsorTaxId} onChange={v => onChange834({...formData834, sponsorTaxId: v})} onFocus={() => onFieldFocus('sponsorTaxId')} />
-             <InputField id="payerName" label="Payer Name" value={formData834.payerName} onChange={v => onChange834({...formData834, payerName: v})} onFocus={() => onFieldFocus('payerName')} />
-             <InputField id="payerId" label="Payer ID" value={formData834.payerId} onChange={v => onChange834({...formData834, payerId: v})} onFocus={() => onFieldFocus('payerId')} />
-        </div>
-
-        <SectionHeader title="Enrollment Details" />
-        <div className="grid grid-cols-2 gap-4">
-             <SelectField id="maintenanceType" label="Maint Type" value={formData834.maintenanceType} onChange={v => onChange834({...formData834, maintenanceType: v})} onFocus={() => onFieldFocus('maintenanceType')} options={MAINT_TYPES} />
-             <SelectField id="maintenanceReason" label="Reason" value={formData834.maintenanceReason} onChange={v => onChange834({...formData834, maintenanceReason: v})} onFocus={() => onFieldFocus('maintenanceReason')} options={MAINT_REASONS} />
-             <SelectField id="benefitStatus" label="Benefit Status" value={formData834.benefitStatus} onChange={v => onChange834({...formData834, benefitStatus: v})} onFocus={() => onFieldFocus('benefitStatus')} options={MAINT_TYPES} />
-             <SelectField id="coverageLevelCode" label="Coverage Level" value={formData834.coverageLevelCode} onChange={v => onChange834({...formData834, coverageLevelCode: v})} onFocus={() => onFieldFocus('coverageLevelCode')} options={COVERAGE_LEVELS} />
-             <div id="planEffectiveDate">
-                <DatePicker label="Effective Date" value={formData834.planEffectiveDate} onChange={v => onChange834({...formData834, planEffectiveDate: v})} onFocus={() => onFieldFocus('planEffectiveDate')} />
-             </div>
-             <InputField id="policyNumber" label="Policy Number" value={formData834.policyNumber} onChange={v => onChange834({...formData834, policyNumber: v})} onFocus={() => onFieldFocus('policyNumber')} />
-        </div>
-
-        <SectionHeader title="Subscriber" />
-        <div className="grid grid-cols-2 gap-4">
-            <InputField id="subscriberFirstName" label="First Name" value={formData834.subscriber.firstName} onChange={v => onChange834({...formData834, subscriber: {...formData834.subscriber, firstName: v}})} onFocus={() => onFieldFocus('subscriberFirstName')} />
-            <InputField id="subscriberLastName" label="Last Name" value={formData834.subscriber.lastName} onChange={v => onChange834({...formData834, subscriber: {...formData834.subscriber, lastName: v}})} onFocus={() => onFieldFocus('subscriberLastName')} />
-            <InputField id="subscriberId" label="Member ID" value={formData834.subscriber.id} onChange={v => onChange834({...formData834, subscriber: {...formData834.subscriber, id: v}})} onFocus={() => onFieldFocus('subscriberId')} />
-            <InputField id="subscriberSSN" label="SSN" value={formData834.subscriber.ssn} onChange={v => onChange834({...formData834, subscriber: {...formData834.subscriber, ssn: v}})} onFocus={() => onFieldFocus('subscriberSSN')} />
-            <div id="subscriberDob">
-                <DatePicker label="DOB" value={formData834.subscriber.dob} onChange={v => onChange834({...formData834, subscriber: {...formData834.subscriber, dob: v}})} onFocus={() => onFieldFocus('subscriberDob')} />
+                ))}
             </div>
-            <SelectField id="subscriberGender" label="Gender" value={formData834.subscriber.gender} onChange={v => onChange834({...formData834, subscriber: {...formData834.subscriber, gender: v}})} onFocus={() => onFieldFocus('subscriberGender')} options={GENDER_OPTIONS} />
-        </div>
-
-        <SectionHeader 
-            title="Dependents" 
-            action={
-                <button 
-                    onClick={handleAddDependent}
-                    className="text-[10px] bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-gray-900 dark:text-white px-3 py-1.5 rounded transition-colors font-medium border border-gray-200 dark:border-slate-700"
-                >
-                    + Add Dependent
-                </button>
-            } 
-        />
-        
-        <div className="space-y-4">
-            {formData834.dependents.length === 0 && (
-                <div className="text-xs text-gray-400 dark:text-slate-500 italic p-2 border border-dashed border-gray-200 dark:border-slate-800 rounded text-center">
-                    No dependents added.
-                </div>
-            )}
-            {formData834.dependents.map((dep, idx) => (
-                <div key={idx} className="bg-gray-50 dark:bg-slate-800/50 rounded p-4 border border-gray-100 dark:border-slate-800 relative group">
-                    <button 
-                        onClick={() => handleRemoveDependent(idx)}
-                        className="absolute top-2 right-2 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-1"
-                        title="Remove Dependent"
-                    >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                    </button>
-                    
-                    <div className="grid grid-cols-2 gap-3 mb-3">
-                        <InputField id={`dependent-${idx}-firstName`} label="First Name" value={dep.firstName} onChange={v => updateDependent(idx, 'firstName', v)} onFocus={() => onFieldFocus(`dependent-${idx}-firstName`)} />
-                        <InputField id={`dependent-${idx}-lastName`} label="Last Name" value={dep.lastName} onChange={v => updateDependent(idx, 'lastName', v)} onFocus={() => onFieldFocus(`dependent-${idx}-lastName`)} />
-                    </div>
-                    <div className="grid grid-cols-3 gap-3">
-                        <div className="col-span-1">
-                            <DatePicker label="DOB" value={dep.dob} onChange={v => updateDependent(idx, 'dob', v)} onFocus={() => onFieldFocus(`dependent-${idx}-dob`)} />
-                        </div>
-                        <div className="col-span-2">
-                            <label className="block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1.5 uppercase tracking-wide">Relationship</label>
-                            <select 
-                                value={dep.relationship}
-                                onChange={e => updateDependent(idx, 'relationship', e.target.value)}
-                                onFocus={() => onFieldFocus(`dependent-${idx}-relationship`)}
-                                className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded text-sm text-gray-900 dark:text-white focus:outline-none focus:border-black dark:focus:border-brand-500 focus:ring-1 focus:ring-black dark:focus:ring-brand-500 transition-colors"
-                            >
-                                <option value="01">Spouse (01)</option>
-                                <option value="19">Child (19)</option>
-                                <option value="21">Unknown (21)</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-            ))}
-        </div>
-      </>
-  );
+          </>
+      );
+  };
 
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-slate-900">
-      {/* Content Area */}
-      <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
-          {activeMode === '270' && renderForm270()}
-          {activeMode === '276' && renderForm276()}
-          {activeMode === '837' && renderForm837()}
-          {activeMode === '834' && renderForm834()}
-          {activeMode === '850' && renderForm850()}
-          {activeMode === '810' && renderForm810()}
-          {activeMode === '856' && renderForm856()}
-      </div>
+    <div className="p-6 h-full overflow-y-auto custom-scrollbar bg-white dark:bg-slate-900">
+        {/* Generator Mode Selector (if not fixed by transaction type) */}
+        {!transactionType && (
+            <div className="mb-6">
+                <label className="block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1.5 uppercase tracking-wide">Transaction Type</label>
+                <select 
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded text-sm text-gray-900 dark:text-white focus:outline-none focus:border-brand-500"
+                    value={generatorMode}
+                    onChange={(e) => onSetGeneratorMode(e.target.value as any)}
+                >
+                    <option value="270">270 Eligibility Inquiry</option>
+                    <option value="276">276 Claim Status Request</option>
+                    <option value="837">837 Claim (Professional)</option>
+                    <option value="834">834 Benefit Enrollment</option>
+                    <option value="278">278 Auth Request</option>
+                    <option value="820">820 Payment Order</option>
+                    <option value="850">850 Purchase Order</option>
+                    <option value="810">810 Invoice</option>
+                    <option value="856">856 Ship Notice</option>
+                </select>
+            </div>
+        )}
+
+        {generatorMode === '270' && renderForm270()}
+        {generatorMode === '276' && renderForm276()}
+        {generatorMode === '837' && renderForm837()}
+        {generatorMode === '834' && renderForm834()}
+        {generatorMode === '278' && renderForm278()}
+        {generatorMode === '820' && renderForm820()}
+        {generatorMode === '850' && renderForm850()}
+        {generatorMode === '810' && renderForm810()}
+        {generatorMode === '856' && renderForm856()}
     </div>
   );
 };
