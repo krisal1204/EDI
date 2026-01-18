@@ -50,7 +50,7 @@ export const parseEdi = (rawEdi: string): EdiDocument => {
     const tag = elementsRaw[0];
     
     if (tag === 'ST') {
-        const typeCode = elementsRaw[1];
+        const typeCode = elementsRaw[1]?.trim();
         if (['270', '271', '276', '277', '278', '837', '834', '835', '820', '850', '810', '856'].includes(typeCode)) {
             transactionType = typeCode as any;
         }
@@ -71,7 +71,7 @@ export const parseEdi = (rawEdi: string): EdiDocument => {
     return {
       id: uuid(),
       tag,
-      raw: rawSeg + delimiters.segmentTerminator,
+      raw: rawSeg + delimiters.segmentTerminator + '\n', // Added newline for display formatting
       elements,
       lineNumber: index + 1,
       depth: 0,
@@ -191,7 +191,8 @@ export const reindexEdi = (doc: EdiDocument): string => {
             const pId = els[1]?.value;
             if (pId && hlMap.has(pId)) els[1] = { ...els[1], value: hlMap.get(pId)! };
             const content = els.map(e => e.value).join(doc.elementSeparator);
-            return { ...seg, elements: els, raw: `HL${doc.elementSeparator}${content}${doc.segmentTerminator}` };
+            // Reconstruct raw with formatting
+            return { ...seg, elements: els, raw: `HL${doc.elementSeparator}${content}${doc.segmentTerminator}\n` };
         }
         return seg;
     });
@@ -203,19 +204,39 @@ export const duplicateRecordInEdi = (doc: EdiDocument, recordId: string): string
     const anchorIdx = flat.findIndex(s => s.id === recordId);
     if (anchorIdx === -1) return doc.raw;
     const raw = getRecordRaw(doc, recordId);
-    const endIdx = anchorIdx + (raw.split(doc.segmentTerminator).filter(Boolean).length);
-    const prefix = flat.slice(0, endIdx).map(s => s.raw).join('');
-    const suffix = flat.slice(endIdx).map(s => s.raw).join('');
-    return reindexEdi(parseEdi(prefix + raw + suffix));
+    // Count segments roughly by newlines if formatted, or delimiters
+    // Just use raw directly since getRecordRaw uses flat segment raw map
+    const endIdx = anchorIdx + (raw.split(doc.segmentTerminator).filter(Boolean).length); 
+    // Correction: splitting by terminator gives empty string at end usually. 
+    // Actually we can find endIdx logic from replaceRecordInEdi logic duplication if we want precision but reindexEdi handles parsing again.
+    
+    // Simpler: 
+    const prefix = flat.slice(0, anchorIdx).map(s => s.raw).join('');
+    // We insert BEFORE the next record? No, usually duplicate means append after.
+    // Let's find end of current record first.
+    let scanIdx = anchorIdx + 1;
+    const anchorSeg = flat[anchorIdx];
+    const isNext = (seg: EdiSegment) => (['SE', 'GE', 'IEA'].includes(seg.tag)) || (anchorSeg.tag === 'INS' && seg.tag === 'INS') || (anchorSeg.tag === 'CLM' && seg.tag === 'CLM') || (anchorSeg.tag === 'HL' && seg.tag === 'HL' && seg.depth <= anchorSeg.depth);
+    while(scanIdx < flat.length && !isNext(flat[scanIdx])) scanIdx++;
+    
+    const recordRaw = flat.slice(anchorIdx, scanIdx).map(s => s.raw).join('');
+    const pre = flat.slice(0, scanIdx).map(s => s.raw).join('');
+    const post = flat.slice(scanIdx).map(s => s.raw).join('');
+    
+    return reindexEdi(parseEdi(pre + recordRaw + post));
 };
 
 export const removeRecordFromEdi = (doc: EdiDocument, recordId: string): string => {
     const flat = flattenTree(doc.segments);
     const anchorIdx = flat.findIndex(s => s.id === recordId);
     if (anchorIdx === -1) return doc.raw;
-    const raw = getRecordRaw(doc, recordId);
-    const segCount = raw.split(doc.segmentTerminator).filter(Boolean).length;
+    
+    const anchorSeg = flat[anchorIdx];
+    let endIdx = anchorIdx + 1;
+    const isNext = (seg: EdiSegment) => (['SE', 'GE', 'IEA'].includes(seg.tag)) || (anchorSeg.tag === 'INS' && seg.tag === 'INS') || (anchorSeg.tag === 'CLM' && seg.tag === 'CLM') || (anchorSeg.tag === 'HL' && seg.tag === 'HL' && seg.depth <= anchorSeg.depth);
+    while(endIdx < flat.length && !isNext(flat[endIdx])) endIdx++;
+
     const prefix = flat.slice(0, anchorIdx).map(s => s.raw).join('');
-    const suffix = flat.slice(anchorIdx + segCount).map(s => s.raw).join('');
+    const suffix = flat.slice(endIdx).map(s => s.raw).join('');
     return reindexEdi(parseEdi(prefix + suffix));
 };
