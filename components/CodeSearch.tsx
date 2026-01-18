@@ -28,7 +28,7 @@ export const CodeSearch: React.FC = () => {
     };
 
     return (
-        <div className="flex flex-col h-full bg-white dark:bg-slate-900">
+        <div className="flex flex-col h-full w-full bg-white dark:bg-slate-900">
             <div className="p-6 border-b border-gray-100 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm z-10">
                 <div className="flex items-center justify-between mb-6">
                     <h1 className="text-xl font-semibold text-gray-900 dark:text-white tracking-tight">Reference Codes</h1>

@@ -47,7 +47,7 @@ const InputField = ({ label, value, onChange, onFocus, type = 'text', className 
       id={id}
       type={type}
       className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded text-sm text-gray-900 dark:text-white focus:outline-none focus:border-black dark:focus:border-brand-500 focus:ring-1 focus:ring-black dark:focus:ring-brand-500 transition-colors"
-      value={value}
+      value={value || ''}
       onChange={e => onChange(e.target.value)}
       onFocus={onFocus}
       placeholder={placeholder}
@@ -62,7 +62,7 @@ const SelectField = ({ label, value, onChange, onFocus, options, className = '',
       <select
         id={id}
         className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded text-sm text-gray-900 dark:text-white focus:outline-none focus:border-black dark:focus:border-brand-500 focus:ring-1 focus:ring-black dark:focus:ring-brand-500 transition-colors appearance-none cursor-pointer"
-        value={value}
+        value={value || ''}
         onChange={e => onChange(e.target.value)}
         onFocus={onFocus}
       >
@@ -80,11 +80,14 @@ const SelectField = ({ label, value, onChange, onFocus, options, className = '',
 const AutocompleteField = ({ label, value, onChange, onFocus, options, placeholder, id }: { label: string, value: string, onChange: (val: string) => void, onFocus?: () => void, options: Record<string, string>, placeholder?: string, id?: string }) => {
     const [showSuggestions, setShowSuggestions] = useState(false);
     
+    // Ensure value is safe to check
+    const safeValue = value || '';
+
     // Filter options based on input
     const filtered = Object.entries(options)
         .filter(([code, desc]) => 
-            code.toLowerCase().includes(value.toLowerCase()) || 
-            desc.toLowerCase().includes(value.toLowerCase())
+            code.toLowerCase().includes(safeValue.toLowerCase()) || 
+            desc.toLowerCase().includes(safeValue.toLowerCase())
         )
         .slice(0, 8); // Limit to 8 results
 
@@ -95,7 +98,7 @@ const AutocompleteField = ({ label, value, onChange, onFocus, options, placehold
                 id={id}
                 type="text"
                 className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded text-sm text-gray-900 dark:text-white focus:outline-none focus:border-black dark:focus:border-brand-500 focus:ring-1 focus:ring-black dark:focus:ring-brand-500 transition-colors"
-                value={value}
+                value={safeValue}
                 placeholder={placeholder}
                 onChange={e => {
                     onChange(e.target.value);
@@ -108,7 +111,7 @@ const AutocompleteField = ({ label, value, onChange, onFocus, options, placehold
                 onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
                 autoComplete="off"
             />
-            {showSuggestions && value && filtered.length > 0 && (
+            {showSuggestions && safeValue && filtered.length > 0 && (
                 <div className="absolute z-50 left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 shadow-xl rounded-md max-h-48 overflow-y-auto">
                     {filtered.map(([code, desc]) => (
                         <div 
@@ -358,7 +361,7 @@ export const EdiGenerator: React.FC<Props> = ({
                 <select 
                     id="serviceTypeCodes"
                     className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded text-sm text-gray-900 dark:text-white focus:outline-none focus:border-black dark:focus:border-brand-500 focus:ring-1 focus:ring-black dark:focus:ring-brand-500 transition-colors"
-                    value={formData.serviceTypeCodes[0] || '30'}
+                    value={formData.serviceTypeCodes?.[0] || '30'}
                     onChange={e => onChange({...formData, serviceTypeCodes: [e.target.value]})}
                     onFocus={() => onFieldFocus('serviceTypeCodes')}
                 >

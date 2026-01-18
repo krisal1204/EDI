@@ -5,9 +5,10 @@ interface Props {
   onEnter: (industry: 'healthcare' | 'manufacturing') => void;
   onContact: () => void;
   onLearn: () => void;
+  onCodes: () => void;
 }
 
-export const Landing: React.FC<Props> = ({ onEnter, onContact, onLearn }) => {
+export const Landing: React.FC<Props> = ({ onEnter, onContact, onLearn, onCodes }) => {
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-white dark:bg-slate-950 p-6 text-center animate-fade-in">
         <div className="mb-12">
@@ -47,12 +48,20 @@ export const Landing: React.FC<Props> = ({ onEnter, onContact, onLearn }) => {
                 </button>
             </div>
             
-            <div className="mt-8">
+            <div className="mt-10 flex flex-wrap justify-center gap-6 text-sm font-medium text-gray-500 dark:text-slate-400">
                 <button 
                     onClick={onLearn}
-                    className="text-sm font-medium text-gray-500 hover:text-gray-900 dark:text-slate-400 dark:hover:text-white transition-colors hover:underline"
+                    className="flex items-center gap-2 hover:text-gray-900 dark:hover:text-white transition-colors"
                 >
-                    New to EDI? Read the Guide
+                    <span className="w-6 h-6 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center text-[10px]">📖</span>
+                    Read the Guide
+                </button>
+                <button 
+                    onClick={onCodes}
+                    className="flex items-center gap-2 hover:text-gray-900 dark:hover:text-white transition-colors"
+                >
+                    <span className="w-6 h-6 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center text-[10px]">🔍</span>
+                    Browse Code Library
                 </button>
             </div>
         </div>

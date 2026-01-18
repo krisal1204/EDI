@@ -86,6 +86,11 @@ export const DragDropInput: React.FC<Props> = ({ onProcess, industry }) => {
     if (text.trim()) onProcess(text);
   };
 
+  const handleClear = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      setText('');
+  };
+
   const handleScenarioSelect = (content: string) => {
       setText(content);
       onProcess(content);
@@ -100,6 +105,9 @@ export const DragDropInput: React.FC<Props> = ({ onProcess, industry }) => {
           payment: ADVANCED_SAMPLES.filter(s => s.type === '835'),
           auth: ADVANCED_SAMPLES.filter(s => s.type === '278'),
           premium: ADVANCED_SAMPLES.filter(s => s.type === '820'),
+          orders: ADVANCED_SAMPLES.filter(s => s.type === '850'),
+          invoices: ADVANCED_SAMPLES.filter(s => s.type === '810'),
+          shipments: ADVANCED_SAMPLES.filter(s => s.type === '856'),
       };
   }, []);
 
@@ -144,7 +152,13 @@ export const DragDropInput: React.FC<Props> = ({ onProcess, industry }) => {
           )}
           
           {text && (
-             <div className="absolute bottom-4 right-4 z-20">
+             <div className="absolute bottom-4 right-4 z-20 flex gap-2">
+                 <button 
+                    onClick={handleClear}
+                    className="bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-gray-600 dark:text-slate-300 px-4 py-2 rounded-full font-medium shadow-md transition-all"
+                 >
+                    Clear
+                 </button>
                  <button 
                     onClick={handleProcess}
                     className="bg-black dark:bg-brand-600 text-white px-6 py-2 rounded-full font-medium shadow-lg hover:bg-gray-800 dark:hover:bg-brand-500 transition-all transform hover:scale-105"
@@ -160,11 +174,17 @@ export const DragDropInput: React.FC<Props> = ({ onProcess, industry }) => {
             
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-7 gap-4 justify-center">
                 {industry === 'manufacturing' && (
-                    <ButtonGroup title="Supply Chain">
+                    <>
+                    <ButtonGroup title="Orders" scenarios={scenarios.orders} onScenarioSelect={handleScenarioSelect}>
                         <SampleButton code="850" label="Purchase Order" onClick={() => { setText(sample850); onProcess(sample850); }} />
+                    </ButtonGroup>
+                    <ButtonGroup title="Invoices" scenarios={scenarios.invoices} onScenarioSelect={handleScenarioSelect}>
                         <SampleButton code="810" label="Invoice" onClick={() => { setText(sample810); onProcess(sample810); }} />
+                    </ButtonGroup>
+                    <ButtonGroup title="Shipments" scenarios={scenarios.shipments} onScenarioSelect={handleScenarioSelect}>
                         <SampleButton code="856" label="Ship Notice" onClick={() => { setText(sample856); onProcess(sample856); }} />
                     </ButtonGroup>
+                    </>
                 )}
 
                 {industry === 'healthcare' && (
@@ -207,4 +227,3 @@ export const DragDropInput: React.FC<Props> = ({ onProcess, industry }) => {
     </div>
   );
 };
-    

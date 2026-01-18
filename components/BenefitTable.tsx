@@ -8,8 +8,8 @@ export const BenefitTable = ({ benefits }: { benefits: BenefitRow[] }) => {
   const [filterService, setFilterService] = useState('All');
 
   // --- Extract Unique Options for Dropdowns ---
-  const uniqueEntities = useMemo(() => Array.from(new Set(benefits.map(b => b.reference))).sort(), [benefits]);
-  const uniqueServices = useMemo(() => Array.from(new Set(benefits.map(b => b.service))).sort(), [benefits]);
+  const uniqueEntities = useMemo(() => Array.from(new Set(benefits.map(b => b.reference || 'Unknown'))).sort(), [benefits]);
+  const uniqueServices = useMemo(() => Array.from(new Set(benefits.map(b => b.service || 'Unknown'))).sort(), [benefits]);
 
   // --- Filtering Logic ---
   const filteredBenefits = useMemo(() => {
@@ -18,15 +18,15 @@ export const BenefitTable = ({ benefits }: { benefits: BenefitRow[] }) => {
       const searchLower = searchTerm.toLowerCase();
       const matchesSearch = 
         searchTerm === '' ||
-        b.service.toLowerCase().includes(searchLower) ||
-        b.type.toLowerCase().includes(searchLower) ||
-        b.messages.some(m => m.toLowerCase().includes(searchLower)) ||
-        b.coverage.toLowerCase().includes(searchLower);
+        (b.service && b.service.toLowerCase().includes(searchLower)) ||
+        (b.type && b.type.toLowerCase().includes(searchLower)) ||
+        (b.messages && b.messages.some(m => m.toLowerCase().includes(searchLower))) ||
+        (b.coverage && b.coverage.toLowerCase().includes(searchLower));
 
       // Dropdown Filters
       const matchesEntity = filterEntity === 'All' || b.reference === filterEntity;
       // Service filter is tricky with repeats; check includes if "All" is not selected
-      const matchesService = filterService === 'All' || b.service.includes(filterService);
+      const matchesService = filterService === 'All' || (b.service && b.service.includes(filterService));
 
       return matchesSearch && matchesEntity && matchesService;
     });
