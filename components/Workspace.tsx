@@ -268,6 +268,28 @@ export const Workspace = () => {
       }
   };
 
+  const startResizing = (e: React.MouseEvent) => {
+      e.preventDefault();
+      
+      const handleMouseMove = (moveEvent: MouseEvent) => {
+          // Limit width between 400px and 80% of screen width
+          const newWidth = Math.max(400, Math.min(moveEvent.clientX, window.innerWidth * 0.8));
+          setSidebarWidth(newWidth);
+      };
+
+      const handleMouseUp = () => {
+          document.removeEventListener('mousemove', handleMouseMove);
+          document.removeEventListener('mouseup', handleMouseUp);
+          document.body.style.cursor = 'default';
+          document.body.classList.remove('select-none');
+      };
+
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = 'col-resize';
+      document.body.classList.add('select-none');
+  };
+
   return (
     <div className="flex flex-col h-screen bg-white dark:bg-slate-950 text-gray-900 dark:text-slate-200 font-sans overflow-hidden transition-colors">
       <header className="flex-none h-14 bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 flex items-center justify-between px-6 z-30">
@@ -307,30 +329,37 @@ export const Workspace = () => {
 
       <div className="flex-1 flex overflow-hidden">
         {doc && ['inspector', 'visual', 'raw', 'json'].includes(viewMode) && (
-            <div className="flex-none bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-800 flex" style={{ width: sidebarWidth }}>
-                <RecordList records={records} selectedId={selectedRecordId} onSelect={handleRecordSelect} onResetAll={() => {}} onResetRecord={() => {}} isModified={false} />
-                <div className="flex-1 overflow-hidden">
-                    <EdiGenerator 
-                        formData={formData} onChange={handleFormChange}
-                        formData276={formData276} onChange276={handleForm276Change}
-                        formData837={formData837} onChange837={handleForm837Change}
-                        formData834={formData834} onChange834={handleForm834Change}
-                        formData278={formData278} onChange278={handleForm278Change}
-                        formData820={formData820} onChange820={handleForm820Change}
-                        formData850={formData850} onChange850={handleForm850Change}
-                        formData810={formData810} onChange810={handleForm810Change}
-                        formData856={formData856} onChange856={handleForm856Change}
-                        generatorMode={generatorMode} onSetGeneratorMode={m => setGeneratorMode(m)}
-                        transactionType={doc.transactionType}
-                        benefits={benefits} 
-                        claims={claims} 
-                        remittanceInfo={remittance?.info}
-                        remittanceClaims={remittance?.claims}
-                        selectedSegment={null} 
-                        onFieldFocus={() => {}} 
-                    />
+            <>
+                <div className="flex-none bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-800 flex" style={{ width: sidebarWidth }}>
+                    <RecordList records={records} selectedId={selectedRecordId} onSelect={handleRecordSelect} onResetAll={() => {}} onResetRecord={() => {}} isModified={false} />
+                    <div className="flex-1 overflow-hidden">
+                        <EdiGenerator 
+                            formData={formData} onChange={handleFormChange}
+                            formData276={formData276} onChange276={handleForm276Change}
+                            formData837={formData837} onChange837={handleForm837Change}
+                            formData834={formData834} onChange834={handleForm834Change}
+                            formData278={formData278} onChange278={handleForm278Change}
+                            formData820={formData820} onChange820={handleForm820Change}
+                            formData850={formData850} onChange850={handleForm850Change}
+                            formData810={formData810} onChange810={handleForm810Change}
+                            formData856={formData856} onChange856={handleForm856Change}
+                            generatorMode={generatorMode} onSetGeneratorMode={m => setGeneratorMode(m)}
+                            transactionType={doc.transactionType}
+                            benefits={benefits} 
+                            claims={claims} 
+                            remittanceInfo={remittance?.info}
+                            remittanceClaims={remittance?.claims}
+                            selectedSegment={null} 
+                            onFieldFocus={() => {}} 
+                        />
+                    </div>
                 </div>
-            </div>
+                {/* Resize Handle */}
+                <div
+                    className="w-1 bg-transparent hover:bg-brand-500 cursor-col-resize transition-colors z-10 -ml-0.5"
+                    onMouseDown={startResizing}
+                />
+            </>
         )}
 
         <div className="flex-1 flex min-w-0 bg-white dark:bg-slate-950 relative">
