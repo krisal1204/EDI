@@ -637,8 +637,8 @@ export const mapEdiToClaimStatus = (doc: EdiDocument): ClaimStatusRow[] => {
             const date = formatDate(seg.elements[1]?.value);
             const amount = seg.elements[3]?.value || '0.00';
             const paid = seg.elements[4]?.value || '0.00';
-            const checkDate = formatDate(seg.elements[5]?.value);
-            const checkNum = seg.elements[6]?.value;
+            const checkDate = formatDate(seg.elements[7]?.value); // STC08 in 5010
+            const checkNum = seg.elements[8]?.value; // STC09 in 5010
 
             // Find TRN backwards for Claim ID
             const trn = findBackwards(flat, i, s => s.tag === 'TRN');
@@ -712,7 +712,6 @@ export const mapEdiToRemittance = (doc: EdiDocument): { info: PaymentInfo, claim
             // If preceding segment is SVC or CAS following SVC, it's line level.
             // If preceding is CLP or CAS following CLP, it's claim level.
             // We use simple heuristic: if we haven't seen SVC yet since CLP, it's claim level.
-            const hasSvcSinceClp = flat.slice(flat.findIndex(s => s === flat[i-1])).some(s => s.tag === 'SVC');
             // Actually, safer to check backwards from current
             let isLine = false;
             for(let j=i-1; j>=0; j--){

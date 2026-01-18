@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { DragDropInput } from './DragDropInput';
 import { SegmentTree } from './SegmentTree';
@@ -19,7 +19,8 @@ import {
     build270, build276, build837, build834, build850, build810, build856, build278, build820
 } from '../services/ediBuilder';
 import { 
-    mapEdiToForm, mapEdiToForm276, mapEdiToForm837, mapEdiToForm834, mapEdiToForm850, mapEdiToForm810, mapEdiToForm856, mapEdiToForm278, mapEdiToForm820
+    mapEdiToForm, mapEdiToForm276, mapEdiToForm837, mapEdiToForm834, mapEdiToForm850, mapEdiToForm810, mapEdiToForm856, mapEdiToForm278, mapEdiToForm820,
+    mapEdiToBenefits, mapEdiToClaimStatus, mapEdiToRemittance
 } from '../services/ediMapper';
 import { extractRecords, EdiRecord } from '../services/recordService';
 import { useAppStore } from '../store/useAppStore';
@@ -86,6 +87,11 @@ export const Workspace = () => {
 
   const [generatorMode, setGeneratorMode] = useState<'270' | '276' | '837' | '834' | '278' | '820' | '850' | '810' | '856'>('270');
   const [sidebarWidth, setSidebarWidth] = useState(700);
+
+  // Derived data for response transactions
+  const benefits = useMemo(() => doc && doc.transactionType === '271' ? mapEdiToBenefits(doc) : [], [doc]);
+  const claims = useMemo(() => doc && doc.transactionType === '277' ? mapEdiToClaimStatus(doc) : [], [doc]);
+  const remittance = useMemo(() => doc && doc.transactionType === '835' ? mapEdiToRemittance(doc) : null, [doc]);
 
   useEffect(() => {
     if (theme === 'dark') document.documentElement.classList.add('dark');
@@ -272,7 +278,7 @@ export const Workspace = () => {
                 <span className="font-medium text-sm tracking-tight text-gray-900 dark:text-white uppercase">EDI Insight</span>
             </button>
             {doc?.transactionType && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-500 dark:text-slate-400 font-mono">
+                <span className="text-[10px] px-2 py-0.5 rounded-full border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-50 dark:text-slate-400 font-mono">
                     {doc.transactionType}
                 </span>
             )}
@@ -315,7 +321,12 @@ export const Workspace = () => {
                         formData856={formData856} onChange856={handleForm856Change}
                         generatorMode={generatorMode} onSetGeneratorMode={m => setGeneratorMode(m)}
                         transactionType={doc.transactionType}
-                        benefits={[]} claims={[]} selectedSegment={null} onFieldFocus={() => {}} 
+                        benefits={benefits} 
+                        claims={claims} 
+                        remittanceInfo={remittance?.info}
+                        remittanceClaims={remittance?.claims}
+                        selectedSegment={null} 
+                        onFieldFocus={() => {}} 
                     />
                 </div>
             </div>
