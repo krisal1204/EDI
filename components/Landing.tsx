@@ -1,14 +1,33 @@
 
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 
 interface Props {
-  onEnter: (industry: 'healthcare' | 'manufacturing') => void;
-  onContact: () => void;
-  onLearn: () => void;
-  onCodes: () => void;
+  onEnter?: (industry: 'healthcare' | 'manufacturing') => void;
+  onContact?: () => void;
+  onLearn?: () => void;
+  onCodes?: () => void;
 }
 
 export const Landing: React.FC<Props> = ({ onEnter, onContact, onLearn, onCodes }) => {
+  const navigate = useNavigate();
+
+  const handleEnter = (industry: 'healthcare' | 'manufacturing') => {
+      navigate('/editor', { state: { industry } });
+  };
+
+  const handleCodes = () => {
+      navigate('/editor', { state: { viewMode: 'reference' } });
+  };
+
+  const handleGuide = () => {
+      navigate('/guide');
+  };
+
+  const handleContact = () => {
+      navigate('/editor', { state: { viewMode: 'contact' } });
+  };
+
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-white dark:bg-slate-950 p-6 text-center animate-fade-in">
         <div className="mb-12">
@@ -26,7 +45,7 @@ export const Landing: React.FC<Props> = ({ onEnter, onContact, onLearn, onCodes 
 
             <div className="flex flex-col md:flex-row items-center justify-center gap-6">
                 <button 
-                    onClick={() => onEnter('healthcare')}
+                    onClick={() => handleEnter('healthcare')}
                     className="group relative flex flex-col items-center justify-center p-8 bg-white dark:bg-slate-900 border-2 border-gray-100 dark:border-slate-800 hover:border-blue-500 dark:hover:border-blue-500 rounded-2xl transition-all duration-200 w-64 hover:shadow-xl hover:-translate-y-1"
                 >
                     <div className="w-12 h-12 bg-blue-50 dark:bg-blue-900/20 rounded-full flex items-center justify-center text-blue-600 dark:text-blue-400 mb-4 group-hover:scale-110 transition-transform">
@@ -37,7 +56,7 @@ export const Landing: React.FC<Props> = ({ onEnter, onContact, onLearn, onCodes 
                 </button>
 
                 <button 
-                    onClick={() => onEnter('manufacturing')}
+                    onClick={() => handleEnter('manufacturing')}
                     className="group relative flex flex-col items-center justify-center p-8 bg-white dark:bg-slate-900 border-2 border-gray-100 dark:border-slate-800 hover:border-orange-500 dark:hover:border-orange-500 rounded-2xl transition-all duration-200 w-64 hover:shadow-xl hover:-translate-y-1"
                 >
                     <div className="w-12 h-12 bg-orange-50 dark:bg-orange-900/20 rounded-full flex items-center justify-center text-orange-600 dark:text-orange-400 mb-4 group-hover:scale-110 transition-transform">
@@ -50,14 +69,14 @@ export const Landing: React.FC<Props> = ({ onEnter, onContact, onLearn, onCodes 
             
             <div className="mt-10 flex flex-wrap justify-center gap-6 text-sm font-medium text-gray-500 dark:text-slate-400">
                 <button 
-                    onClick={onLearn}
+                    onClick={handleGuide}
                     className="flex items-center gap-2 hover:text-gray-900 dark:hover:text-white transition-colors"
                 >
                     <span className="w-6 h-6 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center text-[10px]">📖</span>
                     Read the Guide
                 </button>
                 <button 
-                    onClick={onCodes}
+                    onClick={handleCodes}
                     className="flex items-center gap-2 hover:text-gray-900 dark:hover:text-white transition-colors"
                 >
                     <span className="w-6 h-6 bg-gray-100 dark:bg-slate-800 rounded-full flex items-center justify-center text-[10px]">🔍</span>
@@ -69,7 +88,7 @@ export const Landing: React.FC<Props> = ({ onEnter, onContact, onLearn, onCodes 
         <footer className="mt-auto py-6 text-xs text-gray-400 dark:text-slate-600 flex items-center justify-center gap-4">
             <span>&copy; {new Date().getFullYear()} EDI Insight. Privacy First.</span>
             <span className="w-1 h-1 bg-gray-300 dark:bg-slate-700 rounded-full"></span>
-            <button onClick={onContact} className="hover:text-gray-600 dark:hover:text-slate-400 hover:underline transition-colors">
+            <button onClick={handleContact} className="hover:text-gray-600 dark:hover:text-slate-400 hover:underline transition-colors">
                 Contact Developer
             </button>
         </footer>

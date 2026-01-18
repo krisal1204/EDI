@@ -2,8 +2,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { askGeneralQuestion, getModelName } from '../services/geminiService';
 import ReactMarkdown from 'react-markdown';
+import { useNavigate } from 'react-router-dom';
 
-export const Guide: React.FC<{ onBack: () => void }> = ({ onBack }) => {
+export const Guide: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
+  const navigate = useNavigate();
   const [industry, setIndustry] = useState<'healthcare' | 'manufacturing'>('healthcare');
   const [activeFlow, setActiveFlow] = useState<'step1' | 'step2' | 'step3'>('step1');
   
@@ -41,6 +43,11 @@ export const Guide: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       ]);
   };
 
+  const handleBack = () => {
+      if (onBack) onBack();
+      else navigate(-1);
+  };
+
   const steps = industry === 'healthcare' ? [
     { id: 'step1', label: '1. Check-In', sub: 'Eligibility' },
     { id: 'step2', label: '2. Billing', sub: 'Claims' },
@@ -57,7 +64,7 @@ export const Guide: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       <div className="sticky top-0 z-20 bg-white/90 dark:bg-slate-950/90 backdrop-blur-sm border-b border-gray-100 dark:border-slate-800 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <button 
-            onClick={onBack}
+            onClick={handleBack}
             className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full transition-colors text-gray-500 dark:text-slate-400"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>

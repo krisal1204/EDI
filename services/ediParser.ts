@@ -1,7 +1,7 @@
 
 import { EdiDocument, EdiSegment } from '../types';
 
-const uuid = () => Math.random().toString(36).substr(2, 9);
+const uuid = () => Math.random().toString(36).substring(2, 11);
 
 /**
  * Detects delimiters from the ISA segment (standard X12)
