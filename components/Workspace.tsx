@@ -12,7 +12,7 @@ import { JsonViewer } from './JsonViewer';
 import { SendMessage } from './SendMessage';
 import { RecordList } from './RecordList';
 import { VisualReport } from './VisualReport';
-import { parseEdi, replaceRecordInEdi } from '../services/ediParser';
+import { parseEdi, replaceRecordInEdi, formatEdi } from '../services/ediParser';
 import { EdiDocument, EdiSegment } from '../types';
 import { 
     FormData270, FormData276, FormData837, FormData834, FormData850, FormData810, FormData856, FormData278, FormData820,
@@ -99,9 +99,10 @@ export const Workspace = () => {
   }, [theme]);
 
   const handleLoadNewEdi = (edi: string) => {
-      setRawEdi(edi);
-      setOriginalEdi(edi);
-      processEdi(edi, true);
+      const formatted = formatEdi(edi);
+      setRawEdi(formatted);
+      setOriginalEdi(formatted);
+      processEdi(formatted, true);
   };
 
   const handleClearFile = () => {
