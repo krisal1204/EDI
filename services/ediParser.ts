@@ -34,6 +34,18 @@ function detectDelimiters(raw: string) {
   };
 }
 
+export const formatEdi = (rawEdi: string): string => {
+  if (!rawEdi) return "";
+  const cleanEdi = rawEdi.trim();
+  const delimiters = detectDelimiters(cleanEdi);
+  
+  const segments = cleanEdi.split(delimiters.segmentTerminator)
+    .map(s => s.replace(/[\n\r]/g, '').trim())
+    .filter(s => s.length > 0);
+    
+  return segments.join(delimiters.segmentTerminator + '\n') + delimiters.segmentTerminator + '\n';
+};
+
 export const parseEdi = (rawEdi: string): EdiDocument => {
   const cleanEdi = rawEdi.trim();
   const delimiters = detectDelimiters(cleanEdi);
