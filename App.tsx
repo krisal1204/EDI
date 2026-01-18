@@ -66,6 +66,7 @@ function App() {
   const [currentPage, setCurrentPage] = useState<'landing' | 'workspace' | 'guide'>('landing');
   const [industry, setIndustry] = useState<'healthcare' | 'manufacturing'>('healthcare');
 
+  // --- Form Data State ---
   const [formData, setFormData] = useState<FormData270>(INITIAL_FORM_DATA);
   const [formData276, setFormData276] = useState<FormData276>({} as any);
   const [formData837, setFormData837] = useState<FormData837>({} as any);
@@ -113,8 +114,18 @@ function App() {
       setRecords([]);
       setSelectedRecordId(null);
       setSelectedSegment(null);
+      
+      // Reset all form states to ensure no cross-contamination
       setFormData(INITIAL_FORM_DATA);
-      // Reset modes
+      setFormData276({} as any);
+      setFormData837({} as any);
+      setFormData834(INITIAL_FORM_DATA_834);
+      setFormData278({} as any);
+      setFormData820({} as any);
+      setFormData850({} as any);
+      setFormData810({} as any);
+      setFormData856({} as any);
+      
       setViewMode('inspector');
   };
 
@@ -135,9 +146,47 @@ function App() {
   };
 
   const mapToForm = (parsed: EdiDocument, recordId?: string) => {
-      if (parsed.transactionType === '270') { setFormData({ ...INITIAL_FORM_DATA, ...mapEdiToForm(parsed, recordId) }); setGeneratorMode('270'); }
-      else if (parsed.transactionType === '837') { setFormData837({ ...mapEdiToForm837(parsed, recordId) } as any); setGeneratorMode('837'); }
-      else if (parsed.transactionType === '834') { setFormData834({ ...INITIAL_FORM_DATA_834, ...mapEdiToForm834(parsed, recordId) }); setGeneratorMode('834'); }
+      const type = parsed.transactionType;
+      
+      // Clear current mode to avoid flickering wrong form
+      // setGeneratorMode(type as any); 
+
+      if (type === '270') {
+          setFormData({ ...INITIAL_FORM_DATA, ...mapEdiToForm(parsed, recordId) });
+          setGeneratorMode('270');
+      } 
+      else if (type === '276') {
+          setFormData276({ ...mapEdiToForm276(parsed, recordId) } as any);
+          setGeneratorMode('276');
+      }
+      else if (type === '837') {
+          setFormData837({ ...mapEdiToForm837(parsed, recordId) } as any);
+          setGeneratorMode('837');
+      }
+      else if (type === '834') {
+          setFormData834({ ...INITIAL_FORM_DATA_834, ...mapEdiToForm834(parsed, recordId) });
+          setGeneratorMode('834');
+      }
+      else if (type === '278') {
+          setFormData278({ ...mapEdiToForm278(parsed) } as any);
+          setGeneratorMode('278');
+      }
+      else if (type === '820') {
+          setFormData820({ ...mapEdiToForm820(parsed) } as any);
+          setGeneratorMode('820');
+      }
+      else if (type === '850') {
+          setFormData850({ ...mapEdiToForm850(parsed) } as any);
+          setGeneratorMode('850');
+      }
+      else if (type === '810') {
+          setFormData810({ ...mapEdiToForm810(parsed) } as any);
+          setGeneratorMode('810');
+      }
+      else if (type === '856') {
+          setFormData856({ ...mapEdiToForm856(parsed) } as any);
+          setGeneratorMode('856');
+      }
   };
 
   const handleRecordSelect = (record: EdiRecord) => {
@@ -145,9 +194,19 @@ function App() {
       processEdi(rawEdi || originalEdi, true, index);
   };
 
+  // --- Form Change Handlers ---
+
   const handleFormChange = (newData: FormData270) => {
     setFormData(newData);
     const newEdi = build270(newData);
+    const updated = replaceRecordInEdi(doc!, newEdi, selectedRecordId!);
+    setRawEdi(updated);
+    processEdi(updated, false);
+  };
+
+  const handleForm276Change = (newData: FormData276) => {
+    setFormData276(newData);
+    const newEdi = build276(newData);
     const updated = replaceRecordInEdi(doc!, newEdi, selectedRecordId!);
     setRawEdi(updated);
     processEdi(updated, false);
@@ -169,8 +228,47 @@ function App() {
     processEdi(updated, false);
   }
 
+  const handleForm278Change = (newData: FormData278) => {
+    setFormData278(newData);
+    const newEdi = build278(newData);
+    const updated = replaceRecordInEdi(doc!, newEdi, selectedRecordId!);
+    setRawEdi(updated);
+    processEdi(updated, false);
+  };
+
+  const handleForm820Change = (newData: FormData820) => {
+    setFormData820(newData);
+    const newEdi = build820(newData);
+    const updated = replaceRecordInEdi(doc!, newEdi, selectedRecordId!);
+    setRawEdi(updated);
+    processEdi(updated, false);
+  };
+
+  const handleForm850Change = (newData: FormData850) => {
+    setFormData850(newData);
+    const newEdi = build850(newData);
+    const updated = replaceRecordInEdi(doc!, newEdi, selectedRecordId!);
+    setRawEdi(updated);
+    processEdi(updated, false);
+  };
+
+  const handleForm810Change = (newData: FormData810) => {
+    setFormData810(newData);
+    const newEdi = build810(newData);
+    const updated = replaceRecordInEdi(doc!, newEdi, selectedRecordId!);
+    setRawEdi(updated);
+    processEdi(updated, false);
+  };
+
+  const handleForm856Change = (newData: FormData856) => {
+    setFormData856(newData);
+    const newEdi = build856(newData);
+    const updated = replaceRecordInEdi(doc!, newEdi, selectedRecordId!);
+    setRawEdi(updated);
+    processEdi(updated, false);
+  };
+
   const handleFieldFocus = (field: string) => {
-      // This is used for Bi-directional sync
       const el = document.getElementById(field);
       if (el) {
           el.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -235,11 +333,17 @@ function App() {
                 <div className="flex-1 overflow-hidden">
                     <EdiGenerator 
                         formData={formData} onChange={handleFormChange}
+                        formData276={formData276} onChange276={handleForm276Change}
                         formData837={formData837} onChange837={handleForm837Change}
                         formData834={formData834} onChange834={handleForm834Change}
+                        formData278={formData278} onChange278={handleForm278Change}
+                        formData820={formData820} onChange820={handleForm820Change}
+                        formData850={formData850} onChange850={handleForm850Change}
+                        formData810={formData810} onChange810={handleForm810Change}
+                        formData856={formData856} onChange856={handleForm856Change}
                         generatorMode={generatorMode} onSetGeneratorMode={m => setGeneratorMode(m)}
+                        transactionType={doc.transactionType}
                         benefits={[]} claims={[]} selectedSegment={null} onFieldFocus={() => {}} 
-                        formData276={{} as any} onChange276={() => {}}
                     />
                 </div>
             </div>
