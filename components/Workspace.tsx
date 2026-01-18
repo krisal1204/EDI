@@ -84,6 +84,7 @@ export const Workspace = () => {
   const [records, setRecords] = useState<EdiRecord[]>([]);
   const [selectedRecordId, setSelectedRecordId] = useState<string | null>(null);
   const [selectedSegment, setSelectedSegment] = useState<EdiSegment | null>(null);
+  const [highlightedField, setHighlightedField] = useState<string | null>(null);
 
   const [generatorMode, setGeneratorMode] = useState<'270' | '276' | '837' | '834' | '278' | '820' | '850' | '810' | '856'>('270');
   const [sidebarWidth, setSidebarWidth] = useState(700);
@@ -261,10 +262,54 @@ export const Workspace = () => {
   };
 
   const handleFieldFocus = (field: string) => {
+      setHighlightedField(field);
+      // Clear highlight after a short duration to allow re-triggering
+      setTimeout(() => setHighlightedField(null), 2000);
+      
       const el = document.getElementById(field);
       if (el) {
           el.scrollIntoView({ behavior: 'smooth', block: 'center' });
           el.focus();
+      }
+  };
+
+  const handleSegmentSelect = (segment: EdiSegment) => {
+      setSelectedSegment(segment);
+      
+      // Heuristic to map Segment to Form Field for highlighting
+      const val = (i: number) => segment.elements[i]?.value;
+      const tag = segment.tag;
+      let fieldId = null;
+
+      if (tag === 'NM1') {
+          const qual = val(0);
+          if (qual === 'PR') fieldId = 'payerName';
+          else if (qual === '1P') fieldId = 'providerName';
+          else if (qual === 'IL') fieldId = 'subscriberFirstName';
+          else if (qual === '03') fieldId = 'dependentFirstName';
+          else if (qual === '85') fieldId = 'billingProviderName';
+          else if (qual === '41' || qual === '40') fieldId = 'payerName';
+      }
+      else if (tag === 'N3') fieldId = 'billingProviderAddress';
+      else if (tag === 'N4') fieldId = 'billingProviderCity';
+      else if (tag === 'DMG') fieldId = 'subscriberDob';
+      else if (tag === 'DTP') {
+          const qual = val(0);
+          if (qual === '472') fieldId = 'serviceDate';
+          if (qual === '348') fieldId = 'planEffectiveDate';
+      }
+      else if (tag === 'REF') {
+          const qual = val(0);
+          if (qual === 'EI') fieldId = 'billingTaxId';
+          if (qual === 'SY') fieldId = 'subSsn';
+          if (qual === '0F') fieldId = 'subscriberId';
+      }
+      else if (tag === 'CLM') fieldId = 'claimId';
+      else if (tag === 'BEG') fieldId = 'poNumber';
+      else if (tag === 'BIG') fieldId = 'invoiceNumber';
+      
+      if (fieldId) {
+          handleFieldFocus(fieldId);
       }
   };
 
@@ -349,8 +394,9 @@ export const Workspace = () => {
                             claims={claims} 
                             remittanceInfo={remittance?.info}
                             remittanceClaims={remittance?.claims}
-                            selectedSegment={null} 
-                            onFieldFocus={() => {}} 
+                            selectedSegment={selectedSegment} 
+                            onFieldFocus={handleFieldFocus}
+                            highlightedField={highlightedField}
                         />
                     </div>
                 </div>
@@ -381,7 +427,7 @@ export const Workspace = () => {
                                 <SegmentTree 
                                     segments={doc.segments} 
                                     selectedId={selectedSegment?.id || null} 
-                                    onSelect={setSelectedSegment} 
+                                    onSelect={handleSegmentSelect} 
                                 />
                             </div>
                             <div className="flex-1 bg-white dark:bg-slate-950 h-full overflow-hidden">
