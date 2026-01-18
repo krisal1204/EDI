@@ -1,9 +1,6 @@
 
 import { EdiDocument, EdiSegment } from '../types';
 
-/**
- * Generates a simple unique ID
- */
 const uuid = () => Math.random().toString(36).substr(2, 9);
 
 /**
@@ -12,7 +9,6 @@ const uuid = () => Math.random().toString(36).substr(2, 9);
  */
 function detectDelimiters(raw: string) {
   if (!raw.startsWith('ISA')) {
-    // Fallback defaults if ISA is missing or malformed (rare for valid EDI)
     return {
       elementSeparator: '*',
       componentSeparator: ':',
@@ -21,19 +17,19 @@ function detectDelimiters(raw: string) {
     };
   }
 
+  // ISA is always 106 chars in valid X12
   const elementSeparator = raw.charAt(3);
+  const componentSeparator = raw.charAt(104);
+  const segmentTerminator = raw.charAt(105);
   
-  // ISA11 (Repetition Separator) is usually at a specific offset, but splitting is safer given potential formatting issues
-  // ISA segments have 16 elements. 
-  // ISA*01*...
-  // Split limit 17 to get up to ISA16
+  // ISA11 is typically the repetition separator in 5010
   const parts = raw.split(elementSeparator);
   const repetitionSeparator = parts[11] && parts[11].length === 1 ? parts[11] : undefined;
 
   return {
     elementSeparator,
-    componentSeparator: raw.charAt(104),
-    segmentTerminator: raw.charAt(105), // Sometimes 105, check visual inspection
+    componentSeparator,
+    segmentTerminator,
     repetitionSeparator
   };
 }
@@ -42,52 +38,34 @@ export const parseEdi = (rawEdi: string): EdiDocument => {
   const cleanEdi = rawEdi.trim();
   const delimiters = detectDelimiters(cleanEdi);
   
-  // Split segments
+  // Robust split handling both with and without newlines
   const rawSegments = cleanEdi.split(delimiters.segmentTerminator)
-    .map(s => s.trim())
+    .map(s => s.replace(/[\n\r]/g, '').trim())
     .filter(s => s.length > 0);
 
-  let transactionType: '270' | '271' | '276' | '277' | '278' | '837' | '834' | '835' | '820' | '850' | '810' | '856' | 'Unknown' = 'Unknown';
+  let transactionType: any = 'Unknown';
 
   const segments: EdiSegment[] = rawSegments.map((rawSeg, index) => {
-    // Split elements
     const elementsRaw = rawSeg.split(delimiters.elementSeparator);
     const tag = elementsRaw[0];
     
-    // Check for ST segment to determine type
     if (tag === 'ST') {
         const typeCode = elementsRaw[1];
-        if (typeCode === '270') transactionType = '270';
-        else if (typeCode === '271') transactionType = '271';
-        else if (typeCode === '276') transactionType = '276';
-        else if (typeCode === '277') transactionType = '277';
-        else if (typeCode === '278') transactionType = '278';
-        else if (typeCode === '837') transactionType = '837';
-        else if (typeCode === '834') transactionType = '834';
-        else if (typeCode === '835') transactionType = '835';
-        else if (typeCode === '820') transactionType = '820';
-        else if (typeCode === '850') transactionType = '850';
-        else if (typeCode === '810') transactionType = '810';
-        else if (typeCode === '856') transactionType = '856';
+        if (['270', '271', '276', '277', '278', '837', '834', '835', '820', '850', '810', '856'].includes(typeCode)) {
+            transactionType = typeCode as any;
+        }
     }
 
     const elements = elementsRaw.slice(1).map((val, i) => {
-      // Handle Repeats (e.g. EB03 "1>33>35")
       const repeats = (delimiters.repetitionSeparator && val.includes(delimiters.repetitionSeparator))
         ? val.split(delimiters.repetitionSeparator)
         : undefined;
 
-      // Handle Components (e.g. SVC01 "HC:99213")
       const components = val.includes(delimiters.componentSeparator) 
         ? val.split(delimiters.componentSeparator) 
         : undefined;
 
-      return {
-        index: i + 1,
-        value: val,
-        components,
-        repeats
-      };
+      return { index: i + 1, value: val, components, repeats };
     });
 
     return {
@@ -101,11 +79,8 @@ export const parseEdi = (rawEdi: string): EdiDocument => {
     };
   });
 
-  // Post-processing for Hierarchy (HL segments)
-  const segmentMap = new Map<string, EdiSegment>();
-  const hlMap = new Map<string, EdiSegment>(); // Map HL ID to Segment
-
-  // First pass: Identify HL segments and build map
+  // Organise into tree based on HL or generic nesting
+  const hlMap = new Map<string, EdiSegment>();
   segments.forEach(seg => {
     if (seg.tag === 'HL') {
       const hlId = seg.elements[0]?.value;
@@ -118,44 +93,35 @@ export const parseEdi = (rawEdi: string): EdiDocument => {
     }
   });
 
-  // Second pass: Organize into tree
   const tree: EdiSegment[] = [];
   let currentHl: EdiSegment | null = null;
 
   segments.forEach(seg => {
     if (seg.tag === 'HL') {
-      seg.children = []; // Initialize
+      seg.children = [];
       currentHl = seg;
-      
       if (seg.parentId && hlMap.has(seg.parentId)) {
         const parent = hlMap.get(seg.parentId)!;
-        parent.children = parent.children || [];
-        parent.children.push(seg);
+        parent.children!.push(seg);
         seg.depth = parent.depth + 1;
       } else {
-        tree.push(seg); // Root HL
-        seg.depth = 0;
+        tree.push(seg);
       }
     } else {
-      // Logic for segments before any HL (like ISA, GS)
-      if (!currentHl) {
-        tree.push(seg);
-      } else {
-        // It belongs to the current HL
-        currentHl.children?.push(seg);
+      if (!currentHl) tree.push(seg);
+      else {
+        currentHl.children!.push(seg);
         seg.depth = currentHl.depth + 1;
       }
     }
   });
 
-  const result: EdiDocument = {
+  return {
     segments: hlMap.size > 0 ? tree : segments,
     ...delimiters,
     raw: rawEdi,
     transactionType
   };
-
-  return result;
 };
 
 export const flattenTree = (segments: EdiSegment[]): EdiSegment[] => {
@@ -169,275 +135,87 @@ export const flattenTree = (segments: EdiSegment[]): EdiSegment[] => {
   return flat;
 };
 
-// ... (Rest of file unchanged: getRecordRaw, replaceRecordInEdi, reindexEdi, duplicateRecordInEdi, removeRecordFromEdi)
-// NOTE: For brevity, assuming the file tail functions are preserved exactly as is.
 export const getRecordRaw = (doc: EdiDocument, recordId: string): string => {
     const flat = flattenTree(doc.segments);
     const anchorIdx = flat.findIndex(s => s.id === recordId);
     if (anchorIdx === -1) return "";
-
     const anchorSeg = flat[anchorIdx];
     let endIdx = anchorIdx + 1;
     
-    // Scan forward until we hit a segment that starts a "sibling" or "parent" record, or SE.
     const isStartOfNextRecord = (seg: EdiSegment) => {
-        if (seg.tag === 'SE') return true; 
-        if (seg.tag === 'GE') return true;
-        if (seg.tag === 'IEA') return true;
-
+        if (['SE', 'GE', 'IEA'].includes(seg.tag)) return true;
         if (anchorSeg.tag === 'INS') return seg.tag === 'INS';
         if (anchorSeg.tag === 'CLM') return seg.tag === 'CLM';
-        if (anchorSeg.tag === 'CLP') return seg.tag === 'CLP'; // 835 Claim Loop
-        if (anchorSeg.tag === 'PO1') return seg.tag === 'PO1'; // 850 Item Loop
-        if (anchorSeg.tag === 'IT1') return seg.tag === 'IT1'; // 810 Item Loop
-        if (anchorSeg.tag === 'ENT') return seg.tag === 'ENT'; // 820 Indiv
-        if (anchorSeg.tag === 'RMR') return seg.tag === 'RMR'; // 820 Remittance
-        if (anchorSeg.tag === 'HL') {
-            // For HL, we stop if we hit a sibling or parent HL (depth <= current)
-            if (seg.tag === 'HL') {
-                return seg.depth <= anchorSeg.depth;
-            }
-            return false;
-        }
-        if (anchorSeg.tag === 'TRN') return seg.tag === 'TRN';
-        
+        if (anchorSeg.tag === 'CLP') return seg.tag === 'CLP';
+        if (anchorSeg.tag === 'HL' && seg.tag === 'HL') return seg.depth <= anchorSeg.depth;
         return false;
     };
 
-    while(endIdx < flat.length) {
-        if (isStartOfNextRecord(flat[endIdx])) break;
-        endIdx++;
-    }
-
+    while(endIdx < flat.length && !isStartOfNextRecord(flat[endIdx])) endIdx++;
     return flat.slice(anchorIdx, endIdx).map(s => s.raw).join('');
 };
 
 export const replaceRecordInEdi = (doc: EdiDocument, newEdi: string, recordId: string): string => {
     const originalFlat = flattenTree(doc.segments);
     const anchorIdx = originalFlat.findIndex(s => s.id === recordId);
-    
     if (anchorIdx === -1) return doc.raw; 
 
     const anchorSeg = originalFlat[anchorIdx];
     let endIdx = anchorIdx + 1;
-    
-    const isStartOfNextRecord = (seg: EdiSegment) => {
-        if (seg.tag === 'SE') return true; 
-        if (seg.tag === 'GE') return true;
-        if (seg.tag === 'IEA') return true;
-
-        if (anchorSeg.tag === 'INS') return seg.tag === 'INS';
-        if (anchorSeg.tag === 'CLM') return seg.tag === 'CLM';
-        if (anchorSeg.tag === 'CLP') return seg.tag === 'CLP';
-        if (anchorSeg.tag === 'PO1') return seg.tag === 'PO1';
-        if (anchorSeg.tag === 'IT1') return seg.tag === 'IT1';
-        if (anchorSeg.tag === 'ENT') return seg.tag === 'ENT';
-        if (anchorSeg.tag === 'RMR') return seg.tag === 'RMR';
-        if (anchorSeg.tag === 'TRN') return seg.tag === 'TRN';
-        if (anchorSeg.tag === 'HL') {
-            if (seg.tag === 'HL') {
-                return seg.depth <= anchorSeg.depth;
-            }
-            return false;
-        }
-        return false;
-    };
-
-    while(endIdx < originalFlat.length) {
-        if (isStartOfNextRecord(originalFlat[endIdx])) break;
-        endIdx++;
-    }
-
-    const newDoc = parseEdi(newEdi);
-    const newFlat = flattenTree(newDoc.segments);
-    
-    let newStartIdx = -1;
-    
-    if (anchorSeg.tag === 'HL') {
-         const levelCode = anchorSeg.elements[2]?.value;
-         newStartIdx = newFlat.findIndex(s => s.tag === 'HL' && s.elements[2]?.value === levelCode);
-    } else {
-         newStartIdx = newFlat.findIndex(s => s.tag === anchorSeg.tag);
-    }
-    
-    if (newStartIdx === -1) return doc.raw; 
-
-    const newAnchorSeg = newFlat[newStartIdx];
-    let newEndIdx = newStartIdx + 1;
-    
-    const isNewEnd = (seg: EdiSegment) => {
-        if (seg.tag === 'SE') return true;
-        if (anchorSeg.tag === 'INS') return seg.tag === 'INS';
-        if (anchorSeg.tag === 'CLM') return seg.tag === 'CLM';
-        if (anchorSeg.tag === 'CLP') return seg.tag === 'CLP';
-        if (anchorSeg.tag === 'PO1') return seg.tag === 'PO1';
-        if (anchorSeg.tag === 'IT1') return seg.tag === 'IT1';
-        if (anchorSeg.tag === 'ENT') return seg.tag === 'ENT';
-        if (anchorSeg.tag === 'RMR') return seg.tag === 'RMR';
-        if (anchorSeg.tag === 'TRN') return seg.tag === 'TRN';
-        if (anchorSeg.tag === 'HL') {
-             if (seg.tag === 'HL') return seg.depth <= newAnchorSeg.depth;
-             return false;
-        }
-        return false;
-    };
-
-    while(newEndIdx < newFlat.length) {
-        if (isNewEnd(newFlat[newEndIdx])) break;
-        newEndIdx++;
-    }
+    const isNext = (seg: EdiSegment) => (['SE', 'GE', 'IEA'].includes(seg.tag)) || (anchorSeg.tag === 'INS' && seg.tag === 'INS') || (anchorSeg.tag === 'CLM' && seg.tag === 'CLM') || (anchorSeg.tag === 'HL' && seg.tag === 'HL' && seg.depth <= anchorSeg.depth);
+    while(endIdx < originalFlat.length && !isNext(originalFlat[endIdx])) endIdx++;
 
     const prefix = originalFlat.slice(0, anchorIdx).map(s => s.raw).join('');
-    const replacement = newFlat.slice(newStartIdx, newEndIdx).map(s => s.raw).join('');
     const suffix = originalFlat.slice(endIdx).map(s => s.raw).join('');
-
-    return prefix + replacement + suffix;
+    return prefix + newEdi + suffix;
 };
 
 export const reindexEdi = (doc: EdiDocument): string => {
     const flat = flattenTree(doc.segments);
-    
     let hlCounter = 0;
     const hlMap = new Map<string, string>(); 
-
-    const reindexedSegments = flat.map(seg => {
+    const reindexed = flat.map(seg => {
         if (seg.tag === 'HL') {
             hlCounter++;
             const oldId = seg.elements[0]?.value;
             const newId = hlCounter.toString();
             if (oldId) hlMap.set(oldId, newId);
-            
-            const newElements = seg.elements.map(e => ({...e}));
-            if (newElements[0]) newElements[0].value = newId;
-            
-            return { ...seg, elements: newElements };
+            const els = [...seg.elements];
+            if (els[0]) els[0] = { ...els[0], value: newId };
+            return { ...seg, elements: els };
         }
         return seg;
-    });
-
-    const finalSegments = reindexedSegments.map(seg => {
+    }).map(seg => {
         if (seg.tag === 'HL') {
-            const newElements = seg.elements.map(e => ({...e}));
-            const parentId = seg.elements[1]?.value;
-            
-            if (parentId && hlMap.has(parentId)) {
-                if (newElements[1]) newElements[1].value = hlMap.get(parentId)!;
-            }
-            
-            const content = newElements.map(e => e.value).join(doc.elementSeparator);
-            const raw = `${seg.tag}${doc.elementSeparator}${content}${doc.segmentTerminator}`;
-            return { ...seg, elements: newElements, raw };
+            const els = [...seg.elements];
+            const pId = els[1]?.value;
+            if (pId && hlMap.has(pId)) els[1] = { ...els[1], value: hlMap.get(pId)! };
+            const content = els.map(e => e.value).join(doc.elementSeparator);
+            return { ...seg, elements: els, raw: `HL${doc.elementSeparator}${content}${doc.segmentTerminator}` };
         }
         return seg;
     });
-    
-    const stIndex = finalSegments.findIndex(s => s.tag === 'ST');
-    const seIndex = finalSegments.findIndex(s => s.tag === 'SE');
-    
-    if (stIndex !== -1 && seIndex !== -1) {
-        const count = seIndex - stIndex + 1;
-        const seSeg = finalSegments[seIndex];
-        const newElements = seSeg.elements.map(e => ({...e}));
-        if (newElements[0]) newElements[0].value = count.toString();
-        
-        const content = newElements.map(e => e.value).join(doc.elementSeparator);
-        seSeg.raw = `${seSeg.tag}${doc.elementSeparator}${content}${doc.segmentTerminator}`;
-        finalSegments[seIndex] = { ...seSeg, raw: seSeg.raw };
-    }
-
-    return finalSegments.map(s => s.raw).join('');
+    return reindexed.map(s => s.raw).join('');
 };
 
 export const duplicateRecordInEdi = (doc: EdiDocument, recordId: string): string => {
     const flat = flattenTree(doc.segments);
     const anchorIdx = flat.findIndex(s => s.id === recordId);
     if (anchorIdx === -1) return doc.raw;
-
-    const anchorSeg = flat[anchorIdx];
-    let endIdx = anchorIdx + 1;
-
-    const isStartOfNextRecord = (seg: EdiSegment) => {
-        if (seg.tag === 'SE') return true;
-        if (seg.tag === 'GE') return true;
-        if (seg.tag === 'IEA') return true;
-
-        if (anchorSeg.tag === 'INS') return seg.tag === 'INS';
-        if (anchorSeg.tag === 'CLM') return seg.tag === 'CLM';
-        if (anchorSeg.tag === 'CLP') return seg.tag === 'CLP';
-        if (anchorSeg.tag === 'PO1') return seg.tag === 'PO1';
-        if (anchorSeg.tag === 'IT1') return seg.tag === 'IT1';
-        if (anchorSeg.tag === 'ENT') return seg.tag === 'ENT';
-        if (anchorSeg.tag === 'RMR') return seg.tag === 'RMR';
-        if (anchorSeg.tag === 'HL') {
-            if (seg.tag === 'HL') {
-                return seg.depth <= anchorSeg.depth;
-            }
-            return false;
-        }
-        if (anchorSeg.tag === 'TRN') return seg.tag === 'TRN';
-        return false;
-    };
-
-    while (endIdx < flat.length) {
-        if (isStartOfNextRecord(flat[endIdx])) break;
-        endIdx++;
-    }
-
-    const recordRaw = flat.slice(anchorIdx, endIdx).map(s => s.raw).join('');
-    
+    const raw = getRecordRaw(doc, recordId);
+    const endIdx = anchorIdx + (raw.split(doc.segmentTerminator).filter(Boolean).length);
     const prefix = flat.slice(0, endIdx).map(s => s.raw).join('');
     const suffix = flat.slice(endIdx).map(s => s.raw).join('');
-    
-    let newEdi = prefix + recordRaw + suffix;
-    
-    const tempDoc = parseEdi(newEdi);
-    newEdi = reindexEdi(tempDoc);
-
-    return newEdi;
+    return reindexEdi(parseEdi(prefix + raw + suffix));
 };
 
 export const removeRecordFromEdi = (doc: EdiDocument, recordId: string): string => {
     const flat = flattenTree(doc.segments);
     const anchorIdx = flat.findIndex(s => s.id === recordId);
     if (anchorIdx === -1) return doc.raw;
-
-    const anchorSeg = flat[anchorIdx];
-    let endIdx = anchorIdx + 1;
-
-    const isStartOfNextRecord = (seg: EdiSegment) => {
-        if (seg.tag === 'SE') return true;
-        if (seg.tag === 'GE') return true;
-        if (seg.tag === 'IEA') return true;
-
-        if (anchorSeg.tag === 'INS') return seg.tag === 'INS';
-        if (anchorSeg.tag === 'CLM') return seg.tag === 'CLM';
-        if (anchorSeg.tag === 'CLP') return seg.tag === 'CLP';
-        if (anchorSeg.tag === 'PO1') return seg.tag === 'PO1';
-        if (anchorSeg.tag === 'IT1') return seg.tag === 'IT1';
-        if (anchorSeg.tag === 'ENT') return seg.tag === 'ENT';
-        if (anchorSeg.tag === 'RMR') return seg.tag === 'RMR';
-        if (anchorSeg.tag === 'HL') {
-            if (seg.tag === 'HL') {
-                return seg.depth <= anchorSeg.depth;
-            }
-            return false;
-        }
-        if (anchorSeg.tag === 'TRN') return seg.tag === 'TRN';
-        return false;
-    };
-
-    while (endIdx < flat.length) {
-        if (isStartOfNextRecord(flat[endIdx])) break;
-        endIdx++;
-    }
-
+    const raw = getRecordRaw(doc, recordId);
+    const segCount = raw.split(doc.segmentTerminator).filter(Boolean).length;
     const prefix = flat.slice(0, anchorIdx).map(s => s.raw).join('');
-    const suffix = flat.slice(endIdx).map(s => s.raw).join('');
-    
-    let newEdi = prefix + suffix;
-    
-    const tempDoc = parseEdi(newEdi);
-    newEdi = reindexEdi(tempDoc);
-
-    return newEdi;
+    const suffix = flat.slice(anchorIdx + segCount).map(s => s.raw).join('');
+    return reindexEdi(parseEdi(prefix + suffix));
 };
