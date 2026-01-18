@@ -257,25 +257,6 @@ export const Workspace = () => {
     processEdi(updated, false);
   };
 
-  // Field ID -> Segment heuristic map
-  const getFieldToSegmentCriteria = (fieldId: string) => {
-      // Common fields
-      if (fieldId.includes('payerName')) return { tag: 'NM1', el1: ['PR', '41', 'IN', '40'] };
-      if (fieldId.includes('payerId')) return { tag: 'NM1', el1: ['PR', '41', 'IN', '40'] };
-      if (fieldId.includes('providerName')) return { tag: 'NM1', el1: ['1P', '85', 'PE', 'FA'] };
-      if (fieldId.includes('providerNpi')) return { tag: 'NM1', el1: ['1P', '85', 'PE'] };
-      if (fieldId.includes('subscriberFirstName') || fieldId.includes('subscriberLastName')) return { tag: 'NM1', el1: ['IL', '74'] };
-      if (fieldId.includes('subscriberId')) return { tag: 'NM1', el1: ['IL', '74'] };
-      if (fieldId.includes('dependentFirstName') || fieldId.includes('dependentLastName')) return { tag: 'NM1', el1: ['03'] };
-      if (fieldId.includes('claimId')) return { tag: 'CLM' }; // Also TRN sometimes
-      if (fieldId.includes('totalCharge')) return { tag: 'CLM' };
-      if (fieldId.includes('serviceDate')) return { tag: 'DTP', el1: ['472', '291'] };
-      if (fieldId.includes('poNumber')) return { tag: 'BEG' };
-      if (fieldId.includes('invoiceNumber')) return { tag: 'BIG' };
-      if (fieldId.includes('shipmentId')) return { tag: 'BSN' };
-      return null;
-  };
-
   const handleFieldFocus = (fieldId: string) => {
       // 1. Visual Highlight
       setHighlightedField(fieldId);
@@ -288,85 +269,193 @@ export const Workspace = () => {
 
       // 2. Reverse Highlight: Select Segment
       if (!doc) return;
-      const criteria = getFieldToSegmentCriteria(fieldId);
-      if (!criteria) return;
-
       const flat = flattenTree(doc.segments);
       
-      // Attempt to find segment within the selected record's scope if possible
       let searchStart = 0;
       if (selectedRecordId) {
           const recIdx = records.findIndex(r => r.id === selectedRecordId);
           if (recIdx !== -1) searchStart = records[recIdx].startIndex;
       }
 
-      // Search forwards from record start
-      let found = flat.slice(searchStart).find(seg => {
-          if (seg.tag !== criteria.tag) return false;
-          if (criteria.el1 && !criteria.el1.includes(seg.elements[0]?.value)) return false;
-          return true;
-      });
+      // --- Enhanced Heuristics ---
 
-      // If not found in record scope, try from beginning
-      if (!found) {
-          found = flat.find(seg => {
-              if (seg.tag !== criteria.tag) return false;
-              if (criteria.el1 && !criteria.el1.includes(seg.elements[0]?.value)) return false;
-              return true;
-          });
+      // 1. Line Items (line-X-field)
+      const lineMatch = fieldId.match(/^line-(\d+)-/);
+      if (lineMatch) {
+          const lineIdx = parseInt(lineMatch[1]);
+          let currentLineCount = -1;
+          for (let i = searchStart; i < flat.length; i++) {
+              const s = flat[i];
+              // Boundary check to keep within record
+              if (i > searchStart && (s.tag === 'ST' || s.tag === 'SE' || s.tag === 'CLM' || s.tag === 'INS')) {
+                   if (!fieldId.includes('claim') && !fieldId.includes('subscriber')) break; 
+              }
+
+              if (['SV1', 'SV2', 'SV3', 'PO1', 'IT1', 'LIN'].includes(s.tag)) {
+                  currentLineCount++;
+                  if (currentLineCount === lineIdx) {
+                      if (fieldId.includes('Date')) {
+                          // Look ahead for DTP
+                          const dtp = flat.slice(i, i+5).find(seg => seg.tag === 'DTP' || seg.tag === 'DTM');
+                          if (dtp) { setSelectedSegment(dtp); return; }
+                      }
+                      setSelectedSegment(s);
+                      return;
+                  }
+              }
+          }
+          return;
       }
 
-      if (found && found.id !== selectedSegment?.id) {
-          // Avoid triggering if already selected to prevent loop/jitter
-          setSelectedSegment(found);
+      // 2. Dependents (dep-X-field)
+      const depMatch = fieldId.match(/^dep-(\d+)-/);
+      if (depMatch) {
+          const depIdx = parseInt(depMatch[1]);
+          let currentDepCount = -1;
+          for (let i = searchStart; i < flat.length; i++) {
+              const s = flat[i];
+              // Detect dependent block start
+              let isDepStart = false;
+              if (s.tag === 'INS' && s.elements[0]?.value === 'N') isDepStart = true;
+              else if (s.tag === 'HL' && s.elements[2]?.value === '23') isDepStart = true;
+              else if (s.tag === 'NM1' && s.elements[0]?.value === '03') isDepStart = true;
+
+              if (isDepStart) {
+                  // Only count distinct loop starts
+                  if (s.tag === 'NM1' && s.elements[0]?.value === '03') currentDepCount++;
+                  else if (s.tag === 'INS' && s.elements[0]?.value === 'N') currentDepCount++;
+                  // HL might be parent of NM1, avoid double count if possible, or rely on NM1 match primarily
+                  
+                  if (currentDepCount === depIdx) {
+                      if (fieldId.includes('firstName') || fieldId.includes('lastName')) {
+                          if (s.tag === 'NM1') { setSelectedSegment(s); return; }
+                          const nm1 = flat.slice(i, i+10).find(seg => seg.tag === 'NM1' && (seg.elements[0]?.value === '03' || seg.elements[0]?.value === 'QC'));
+                          if (nm1) { setSelectedSegment(nm1); return; }
+                      }
+                      if (fieldId.includes('dob') || fieldId.includes('gender')) {
+                          const dmg = flat.slice(i, i+10).find(seg => seg.tag === 'DMG');
+                          if (dmg) { setSelectedSegment(dmg); return; }
+                      }
+                      setSelectedSegment(s);
+                      return;
+                  }
+              }
+          }
+          return;
+      }
+
+      // 3. Static Field Mapping
+      let tag = '', el1Codes: string[] | undefined = undefined;
+      let lookAheadFor = '';
+
+      if (fieldId === 'payerName') { tag = 'NM1'; el1Codes = ['PR', '41', 'IN', '40']; }
+      else if (fieldId === 'payerId') { tag = 'NM1'; el1Codes = ['PR', '41', 'IN']; }
+      else if (fieldId === 'providerName') { tag = 'NM1'; el1Codes = ['1P', '85', 'PE', 'FA']; }
+      else if (fieldId === 'providerNpi') { tag = 'NM1'; el1Codes = ['1P', '85', 'PE']; }
+      else if (fieldId === 'subscriberFirstName') { tag = 'NM1'; el1Codes = ['IL', '74']; }
+      else if (fieldId === 'subscriberLastName') { tag = 'NM1'; el1Codes = ['IL', '74']; }
+      else if (fieldId === 'subscriberId') { tag = 'NM1'; el1Codes = ['IL']; } 
+      else if (fieldId === 'billingProviderName') { tag = 'NM1'; el1Codes = ['85']; }
+      else if (fieldId === 'billingProviderAddress') { tag = 'NM1'; el1Codes = ['85']; lookAheadFor = 'N3'; }
+      else if (fieldId === 'billingProviderCity') { tag = 'NM1'; el1Codes = ['85']; lookAheadFor = 'N4'; }
+      else if (fieldId === 'billingTaxId') { tag = 'REF'; el1Codes = ['EI']; }
+      else if (fieldId === 'claimId') { tag = 'CLM'; }
+      else if (fieldId === 'totalCharge') { tag = 'CLM'; }
+      else if (fieldId === 'serviceDate') { tag = 'DTP'; el1Codes = ['472', '291']; }
+      else if (fieldId === 'poNumber') { tag = 'BEG'; }
+      else if (fieldId === 'invoiceNumber') { tag = 'BIG'; }
+      else if (fieldId === 'shipmentId') { tag = 'BSN'; }
+      else if (fieldId === 'shipToName') { tag = 'NM1'; el1Codes = ['ST']; }
+      else if (fieldId === 'shipToAddress') { tag = 'NM1'; el1Codes = ['ST']; lookAheadFor = 'N3'; }
+      else if (fieldId === 'shipToCity') { tag = 'NM1'; el1Codes = ['ST']; lookAheadFor = 'N4'; }
+      else if (fieldId === 'sellerName') { tag = 'NM1'; el1Codes = ['SE']; }
+      else if (fieldId === 'buyerName') { tag = 'NM1'; el1Codes = ['BY']; }
+
+      if (tag) {
+          for (let i = searchStart; i < flat.length; i++) {
+              const s = flat[i];
+              if (s.tag === tag) {
+                  if (!el1Codes || (s.elements[0]?.value && el1Codes.includes(s.elements[0]?.value))) {
+                      if (lookAheadFor) {
+                          const target = flat.slice(i, i+5).find(sub => sub.tag === lookAheadFor);
+                          if (target) { setSelectedSegment(target); return; }
+                      } else {
+                          setSelectedSegment(s);
+                          return;
+                      }
+                  }
+              }
+          }
       }
   };
 
   const handleSegmentSelect = (segment: EdiSegment) => {
       setSelectedSegment(segment);
+      if (!doc) return;
       
-      // Segment -> Field Heuristics
-      const val = (i: number) => segment.elements[i]?.value;
-      const tag = segment.tag;
+      const flat = flattenTree(doc.segments);
+      const index = flat.findIndex(s => s.id === segment.id);
+      if (index === -1) return;
+
       let fieldId = null;
+      const tag = segment.tag;
+      const val = (i: number) => segment.elements[i]?.value;
+
+      // Identify context (Parent Loop)
+      let contextEntity = 'Unknown'; 
+      for (let i = index; i >= 0; i--) {
+          const s = flat[i];
+          if (s.tag === 'NM1') {
+              const q = s.elements[0]?.value;
+              if (q === '85') { contextEntity = 'BillingProvider'; break; }
+              if (q === 'IL' || q === '74') { contextEntity = 'Subscriber'; break; }
+              if (q === '03' || q === 'QC') { contextEntity = 'Dependent'; break; }
+              if (q === 'PR' || q === '41' || q === '40') { contextEntity = 'Payer'; break; }
+              if (q === '1P') { contextEntity = 'Provider'; break; }
+              if (q === 'ST') { contextEntity = 'ShipTo'; break; }
+              if (q === 'SE') { contextEntity = 'Seller'; break; }
+              if (q === 'BY') { contextEntity = 'Buyer'; break; }
+          }
+          if (s.tag === 'HL') {
+              const lvl = s.elements[2]?.value;
+              if (lvl === '20') { contextEntity = 'Payer'; break; }
+              if (lvl === '21') { contextEntity = 'Provider'; break; }
+              if (lvl === '22') { contextEntity = 'Subscriber'; break; }
+              if (lvl === '23') { contextEntity = 'Dependent'; break; }
+              if (lvl === '19') { contextEntity = 'Provider'; break; }
+          }
+      }
 
       if (tag === 'NM1') {
-          const qual = val(0);
-          if (qual === 'PR') fieldId = 'payerName';
-          else if (qual === '1P') fieldId = 'providerName';
-          else if (qual === 'IL') fieldId = 'subscriberFirstName';
-          else if (qual === '03') fieldId = 'dependentFirstName';
-          else if (qual === '85') fieldId = 'billingProviderName';
-          else if (qual === 'PE') fieldId = 'premiumReceiverName';
-          else if (qual === '41' || qual === '40') fieldId = 'payerName';
-          else if (qual === 'P5') fieldId = 'sponsorName';
-          else if (qual === 'IN') fieldId = 'payerName';
-          else if (qual === 'BY') fieldId = 'buyerName';
-          else if (qual === 'SE') fieldId = 'sellerName';
-          else if (qual === 'ST') fieldId = 'shipToName';
-          else if (qual === 'SF') fieldId = 'sellerName';
+          const q = val(0);
+          if (q === 'PR' || q === '41' || q === '40') fieldId = 'payerName';
+          else if (q === '1P') fieldId = 'providerName';
+          else if (q === 'IL') fieldId = 'subscriberFirstName';
+          else if (q === '03') fieldId = 'dependentFirstName';
+          else if (q === '85') fieldId = 'billingProviderName';
+          else if (q === 'BY') fieldId = 'buyerName';
+          else if (q === 'SE') fieldId = 'sellerName';
+          else if (q === 'ST') fieldId = 'shipToName';
       }
       else if (tag === 'N3') {
-          // Contextual N3? Assume billing provider or ship to for now if generics are limited
-          fieldId = 'billingProviderAddress'; // Or shipToAddress
+          if (contextEntity === 'BillingProvider') fieldId = 'billingProviderAddress';
+          else if (contextEntity === 'ShipTo') fieldId = 'shipToAddress';
       }
       else if (tag === 'N4') {
-          fieldId = 'billingProviderCity'; // Or shipToCity
+          if (contextEntity === 'BillingProvider') fieldId = 'billingProviderCity';
+          else if (contextEntity === 'ShipTo') fieldId = 'shipToCity';
       }
-      else if (tag === 'DMG') fieldId = 'subscriberDob';
-      else if (tag === 'DTP') {
-          const qual = val(0);
-          if (qual === '472' || qual === '291') fieldId = 'serviceDate';
-          if (qual === '348') fieldId = 'planEffectiveDate';
-          if (qual === '356') fieldId = 'planEffectiveDate';
+      else if (tag === 'DMG') {
+          if (contextEntity === 'Subscriber') fieldId = 'subscriberDob';
+          else if (contextEntity === 'Dependent') fieldId = 'dependentDob';
       }
       else if (tag === 'REF') {
-          const qual = val(0);
-          if (qual === 'EI') fieldId = 'billingTaxId';
-          if (qual === 'SY') fieldId = 'subSsn';
-          if (qual === '0F') fieldId = 'subscriberId';
-          if (qual === '1L') fieldId = 'policyNumber';
-          if (qual === 'CN' || qual === 'BM') fieldId = 'trackingNumber';
+          const q = val(0);
+          if (q === 'EI') fieldId = 'billingTaxId';
+          if (q === 'SY') fieldId = 'subSsn';
+          if (q === '0F' || q === 'MI') fieldId = 'subscriberId';
+          if (q === '1L') fieldId = 'policyNumber';
+          if (q === 'CN' || q === 'BM') fieldId = 'trackingNumber';
       }
       else if (tag === 'CLM') fieldId = 'claimId';
       else if (tag === 'BEG') fieldId = 'poNumber';
@@ -374,14 +463,68 @@ export const Workspace = () => {
       else if (tag === 'BSN') fieldId = 'shipmentId';
       else if (tag === 'BPR') fieldId = 'totalPayment';
       else if (tag === 'TRN') {
-          const qual = val(0);
-          if (qual === '1') fieldId = 'checkNumber'; // or claimId/trace in 276
+          if (val(0) === '1') fieldId = 'checkNumber';
       }
-      else if (tag === 'PO1' || tag === 'IT1') fieldId = 'line-0-partNumber'; // Approximated to first line
-      else if (tag === 'LIN') fieldId = 'line-0-partNumber';
-      
+      else if (tag === 'DTP') {
+          const q = val(0);
+          if (q === '472' || q === '291') fieldId = 'serviceDate';
+          if (q === '348') fieldId = 'planEffectiveDate';
+      }
+      else if (['SV1', 'SV2', 'SV3', 'PO1', 'IT1', 'LIN'].includes(tag)) {
+          // Calculate index relative to current transaction
+          let count = 0;
+          // Find enclosing ST/SE
+          let startBoundary = 0;
+          for(let i=index; i>=0; i--) { if(flat[i].tag === 'ST') { startBoundary = i; break; } }
+          
+          for (let i = startBoundary; i < index; i++) {
+              if (flat[i].tag === tag) count++;
+          }
+          if (tag.startsWith('SV')) fieldId = `line-${count}-procedureCode`;
+          else fieldId = `line-${count}-partNumber`;
+      }
+
+      // Handle Dependent Fields (dep-X-field)
+      if (contextEntity === 'Dependent') {
+          let depCount = -1; // 0-based index
+          // Count dependent loops from start of transaction or record
+          let startBoundary = 0;
+          for(let i=index; i>=0; i--) { if(flat[i].tag === 'ST' || flat[i].tag === 'INS' && flat[i].elements[0]?.value === 'Y') { startBoundary = i; break; } }
+
+          for (let i = startBoundary; i <= index; i++) {
+              const s = flat[i];
+              if ((s.tag === 'NM1' && s.elements[0]?.value === '03') || (s.tag === 'INS' && s.elements[0]?.value === 'N')) {
+                  depCount++;
+              }
+          }
+          // Adjustment: if current segment IS the start of loop, we counted it.
+          // If we are INS*N, count is correct (0 for first dep).
+          // If we are NM1*03 and INS*N preceded, count might be double if not careful.
+          // Simplification: We map based on basic count.
+          
+          // Re-normalize depCount if multiple markers exist
+          // Actually, `extractRecords` logic might be safer but expensive here.
+          // Let's assume standard order: HL -> NM1*03 for 270/276, INS*N -> NM1 for 834.
+          
+          // Heuristic fix: If we are deep in segments, we just want "which dependent loop am I in?".
+          // We can just count how many "Dependent Loop Starts" occurred before this segment.
+          let loopCount = 0;
+          for (let i = startBoundary; i < index; i++) {
+               const s = flat[i];
+               if (s.tag === 'NM1' && s.elements[0]?.value === '03') loopCount++;
+               else if (s.tag === 'INS' && s.elements[0]?.value === 'N') loopCount++;
+          }
+          
+          if (fieldId === 'dependentFirstName' || fieldId === 'dependentDob') {
+               // Remap generic fields to indexed fields
+               if (fieldId === 'dependentFirstName') fieldId = `dep-${loopCount}-firstName`;
+               if (fieldId === 'dependentDob') fieldId = `dep-${loopCount}-dob`;
+          } else if (!fieldId && tag === 'NM1') {
+               fieldId = `dep-${loopCount}-firstName`;
+          }
+      }
+
       if (fieldId) {
-          // Call highlight only, avoiding full re-select loop
           setHighlightedField(fieldId);
           setTimeout(() => setHighlightedField(null), 2000);
           const el = document.getElementById(fieldId);
