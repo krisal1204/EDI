@@ -288,7 +288,7 @@ export const build270 = (data: FormData270): string => {
   segments.push(`GE*1*${gsControl}`);
   segments.push(`IEA*1*${isaControl}`);
 
-  return segments.join('~') + '~';
+  return segments.join('~\n') + '~\n';
 };
 
 export const build276 = (data: FormData276): string => {
@@ -353,7 +353,7 @@ export const build276 = (data: FormData276): string => {
   segments.push(`GE*1*${gsControl}`);
   segments.push(`IEA*1*${isaControl}`);
 
-  return segments.join('~') + '~';
+  return segments.join('~\n') + '~\n';
 };
 
 export const build278 = (data: FormData278): string => {
@@ -406,7 +406,7 @@ export const build278 = (data: FormData278): string => {
     segments.push(`GE*1*${gsControl}`);
     segments.push(`IEA*1*${isaControl}`);
 
-    return segments.join('~') + '~';
+    return segments.join('~\n') + '~\n';
 };
 
 const uuid = () => Math.random().toString(36).substring(2, 11);
@@ -487,7 +487,7 @@ export const build837 = (data: FormData837): string => {
     segments.push(`GE*1*${gsControl}`);
     segments.push(`IEA*1*${isaControl}`);
 
-    return segments.join('~') + '~';
+    return segments.join('~\n') + '~\n';
 };
 
 export const build834 = (data: FormData834): string => {
@@ -569,7 +569,7 @@ export const build834 = (data: FormData834): string => {
     segments.push(`GE*1*${gsControl}`);
     segments.push(`IEA*1*${isaControl}`);
 
-    return segments.join('~') + '~';
+    return segments.join('~\n') + '~\n';
 };
 
 export const build820 = (data: FormData820): string => {
@@ -614,7 +614,7 @@ export const build820 = (data: FormData820): string => {
     segments.push(`GE*1*${gsControl}`);
     segments.push(`IEA*1*${isaControl}`);
 
-    return segments.join('~') + '~';
+    return segments.join('~\n') + '~\n';
 };
 
 export const build850 = (data: FormData850): string => {
@@ -663,7 +663,7 @@ export const build850 = (data: FormData850): string => {
     segments.push(`GE*1*${gsControl}`);
     segments.push(`IEA*1*${isaControl}`);
 
-    return segments.join('~') + '~';
+    return segments.join('~\n') + '~\n';
 };
 
 export const build810 = (data: FormData810): string => {
@@ -715,7 +715,7 @@ export const build810 = (data: FormData810): string => {
     segments.push(`GE*1*${gsControl}`);
     segments.push(`IEA*1*${isaControl}`);
 
-    return segments.join('~') + '~';
+    return segments.join('~\n') + '~\n';
 };
 
 export const build856 = (data: FormData856): string => {
@@ -777,5 +777,5 @@ export const build856 = (data: FormData856): string => {
     segments.push(`GE*1*${gsControl}`);
     segments.push(`IEA*1*${isaControl}`);
 
-    return segments.join('~') + '~';
+    return segments.join('~\n') + '~\n';
 };

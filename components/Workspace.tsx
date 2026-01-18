@@ -278,7 +278,7 @@ export const Workspace = () => {
                 <span className="font-medium text-sm tracking-tight text-gray-900 dark:text-white uppercase">EDI Insight</span>
             </button>
             {doc?.transactionType && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-50 dark:text-slate-400 font-mono">
+                <span className="text-[10px] px-2 py-0.5 rounded-full border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-500 dark:text-slate-400 font-mono">
                     {doc.transactionType}
                 </span>
             )}
