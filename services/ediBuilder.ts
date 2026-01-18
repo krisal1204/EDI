@@ -409,7 +409,7 @@ export const build278 = (data: FormData278): string => {
     return segments.join('~') + '~';
 };
 
-const uuid = () => Math.random().toString(36).substr(2, 9);
+const uuid = () => Math.random().toString(36).substring(2, 11);
 
 export const build837 = (data: FormData837): string => {
     const date = getCurrentDate();
