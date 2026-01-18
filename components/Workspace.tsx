@@ -12,7 +12,7 @@ import { JsonViewer } from './JsonViewer';
 import { SendMessage } from './SendMessage';
 import { RecordList } from './RecordList';
 import { VisualReport } from './VisualReport';
-import { parseEdi, replaceRecordInEdi, formatEdi } from '../services/ediParser';
+import { parseEdi, replaceRecordInEdi, formatEdi, flattenTree } from '../services/ediParser';
 import { EdiDocument, EdiSegment } from '../types';
 import { 
     FormData270, FormData276, FormData837, FormData834, FormData850, FormData810, FormData856, FormData278, FormData820,
@@ -63,7 +63,6 @@ export const Workspace = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Initialize state from location if available, otherwise defaults
   const [industry, setIndustry] = useState<'healthcare' | 'manufacturing'>(location.state?.industry || 'healthcare');
   const [viewMode, setViewMode] = useState<'inspector' | 'visual' | 'raw' | 'json' | 'reference' | 'settings' | 'contact'>(location.state?.viewMode || 'inspector');
 
@@ -89,7 +88,6 @@ export const Workspace = () => {
   const [generatorMode, setGeneratorMode] = useState<'270' | '276' | '837' | '834' | '278' | '820' | '850' | '810' | '856'>('270');
   const [sidebarWidth, setSidebarWidth] = useState(700);
 
-  // Derived data for response transactions
   const benefits = useMemo(() => doc && doc.transactionType === '271' ? mapEdiToBenefits(doc) : [], [doc]);
   const claims = useMemo(() => doc && doc.transactionType === '277' ? mapEdiToClaimStatus(doc) : [], [doc]);
   const remittance = useMemo(() => doc && doc.transactionType === '835' ? mapEdiToRemittance(doc) : null, [doc]);
@@ -113,7 +111,6 @@ export const Workspace = () => {
       setRecords([]);
       setSelectedRecordId(null);
       setSelectedSegment(null);
-      
       setFormData(INITIAL_FORM_DATA);
       setFormData276({} as any);
       setFormData837({} as any);
@@ -123,7 +120,6 @@ export const Workspace = () => {
       setFormData850({} as any);
       setFormData810({} as any);
       setFormData856({} as any);
-      
       setViewMode('inspector');
   };
 
@@ -261,22 +257,75 @@ export const Workspace = () => {
     processEdi(updated, false);
   };
 
-  const handleFieldFocus = (field: string) => {
-      setHighlightedField(field);
-      // Clear highlight after a short duration to allow re-triggering
+  // Field ID -> Segment heuristic map
+  const getFieldToSegmentCriteria = (fieldId: string) => {
+      // Common fields
+      if (fieldId.includes('payerName')) return { tag: 'NM1', el1: ['PR', '41', 'IN', '40'] };
+      if (fieldId.includes('payerId')) return { tag: 'NM1', el1: ['PR', '41', 'IN', '40'] };
+      if (fieldId.includes('providerName')) return { tag: 'NM1', el1: ['1P', '85', 'PE', 'FA'] };
+      if (fieldId.includes('providerNpi')) return { tag: 'NM1', el1: ['1P', '85', 'PE'] };
+      if (fieldId.includes('subscriberFirstName') || fieldId.includes('subscriberLastName')) return { tag: 'NM1', el1: ['IL', '74'] };
+      if (fieldId.includes('subscriberId')) return { tag: 'NM1', el1: ['IL', '74'] };
+      if (fieldId.includes('dependentFirstName') || fieldId.includes('dependentLastName')) return { tag: 'NM1', el1: ['03'] };
+      if (fieldId.includes('claimId')) return { tag: 'CLM' }; // Also TRN sometimes
+      if (fieldId.includes('totalCharge')) return { tag: 'CLM' };
+      if (fieldId.includes('serviceDate')) return { tag: 'DTP', el1: ['472', '291'] };
+      if (fieldId.includes('poNumber')) return { tag: 'BEG' };
+      if (fieldId.includes('invoiceNumber')) return { tag: 'BIG' };
+      if (fieldId.includes('shipmentId')) return { tag: 'BSN' };
+      return null;
+  };
+
+  const handleFieldFocus = (fieldId: string) => {
+      // 1. Visual Highlight
+      setHighlightedField(fieldId);
       setTimeout(() => setHighlightedField(null), 2000);
       
-      const el = document.getElementById(field);
+      const el = document.getElementById(fieldId);
       if (el) {
           el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          el.focus();
+      }
+
+      // 2. Reverse Highlight: Select Segment
+      if (!doc) return;
+      const criteria = getFieldToSegmentCriteria(fieldId);
+      if (!criteria) return;
+
+      const flat = flattenTree(doc.segments);
+      
+      // Attempt to find segment within the selected record's scope if possible
+      let searchStart = 0;
+      if (selectedRecordId) {
+          const recIdx = records.findIndex(r => r.id === selectedRecordId);
+          if (recIdx !== -1) searchStart = records[recIdx].startIndex;
+      }
+
+      // Search forwards from record start
+      let found = flat.slice(searchStart).find(seg => {
+          if (seg.tag !== criteria.tag) return false;
+          if (criteria.el1 && !criteria.el1.includes(seg.elements[0]?.value)) return false;
+          return true;
+      });
+
+      // If not found in record scope, try from beginning
+      if (!found) {
+          found = flat.find(seg => {
+              if (seg.tag !== criteria.tag) return false;
+              if (criteria.el1 && !criteria.el1.includes(seg.elements[0]?.value)) return false;
+              return true;
+          });
+      }
+
+      if (found && found.id !== selectedSegment?.id) {
+          // Avoid triggering if already selected to prevent loop/jitter
+          setSelectedSegment(found);
       }
   };
 
   const handleSegmentSelect = (segment: EdiSegment) => {
       setSelectedSegment(segment);
       
-      // Heuristic to map Segment to Form Field for highlighting
+      // Segment -> Field Heuristics
       const val = (i: number) => segment.elements[i]?.value;
       const tag = segment.tag;
       let fieldId = null;
@@ -288,28 +337,55 @@ export const Workspace = () => {
           else if (qual === 'IL') fieldId = 'subscriberFirstName';
           else if (qual === '03') fieldId = 'dependentFirstName';
           else if (qual === '85') fieldId = 'billingProviderName';
+          else if (qual === 'PE') fieldId = 'premiumReceiverName';
           else if (qual === '41' || qual === '40') fieldId = 'payerName';
+          else if (qual === 'P5') fieldId = 'sponsorName';
+          else if (qual === 'IN') fieldId = 'payerName';
+          else if (qual === 'BY') fieldId = 'buyerName';
+          else if (qual === 'SE') fieldId = 'sellerName';
+          else if (qual === 'ST') fieldId = 'shipToName';
+          else if (qual === 'SF') fieldId = 'sellerName';
       }
-      else if (tag === 'N3') fieldId = 'billingProviderAddress';
-      else if (tag === 'N4') fieldId = 'billingProviderCity';
+      else if (tag === 'N3') {
+          // Contextual N3? Assume billing provider or ship to for now if generics are limited
+          fieldId = 'billingProviderAddress'; // Or shipToAddress
+      }
+      else if (tag === 'N4') {
+          fieldId = 'billingProviderCity'; // Or shipToCity
+      }
       else if (tag === 'DMG') fieldId = 'subscriberDob';
       else if (tag === 'DTP') {
           const qual = val(0);
-          if (qual === '472') fieldId = 'serviceDate';
+          if (qual === '472' || qual === '291') fieldId = 'serviceDate';
           if (qual === '348') fieldId = 'planEffectiveDate';
+          if (qual === '356') fieldId = 'planEffectiveDate';
       }
       else if (tag === 'REF') {
           const qual = val(0);
           if (qual === 'EI') fieldId = 'billingTaxId';
           if (qual === 'SY') fieldId = 'subSsn';
           if (qual === '0F') fieldId = 'subscriberId';
+          if (qual === '1L') fieldId = 'policyNumber';
+          if (qual === 'CN' || qual === 'BM') fieldId = 'trackingNumber';
       }
       else if (tag === 'CLM') fieldId = 'claimId';
       else if (tag === 'BEG') fieldId = 'poNumber';
       else if (tag === 'BIG') fieldId = 'invoiceNumber';
+      else if (tag === 'BSN') fieldId = 'shipmentId';
+      else if (tag === 'BPR') fieldId = 'totalPayment';
+      else if (tag === 'TRN') {
+          const qual = val(0);
+          if (qual === '1') fieldId = 'checkNumber'; // or claimId/trace in 276
+      }
+      else if (tag === 'PO1' || tag === 'IT1') fieldId = 'line-0-partNumber'; // Approximated to first line
+      else if (tag === 'LIN') fieldId = 'line-0-partNumber';
       
       if (fieldId) {
-          handleFieldFocus(fieldId);
+          // Call highlight only, avoiding full re-select loop
+          setHighlightedField(fieldId);
+          setTimeout(() => setHighlightedField(null), 2000);
+          const el = document.getElementById(fieldId);
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
   };
 
@@ -317,7 +393,6 @@ export const Workspace = () => {
       e.preventDefault();
       
       const handleMouseMove = (moveEvent: MouseEvent) => {
-          // Limit width between 400px and 80% of screen width
           const newWidth = Math.max(400, Math.min(moveEvent.clientX, window.innerWidth * 0.8));
           setSidebarWidth(newWidth);
       };
