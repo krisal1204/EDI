@@ -6,6 +6,7 @@ import { BenefitRow, ClaimStatusRow, PaymentInfo, RemittanceClaim } from '../ser
 import { BenefitTable } from './BenefitTable';
 import { ClaimStatusTable } from './ClaimStatusTable';
 import { PaymentTable } from './PaymentTable';
+import { OrderTable } from './OrderTable';
 import { PROCEDURE_CODES, ICD10_CODES, SERVICE_TYPE_CODES } from '../services/referenceData';
 import { DatePicker } from './DatePicker';
 
@@ -76,6 +77,66 @@ const SelectField = ({ label, value, onChange, onFocus, options, className = '',
     </div>
   </div>
 );
+
+const MultiSelectField = ({ label, values = [], onChange, options, id, onFocus }: { label: string, values: string[], onChange: (vals: string[]) => void, options: Record<string, string>, id?: string, onFocus?: () => void }) => {
+    const handleAdd = (val: string) => {
+        if (!values.includes(val)) {
+            onChange([...values, val]);
+        }
+    };
+
+    const handleRemove = (val: string) => {
+        onChange(values.filter((v: string) => v !== val));
+    };
+
+    return (
+        <div className="mb-4">
+            <label className="block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1.5 uppercase tracking-wide" htmlFor={id}>{label}</label>
+            
+            {/* Selected Tags */}
+            <div className="flex flex-wrap gap-2 mb-2">
+                {values.map((val: string) => (
+                    <span key={val} className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300 border border-brand-100 dark:border-brand-800">
+                        <span className="font-bold">{val}</span>
+                        <span className="opacity-75 max-w-[150px] truncate hidden sm:inline">- {options[val] || ''}</span>
+                        <button 
+                            onClick={(e) => { e.preventDefault(); handleRemove(val); }} 
+                            className="ml-1 hover:text-brand-900 dark:hover:text-brand-100 font-bold"
+                        >
+                            ×
+                        </button>
+                    </span>
+                ))}
+            </div>
+
+            {/* Selector */}
+            <div className="relative">
+                <select
+                    id={id}
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded text-sm text-gray-900 dark:text-white focus:outline-none focus:border-black dark:focus:border-brand-500 focus:ring-1 focus:ring-black dark:focus:ring-brand-500 transition-colors appearance-none cursor-pointer"
+                    onChange={e => {
+                        if (e.target.value) {
+                            handleAdd(e.target.value);
+                            e.target.value = ""; // Reset select visual
+                        }
+                    }}
+                    onFocus={onFocus}
+                    defaultValue=""
+                >
+                    <option value="" disabled>+ Add Service Type...</option>
+                    {Object.entries(options).map(([code, desc]) => (
+                        <option key={code} value={code} disabled={values.includes(code)}>
+                            {code} - {desc}
+                        </option>
+                    ))}
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500 dark:text-slate-400">
+                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 const AutocompleteField = ({ label, value, onChange, onFocus, options, placeholder, id }: { label: string, value: string, onChange: (val: string) => void, onFocus?: () => void, options: Record<string, string>, placeholder?: string, id?: string }) => {
     const [showSuggestions, setShowSuggestions] = useState(false);
@@ -357,18 +418,14 @@ export const EdiGenerator: React.FC<Props> = ({
                 <DatePicker label="Service Date" value={formData.serviceDate} onChange={v => onChange({...formData, serviceDate: v})} onFocus={() => onFieldFocus('serviceDate')} />
             </div>
             <div>
-                <label className="block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1.5 uppercase tracking-wide">Service Type Code</label>
-                <select 
+                <MultiSelectField
                     id="serviceTypeCodes"
-                    className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded text-sm text-gray-900 dark:text-white focus:outline-none focus:border-black dark:focus:border-brand-500 focus:ring-1 focus:ring-black dark:focus:ring-brand-500 transition-colors"
-                    value={formData.serviceTypeCodes?.[0] || '30'}
-                    onChange={e => onChange({...formData, serviceTypeCodes: [e.target.value]})}
+                    label="Service Type Codes"
+                    values={formData.serviceTypeCodes || ['30']}
+                    onChange={vals => onChange({...formData, serviceTypeCodes: vals})}
+                    options={SERVICE_TYPE_CODES}
                     onFocus={() => onFieldFocus('serviceTypeCodes')}
-                >
-                    {Object.entries(SERVICE_TYPE_CODES).map(([code, desc]) => (
-                        <option key={code} value={code}>{code} - {desc}</option>
-                    ))}
-                </select>
+                />
             </div>
         </div>
       </>
