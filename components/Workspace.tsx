@@ -65,6 +65,7 @@ export const Workspace = () => {
 
   const [industry, setIndustry] = useState<'healthcare' | 'manufacturing'>(location.state?.industry || 'healthcare');
   const [viewMode, setViewMode] = useState<'inspector' | 'visual' | 'raw' | 'json' | 'reference' | 'settings' | 'contact'>(location.state?.viewMode || 'inspector');
+  const [jsonMode, setJsonMode] = useState<'structure' | 'simplified'>('simplified');
 
   const [formData, setFormData] = useState<FormData270>(INITIAL_FORM_DATA);
   const [formData276, setFormData276] = useState<FormData276>({} as any);
@@ -91,6 +92,27 @@ export const Workspace = () => {
   const benefits = useMemo(() => doc && doc.transactionType === '271' ? mapEdiToBenefits(doc) : [], [doc]);
   const claims = useMemo(() => doc && doc.transactionType === '277' ? mapEdiToClaimStatus(doc) : [], [doc]);
   const remittance = useMemo(() => doc && doc.transactionType === '835' ? mapEdiToRemittance(doc) : null, [doc]);
+
+  const activeFormData = useMemo(() => {
+      if (!doc) return {};
+      // Prioritize the generator/editor form data for request types
+      if (doc.transactionType === '270') return formData;
+      if (doc.transactionType === '276') return formData276;
+      if (doc.transactionType === '837') return formData837;
+      if (doc.transactionType === '834') return formData834;
+      if (doc.transactionType === '278') return formData278;
+      if (doc.transactionType === '820') return formData820;
+      if (doc.transactionType === '850') return formData850;
+      if (doc.transactionType === '810') return formData810;
+      if (doc.transactionType === '856') return formData856;
+      
+      // For response types, return the analyzed data
+      if (doc.transactionType === '271') return benefits;
+      if (doc.transactionType === '277') return claims;
+      if (doc.transactionType === '835') return remittance;
+      
+      return { info: "No specific simplified model found", raw: doc };
+  }, [doc, formData, formData276, formData837, formData834, formData278, formData820, formData850, formData810, formData856, benefits, claims, remittance]);
 
   useEffect(() => {
     if (theme === 'dark') document.documentElement.classList.add('dark');
@@ -659,8 +681,24 @@ export const Workspace = () => {
                     )}
                     {viewMode === 'visual' && <VisualReport doc={doc} selectedRecordId={selectedRecordId} onFieldFocus={handleFieldFocus} />}
                     {viewMode === 'json' && (
-                        <div className="p-8 h-full overflow-y-auto custom-scrollbar bg-white dark:bg-slate-950">
-                            <JsonViewer data={doc} initiallyOpen={true} />
+                        <div className="flex flex-col h-full bg-white dark:bg-slate-950">
+                            <div className="flex items-center gap-2 px-6 py-2 border-b border-gray-100 dark:border-slate-800 bg-gray-50/50 dark:bg-slate-900/50">
+                                <button 
+                                    onClick={() => setJsonMode('simplified')}
+                                    className={`text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${jsonMode === 'simplified' ? 'bg-black dark:bg-white text-white dark:text-black shadow-sm' : 'text-gray-500 hover:bg-gray-200 dark:hover:bg-slate-800'}`}
+                                >
+                                    Simplified Object
+                                </button>
+                                <button 
+                                    onClick={() => setJsonMode('structure')}
+                                    className={`text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${jsonMode === 'structure' ? 'bg-black dark:bg-white text-white dark:text-black shadow-sm' : 'text-gray-500 hover:bg-gray-200 dark:hover:bg-slate-800'}`}
+                                >
+                                    Raw AST Structure
+                                </button>
+                            </div>
+                            <div className="p-8 flex-1 overflow-y-auto custom-scrollbar">
+                                <JsonViewer data={jsonMode === 'simplified' ? activeFormData : doc} initiallyOpen={true} />
+                            </div>
                         </div>
                     )}
                     {viewMode === 'raw' && (
