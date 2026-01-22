@@ -207,76 +207,70 @@ export const Workspace = () => {
       processEdi(rawEdi || originalEdi, true, index);
   };
 
+  // NOTE: For Generators, we replace the entire file content. 
+  // The 'replaceRecordInEdi' function is for splicing, which can cause nested envelopes when building full transactions.
+  
   const handleFormChange = (newData: FormData270) => {
     setFormData(newData);
     const newEdi = build270(newData);
-    const updated = replaceRecordInEdi(doc!, newEdi, selectedRecordId!);
-    setRawEdi(updated);
-    processEdi(updated, false);
+    setRawEdi(newEdi);
+    processEdi(newEdi, false);
   };
 
   const handleForm276Change = (newData: FormData276) => {
     setFormData276(newData);
     const newEdi = build276(newData);
-    const updated = replaceRecordInEdi(doc!, newEdi, selectedRecordId!);
-    setRawEdi(updated);
-    processEdi(updated, false);
+    setRawEdi(newEdi);
+    processEdi(newEdi, false);
   };
 
   const handleForm837Change = (newData: FormData837) => {
     setFormData837(newData);
     const newEdi = build837(newData);
-    const updated = replaceRecordInEdi(doc!, newEdi, selectedRecordId!);
-    setRawEdi(updated);
-    processEdi(updated, false);
+    setRawEdi(newEdi);
+    processEdi(newEdi, false);
   }
 
   const handleForm834Change = (newData: FormData834) => {
     setFormData834(newData);
     const newEdi = build834(newData);
-    const updated = replaceRecordInEdi(doc!, newEdi, selectedRecordId!);
-    setRawEdi(updated);
-    processEdi(updated, false);
+    setRawEdi(newEdi);
+    processEdi(newEdi, false);
   }
 
   const handleForm278Change = (newData: FormData278) => {
     setFormData278(newData);
     const newEdi = build278(newData);
-    const updated = replaceRecordInEdi(doc!, newEdi, selectedRecordId!);
-    setRawEdi(updated);
-    processEdi(updated, false);
+    setRawEdi(newEdi);
+    processEdi(newEdi, false);
   };
 
   const handleForm820Change = (newData: FormData820) => {
     setFormData820(newData);
     const newEdi = build820(newData);
-    const updated = replaceRecordInEdi(doc!, newEdi, selectedRecordId!);
-    setRawEdi(updated);
-    processEdi(updated, false);
+    setRawEdi(newEdi);
+    processEdi(newEdi, false);
   };
 
   const handleForm850Change = (newData: FormData850) => {
     setFormData850(newData);
     const newEdi = build850(newData);
-    const updated = replaceRecordInEdi(doc!, newEdi, selectedRecordId!);
-    setRawEdi(updated);
-    processEdi(updated, false);
+    setRawEdi(newEdi);
+    processEdi(newEdi, false);
   };
 
   const handleForm810Change = (newData: FormData810) => {
     setFormData810(newData);
     const newEdi = build810(newData);
-    const updated = replaceRecordInEdi(doc!, newEdi, selectedRecordId!);
-    setRawEdi(updated);
-    processEdi(updated, false);
+    setRawEdi(newEdi);
+    processEdi(newEdi, false);
   };
 
   const handleForm856Change = (newData: FormData856) => {
     setFormData856(newData);
     const newEdi = build856(newData);
-    const updated = replaceRecordInEdi(doc!, newEdi, selectedRecordId!);
-    setRawEdi(updated);
-    processEdi(updated, false);
+    setRawEdi(newEdi);
+    processEdi(newEdi, false);
   };
 
   const handleFieldFocus = (fieldId: string) => {
@@ -351,7 +345,8 @@ export const Workspace = () => {
                   if (currentDepCount === depIdx) {
                       if (fieldId.includes('firstName') || fieldId.includes('lastName')) {
                           if (s.tag === 'NM1') { setSelectedSegment(s); return; }
-                          const nm1 = flat.slice(i, i+10).find(seg => seg.tag === 'NM1' && (seg.elements[0]?.value === '03' || seg.elements[0]?.value === 'QC'));
+                          // For 834, dependent names can be NM1*IL inside the dependent loop (standard 2100A), or NM1*03/QC
+                          const nm1 = flat.slice(i, i+10).find(seg => seg.tag === 'NM1' && (seg.elements[0]?.value === '03' || seg.elements[0]?.value === 'QC' || seg.elements[0]?.value === 'IL'));
                           if (nm1) { setSelectedSegment(nm1); return; }
                       }
                       if (fieldId.includes('dob') || fieldId.includes('gender')) {
@@ -374,15 +369,33 @@ export const Workspace = () => {
       else if (fieldId === 'payerId') { tag = 'NM1'; el1Codes = ['PR', '41', 'IN']; }
       else if (fieldId === 'providerName') { tag = 'NM1'; el1Codes = ['1P', '85', 'PE', 'FA']; }
       else if (fieldId === 'providerNpi') { tag = 'NM1'; el1Codes = ['1P', '85', 'PE']; }
-      else if (fieldId === 'subscriberFirstName') { tag = 'NM1'; el1Codes = ['IL', '74']; }
-      else if (fieldId === 'subscriberLastName') { tag = 'NM1'; el1Codes = ['IL', '74']; }
-      else if (fieldId === 'subscriberId') { tag = 'NM1'; el1Codes = ['IL']; } 
+      
+      // Subscriber Mappings
+      else if (fieldId === 'subscriberFirstName' || fieldId === 'subFirstName') { tag = 'NM1'; el1Codes = ['IL', '74']; }
+      else if (fieldId === 'subscriberLastName' || fieldId === 'subLastName') { tag = 'NM1'; el1Codes = ['IL', '74']; }
+      else if (fieldId === 'subscriberId' || fieldId === 'subId') { tag = 'NM1'; el1Codes = ['IL']; } 
+      else if (fieldId === 'subSsn') { tag = 'REF'; el1Codes = ['SY']; }
+      else if (fieldId === 'subDob') { tag = 'DMG'; }
+      else if (fieldId === 'subGender') { tag = 'DMG'; }
+      
+      // 834 Specific
+      else if (fieldId === 'sponsorName') { tag = 'N1'; el1Codes = ['P5']; }
+      else if (fieldId === 'sponsorTaxId') { tag = 'N1'; el1Codes = ['P5']; }
+      else if (fieldId === 'maintenanceType') { tag = 'INS'; }
+      else if (fieldId === 'maintenanceReason') { tag = 'INS'; }
+      else if (fieldId === 'policyNumber') { tag = 'REF'; el1Codes = ['1L']; }
+      else if (fieldId === 'coverageLevelCode') { tag = 'HD'; }
+      else if (fieldId === 'planEffectiveDate') { tag = 'DTP'; el1Codes = ['348', '356']; }
+
+      // 837 Specific
       else if (fieldId === 'billingProviderName') { tag = 'NM1'; el1Codes = ['85']; }
       else if (fieldId === 'billingProviderAddress') { tag = 'NM1'; el1Codes = ['85']; lookAheadFor = 'N3'; }
       else if (fieldId === 'billingProviderCity') { tag = 'NM1'; el1Codes = ['85']; lookAheadFor = 'N4'; }
       else if (fieldId === 'billingTaxId') { tag = 'REF'; el1Codes = ['EI']; }
       else if (fieldId === 'claimId') { tag = 'CLM'; }
       else if (fieldId === 'totalCharge') { tag = 'CLM'; }
+      
+      // Other
       else if (fieldId === 'serviceDate') { tag = 'DTP'; el1Codes = ['472', '291']; }
       else if (fieldId === 'poNumber') { tag = 'BEG'; }
       else if (fieldId === 'invoiceNumber') { tag = 'BIG'; }
@@ -437,6 +450,7 @@ export const Workspace = () => {
               if (q === 'ST') { contextEntity = 'ShipTo'; break; }
               if (q === 'SE') { contextEntity = 'Seller'; break; }
               if (q === 'BY') { contextEntity = 'Buyer'; break; }
+              if (q === 'P5') { contextEntity = 'Sponsor'; break; }
           }
           if (s.tag === 'HL') {
               const lvl = s.elements[2]?.value;
@@ -446,18 +460,27 @@ export const Workspace = () => {
               if (lvl === '23') { contextEntity = 'Dependent'; break; }
               if (lvl === '19') { contextEntity = 'Provider'; break; }
           }
+          if (s.tag === 'INS') {
+              if (s.elements[0]?.value === 'Y') contextEntity = 'Subscriber';
+              if (s.elements[0]?.value === 'N') contextEntity = 'Dependent';
+          }
       }
 
       if (tag === 'NM1') {
           const q = val(0);
           if (q === 'PR' || q === '41' || q === '40') fieldId = 'payerName';
           else if (q === '1P') fieldId = 'providerName';
-          else if (q === 'IL') fieldId = 'subscriberFirstName';
+          else if (q === 'IL') {
+              if (contextEntity === 'Subscriber') fieldId = 'subFirstName'; // 834
+              else if (contextEntity === 'Dependent') fieldId = 'dependentFirstName'; // 834 dep
+              else fieldId = 'subscriberFirstName'; // General
+          }
           else if (q === '03') fieldId = 'dependentFirstName';
           else if (q === '85') fieldId = 'billingProviderName';
           else if (q === 'BY') fieldId = 'buyerName';
           else if (q === 'SE') fieldId = 'sellerName';
           else if (q === 'ST') fieldId = 'shipToName';
+          else if (q === 'P5') fieldId = 'sponsorName';
       }
       else if (tag === 'N3') {
           if (contextEntity === 'BillingProvider') fieldId = 'billingProviderAddress';
@@ -468,14 +491,14 @@ export const Workspace = () => {
           else if (contextEntity === 'ShipTo') fieldId = 'shipToCity';
       }
       else if (tag === 'DMG') {
-          if (contextEntity === 'Subscriber') fieldId = 'subscriberDob';
+          if (contextEntity === 'Subscriber') fieldId = 'subDob';
           else if (contextEntity === 'Dependent') fieldId = 'dependentDob';
       }
       else if (tag === 'REF') {
           const q = val(0);
           if (q === 'EI') fieldId = 'billingTaxId';
           if (q === 'SY') fieldId = 'subSsn';
-          if (q === '0F' || q === 'MI') fieldId = 'subscriberId';
+          if (q === '0F' || q === 'MI') fieldId = 'subscriberId'; // or subId
           if (q === '1L') fieldId = 'policyNumber';
           if (q === 'CN' || q === 'BM') fieldId = 'trackingNumber';
       }
@@ -484,13 +507,15 @@ export const Workspace = () => {
       else if (tag === 'BIG') fieldId = 'invoiceNumber';
       else if (tag === 'BSN') fieldId = 'shipmentId';
       else if (tag === 'BPR') fieldId = 'totalPayment';
+      else if (tag === 'INS') { fieldId = 'maintenanceType'; }
+      else if (tag === 'HD') { fieldId = 'coverageLevelCode'; }
       else if (tag === 'TRN') {
           if (val(0) === '1') fieldId = 'checkNumber';
       }
       else if (tag === 'DTP') {
           const q = val(0);
           if (q === '472' || q === '291') fieldId = 'serviceDate';
-          if (q === '348') fieldId = 'planEffectiveDate';
+          if (q === '348' || q === '356') fieldId = 'planEffectiveDate';
       }
       else if (['SV1', 'SV2', 'SV3', 'PO1', 'IT1', 'LIN'].includes(tag)) {
           // Calculate index relative to current transaction
@@ -511,37 +536,40 @@ export const Workspace = () => {
           let depCount = -1; // 0-based index
           // Count dependent loops from start of transaction or record
           let startBoundary = 0;
-          for(let i=index; i>=0; i--) { if(flat[i].tag === 'ST' || flat[i].tag === 'INS' && flat[i].elements[0]?.value === 'Y') { startBoundary = i; break; } }
+          for(let i=index; i>=0; i--) { if(flat[i].tag === 'ST' || (flat[i].tag === 'INS' && flat[i].elements[0]?.value === 'Y')) { startBoundary = i; break; } }
 
           for (let i = startBoundary; i <= index; i++) {
               const s = flat[i];
+              // Count markers for dependent loops
               if ((s.tag === 'NM1' && s.elements[0]?.value === '03') || (s.tag === 'INS' && s.elements[0]?.value === 'N')) {
                   depCount++;
               }
           }
-          // Adjustment: if current segment IS the start of loop, we counted it.
-          // If we are INS*N, count is correct (0 for first dep).
-          // If we are NM1*03 and INS*N preceded, count might be double if not careful.
-          // Simplification: We map based on basic count.
           
-          // Re-normalize depCount if multiple markers exist
-          // Actually, `extractRecords` logic might be safer but expensive here.
-          // Let's assume standard order: HL -> NM1*03 for 270/276, INS*N -> NM1 for 834.
+          // Heuristic correction for double counting if markers are adjacent
+          // (Simplified: assuming one marker per loop in standard counting)
           
-          // Heuristic fix: If we are deep in segments, we just want "which dependent loop am I in?".
-          // We can just count how many "Dependent Loop Starts" occurred before this segment.
+          // Renormalize loopCount by checking how many *distinct* loops started
+          // For 834, each dependent loop starts with INS*N.
           let loopCount = 0;
           for (let i = startBoundary; i < index; i++) {
                const s = flat[i];
-               if (s.tag === 'NM1' && s.elements[0]?.value === '03') loopCount++;
-               else if (s.tag === 'INS' && s.elements[0]?.value === 'N') loopCount++;
+               if (s.tag === 'INS' && s.elements[0]?.value === 'N') loopCount++;
+               else if (s.tag === 'NM1' && s.elements[0]?.value === '03') {
+                   // Only count if not preceded immediately by INS*N (avoid double count)
+                   const prev = flat[i-1];
+                   if (!prev || prev.tag !== 'INS') loopCount++;
+               }
           }
           
           if (fieldId === 'dependentFirstName' || fieldId === 'dependentDob') {
-               // Remap generic fields to indexed fields
                if (fieldId === 'dependentFirstName') fieldId = `dep-${loopCount}-firstName`;
                if (fieldId === 'dependentDob') fieldId = `dep-${loopCount}-dob`;
           } else if (!fieldId && tag === 'NM1') {
+               fieldId = `dep-${loopCount}-firstName`;
+          }
+          // Special case for 834 dependent names mapping to NM1*IL
+          else if (tag === 'NM1' && val(0) === 'IL') {
                fieldId = `dep-${loopCount}-firstName`;
           }
       }
