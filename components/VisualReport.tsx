@@ -218,8 +218,41 @@ export const VisualReport: React.FC<Props> = ({ doc, selectedRecordId, onFieldFo
     }
 
     if (type === '271') {
-        const benefits = mapEdiToBenefits(doc);
-        return <BenefitTable benefits={benefits} />;
+        // Reuse mapEdiToForm to extract header info like Payer/Subscriber names as they share similar structure
+        const header = mapEdiToForm(doc, selectedRecordId || undefined) as Partial<FormData270>;
+        const benefits = mapEdiToBenefits(doc, selectedRecordId || undefined);
+        
+        return (
+            <div className="p-8 h-full overflow-y-auto custom-scrollbar space-y-6 animate-fade-in">
+                <div className="mb-8">
+                    <span className="px-2 py-1 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 text-[10px] font-bold rounded uppercase tracking-widest mb-2 inline-block">
+                        Eligibility Response (271)
+                    </span>
+                    <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Benefit Summary</h2>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    <Card title="Covered Member" icon="👤">
+                        <DetailRow label="Name" value={header.hasDependent ? `${header.dependentFirstName} ${header.dependentLastName}` : `${header.subscriberFirstName} ${header.subscriberLastName}`} field="subscriberFirstName" onFocus={onFieldFocus} />
+                        <DetailRow label="Member ID" value={header.subscriberId} field="subscriberId" onFocus={onFieldFocus} />
+                        <DetailRow label="DOB" value={header.hasDependent ? header.dependentDob : header.subscriberDob} field="subscriberDob" onFocus={onFieldFocus} />
+                    </Card>
+                    <Card title="Payer" icon="🏢">
+                        <DetailRow label="Organization" value={header.payerName} field="payerName" onFocus={onFieldFocus} />
+                        <DetailRow label="Payer ID" value={header.payerId} field="payerId" onFocus={onFieldFocus} />
+                    </Card>
+                </div>
+
+                <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm h-[500px]">
+                    <div className="px-6 py-4 bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-800">
+                        <h3 className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-widest">Benefit Details</h3>
+                    </div>
+                    <div className="h-full">
+                        <BenefitTable benefits={benefits} />
+                    </div>
+                </div>
+            </div>
+        );
     }
 
     if (type === '276') {

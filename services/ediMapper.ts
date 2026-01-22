@@ -1,6 +1,6 @@
 
 import { EdiDocument, EdiSegment } from '../types';
-import { flattenTree } from './ediParser';
+import { flattenTree, getRecordRaw } from './ediParser';
 import { 
     FormData270, FormData276, FormData837, FormData834, 
     ServiceLine837, Member834, FormData850, FormData810, 
@@ -543,13 +543,37 @@ export const mapEdiToForm856 = (doc: EdiDocument): Partial<FormData856> => {
 
 // --- Visual Report Mappers ---
 
-export const mapEdiToBenefits = (doc: EdiDocument): BenefitRow[] => {
+export const mapEdiToBenefits = (doc: EdiDocument, recordId?: string): BenefitRow[] => {
     const rows: BenefitRow[] = [];
     const flat = flattenTree(doc.segments);
     
+    // Determine scope
+    let startIndex = 0;
+    let endIndex = flat.length;
+
+    if (recordId) {
+        const anchorIdx = flat.findIndex(s => s.id === recordId);
+        if (anchorIdx !== -1) {
+            startIndex = anchorIdx;
+            // Scan for end of this record logic (simplified: until next similar HL or end)
+            const anchorSeg = flat[anchorIdx];
+            if (anchorSeg.tag === 'HL') {
+                for (let k = anchorIdx + 1; k < flat.length; k++) {
+                    const s = flat[k];
+                    if (s.tag === 'HL' && s.depth <= anchorSeg.depth) {
+                        endIndex = k;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
     let currentRef = "Unknown";
 
-    flat.forEach((seg, i) => {
+    for (let i = startIndex; i < endIndex; i++) {
+        const seg = flat[i];
+
         if (seg.tag === 'NM1' && (seg.elements[0]?.value === 'IL' || seg.elements[0]?.value === '03')) {
             const first = seg.elements[3]?.value || '';
             const last = seg.elements[2]?.value || '';
@@ -564,7 +588,7 @@ export const mapEdiToBenefits = (doc: EdiDocument): BenefitRow[] => {
             // Extract messages
             const messages: string[] = [];
             let j = i + 1;
-            while(j < flat.length && (flat[j].tag === 'MSG' || flat[j].tag === 'DTP' || flat[j].tag === 'III' || flat[j].tag === 'LS')) {
+            while(j < endIndex && (flat[j].tag === 'MSG' || flat[j].tag === 'DTP' || flat[j].tag === 'III' || flat[j].tag === 'LS')) {
                 if (flat[j].tag === 'MSG') messages.push(flat[j].elements[0]?.value);
                 j++;
             }
@@ -572,7 +596,7 @@ export const mapEdiToBenefits = (doc: EdiDocument): BenefitRow[] => {
             // Extract dates
             const dates: string[] = [];
             j = i + 1;
-            while(j < flat.length && flat[j].tag !== 'EB' && flat[j].tag !== 'SE' && flat[j].tag !== 'HL' && flat[j].tag !== 'NM1') {
+            while(j < endIndex && flat[j].tag !== 'EB' && flat[j].tag !== 'SE' && flat[j].tag !== 'HL' && flat[j].tag !== 'NM1') {
                 if (flat[j].tag === 'DTP') {
                     const qual = flat[j].elements[0]?.value;
                     const dateVal = formatDate(flat[j].elements[2]?.value);
@@ -606,7 +630,7 @@ export const mapEdiToBenefits = (doc: EdiDocument): BenefitRow[] => {
                 messages
             });
         }
-    });
+    }
 
     return rows;
 };
