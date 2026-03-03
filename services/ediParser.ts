@@ -34,9 +34,14 @@ function detectDelimiters(raw: string) {
   };
 }
 
+const cleanRawEdi = (raw: string): string => {
+  // Remove CDATA tags and trim whitespace
+  return raw.replace(/<!\[CDATA\[/g, '').replace(/\]\]>/g, '').trim();
+};
+
 export const formatEdi = (rawEdi: string): string => {
   if (!rawEdi) return "";
-  const cleanEdi = rawEdi.trim();
+  const cleanEdi = cleanRawEdi(rawEdi);
   const delimiters = detectDelimiters(cleanEdi);
   
   const segments = cleanEdi.split(delimiters.segmentTerminator)
@@ -47,7 +52,7 @@ export const formatEdi = (rawEdi: string): string => {
 };
 
 export const parseEdi = (rawEdi: string): EdiDocument => {
-  const cleanEdi = rawEdi.trim();
+  const cleanEdi = cleanRawEdi(rawEdi);
   const delimiters = detectDelimiters(cleanEdi);
   
   // Robust split handling both with and without newlines

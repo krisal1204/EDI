@@ -210,6 +210,7 @@ export const EdiGenerator: React.FC<Props> = ({
                     onChange={vals => onChange({...formData, serviceTypeCodes: vals})}
                     options={SERVICE_TYPE_CODES}
                     onFocus={() => onFieldFocus('serviceTypeCodes')}
+                    align="right"
                 />
             </div>
         </div>

@@ -1,12 +1,12 @@
 
 import React, { useState, useMemo } from 'react';
-import { PROCEDURE_CODES, ICD10_CODES, TAXONOMY_CODES } from '../services/referenceData';
+import { PROCEDURE_CODES, ICD10_CODES, TAXONOMY_CODES, SERVICE_TYPE_CODES } from '../services/referenceData';
 
 export const CodeSearch: React.FC = () => {
-    const [tab, setTab] = useState<'procedures' | 'diagnoses' | 'taxonomy'>('procedures');
+    const [tab, setTab] = useState<'procedures' | 'diagnoses' | 'taxonomy' | 'serviceTypes'>('procedures');
     const [search, setSearch] = useState('');
 
-    const data = tab === 'procedures' ? PROCEDURE_CODES : tab === 'diagnoses' ? ICD10_CODES : TAXONOMY_CODES;
+    const data = tab === 'procedures' ? PROCEDURE_CODES : tab === 'diagnoses' ? ICD10_CODES : tab === 'taxonomy' ? TAXONOMY_CODES : SERVICE_TYPE_CODES;
     
     const entries = useMemo(() => {
         return Object.entries(data).map(([code, desc]) => ({ code, desc }));
@@ -24,7 +24,8 @@ export const CodeSearch: React.FC = () => {
     const getPlaceholder = () => {
         if (tab === 'procedures') return 'Search procedures (CPT/HCPCS)...';
         if (tab === 'diagnoses') return 'Search diagnoses (ICD-10)...';
-        return 'Search taxonomy codes (NUCC)...';
+        if (tab === 'taxonomy') return 'Search taxonomy codes (NUCC)...';
+        return 'Search service type codes...';
     };
 
     return (
@@ -56,6 +57,12 @@ export const CodeSearch: React.FC = () => {
                             className={`px-4 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap ${tab === 'taxonomy' ? 'bg-white dark:bg-slate-700 text-black dark:text-white shadow-sm' : 'text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200'}`}
                         >
                             Taxonomy (NUCC)
+                        </button>
+                        <button 
+                            onClick={() => setTab('serviceTypes')} 
+                            className={`px-4 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap ${tab === 'serviceTypes' ? 'bg-white dark:bg-slate-700 text-black dark:text-white shadow-sm' : 'text-gray-500 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200'}`}
+                        >
+                            Service Types
                         </button>
                      </div>
                      

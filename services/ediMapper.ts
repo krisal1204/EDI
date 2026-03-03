@@ -742,8 +742,64 @@ export const mapEdiToBenefits = (doc: EdiDocument, recordId?: string): BenefitRo
                 "QM": "Qualified Medicare Beneficiary"
             };
 
-            const typeDesc = benefitTypeMap[typeCode] || typeCode;
+            // EB06: Time Period Qualifier
+            const timePeriodMap: Record<string, string> = {
+                "6": "Hour",
+                "7": "Day",
+                "13": "24 Hours",
+                "21": "Years",
+                "22": "Service Year",
+                "23": "Calendar Year",
+                "24": "Year to Date",
+                "25": "Contract",
+                "26": "Episode",
+                "27": "Visit",
+                "28": "Outlier",
+                "29": "Remaining",
+                "30": "Exceeded",
+                "31": "Not Exceeded",
+                "32": "Lifetime",
+                "33": "Lifetime Remaining",
+                "34": "Month",
+                "35": "Week",
+                "36": "Admission"
+            };
+
+            // EB09: Quantity Qualifier
+            const quantityQualifierMap: Record<string, string> = {
+                "99": "Quantity Used",
+                "CA": "Covered - Actual",
+                "CE": "Covered - Estimated",
+                "DB": "Deductible Blood Units",
+                "DY": "Days",
+                "HS": "Hours",
+                "LA": "Life-time Reserve",
+                "LE": "Life-time Reserve - Estimated",
+                "MN": "Month",
+                "P6": "Number of Services",
+                "QA": "Quantity Approved",
+                "S7": "Age, High Value",
+                "S8": "Age, Low Value",
+                "VS": "Visits",
+                "YY": "Years"
+            };
+
+            // EB12: In Plan/Network Indicator
+            const networkMap: Record<string, string> = {
+                "Y": "In Network",
+                "N": "Out of Network",
+                "U": "Unknown",
+                "W": "Not Applicable"
+            };
+
+            let typeDesc = benefitTypeMap[typeCode] || typeCode;
             
+            // Append Time Period to Type Description if present (e.g. "Deductible - Remaining")
+            const timePeriodCode = seg.elements[5]?.value?.trim();
+            if (timePeriodCode && timePeriodMap[timePeriodCode]) {
+                typeDesc += ` (${timePeriodMap[timePeriodCode]})`;
+            }
+
             // Construct Coverage Description (combining Level and Type)
             const levelDesc = coverageLevelMap[coverageLevelCode];
             const insDesc = insuranceTypeMap[insuranceTypeCode] || insuranceTypeCode;
@@ -784,6 +840,16 @@ export const mapEdiToBenefits = (doc: EdiDocument, recordId?: string): BenefitRo
                 return serviceTypeMap[trimmed] || trimmed;
             }).join(', ');
 
+            const quantityQual = seg.elements[8]?.value?.trim();
+            const quantityVal = seg.elements[9]?.value;
+            let quantityDisplay = quantityVal;
+            if (quantityDisplay && quantityQual && quantityQualifierMap[quantityQual]) {
+                quantityDisplay += ` ${quantityQualifierMap[quantityQual]}`;
+            }
+
+            const networkCode = seg.elements[11]?.value?.trim();
+            const networkDisplay = networkMap[networkCode] || (networkCode === 'Y' ? 'Yes' : networkCode === 'N' ? 'No' : 'Unknown');
+
             rows.push({
                 reference: currentRef,
                 type: typeDesc,
@@ -791,9 +857,9 @@ export const mapEdiToBenefits = (doc: EdiDocument, recordId?: string): BenefitRo
                 coverage: coverageDesc,
                 amount: seg.elements[6]?.value,
                 percent: seg.elements[7]?.value,
-                quantity: seg.elements[9]?.value,
-                quantityQualifier: seg.elements[8]?.value,
-                network: seg.elements[11]?.value === 'Y' ? 'Yes' : seg.elements[11]?.value === 'N' ? 'No' : 'Unknown',
+                quantity: quantityDisplay, // Use formatted quantity
+                quantityQualifier: quantityQual,
+                network: networkDisplay, // Use formatted network
                 dates,
                 messages,
                 contacts: [...payerContacts, ...entityContacts]
