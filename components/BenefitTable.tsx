@@ -90,12 +90,12 @@ export const BenefitTable = ({ benefits }: { benefits: BenefitRow[] }) => {
             <table className="min-w-full text-left text-xs divide-y divide-gray-100 dark:divide-slate-800">
                 <thead className="bg-white dark:bg-slate-900 sticky top-0 z-10">
                 <tr>
-                    <th className="px-4 py-3 font-medium text-gray-900 dark:text-slate-300 uppercase tracking-wider bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 w-24">Entity</th>
-                    <th className="px-4 py-3 font-medium text-gray-900 dark:text-slate-300 uppercase tracking-wider bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 w-32">Type</th>
-                    <th className="px-4 py-3 font-medium text-gray-900 dark:text-slate-300 uppercase tracking-wider bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800">Service</th>
-                    <th className="px-4 py-3 font-medium text-gray-900 dark:text-slate-300 uppercase tracking-wider bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 w-32">Coverage</th>
-                    <th className="px-4 py-3 font-medium text-gray-900 dark:text-slate-300 uppercase tracking-wider bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 text-right">Limit/Copay</th>
-                    <th className="px-4 py-3 font-medium text-gray-900 dark:text-slate-300 uppercase tracking-wider bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800">Info</th>
+                    <th className="px-4 py-3 font-medium text-gray-900 dark:text-slate-300 uppercase tracking-wider bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 min-w-[120px]">Entity</th>
+                    <th className="px-4 py-3 font-medium text-gray-900 dark:text-slate-300 uppercase tracking-wider bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 min-w-[200px]">Type</th>
+                    <th className="px-4 py-3 font-medium text-gray-900 dark:text-slate-300 uppercase tracking-wider bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 min-w-[200px]">Service</th>
+                    <th className="px-4 py-3 font-medium text-gray-900 dark:text-slate-300 uppercase tracking-wider bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 min-w-[150px]">Coverage</th>
+                    <th className="px-4 py-3 font-medium text-gray-900 dark:text-slate-300 uppercase tracking-wider bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 text-right min-w-[100px]">Limit/Copay</th>
+                    <th className="px-4 py-3 font-medium text-gray-900 dark:text-slate-300 uppercase tracking-wider bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 min-w-[200px]">Info</th>
                 </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50 dark:divide-slate-800 bg-white dark:bg-slate-900">
@@ -134,6 +134,15 @@ export const BenefitTable = ({ benefits }: { benefits: BenefitRow[] }) => {
                              {b.network && b.network !== 'Unknown' && (
                                  <div className="mt-1">
                                      {b.network === 'Yes' ? <span className="text-gray-900 dark:text-slate-200 font-medium">In Network</span> : <span className="text-gray-900 dark:text-slate-200 font-medium">Out of Network</span>}
+                                 </div>
+                             )}
+                             {b.contacts && b.contacts.length > 0 && (
+                                 <div className="mt-2 pt-2 border-t border-gray-100 dark:border-slate-800">
+                                     {b.contacts.map((c, idx) => (
+                                         <div key={idx} className="text-brand-600 dark:text-brand-400 font-medium">
+                                             📞 {c}
+                                         </div>
+                                     ))}
                                  </div>
                              )}
                         </td>
