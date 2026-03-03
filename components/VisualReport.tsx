@@ -222,6 +222,15 @@ export const VisualReport: React.FC<Props> = ({ doc, selectedRecordId, onFieldFo
         const header = mapEdiToForm(doc, selectedRecordId || undefined) as Partial<FormData270>;
         const benefits = mapEdiToBenefits(doc, selectedRecordId || undefined);
         
+        // Calculate Summaries
+        const activeCoverages = benefits.filter(b => b.type.includes('Active Coverage'));
+        const financials = benefits.filter(b => 
+            b.type.includes('Deductible') || 
+            b.type.includes('Out of Pocket') || 
+            b.type.includes('Co-Payment') || 
+            b.type.includes('Co-Insurance')
+        );
+
         return (
             <div className="p-8 h-full overflow-y-auto custom-scrollbar space-y-6 animate-fade-in">
                 <div className="mb-8">
@@ -243,14 +252,75 @@ export const VisualReport: React.FC<Props> = ({ doc, selectedRecordId, onFieldFo
                     </Card>
                 </div>
 
-                <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm h-[500px]">
-                    <div className="px-6 py-4 bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-800">
-                        <h3 className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-widest">Benefit Details</h3>
-                    </div>
-                    <div className="h-full">
-                        <BenefitTable benefits={benefits} />
-                    </div>
-                </div>
+                {/* Active Coverages Summary */}
+                <Card title="Active Plans" icon="✅">
+                    {activeCoverages.length > 0 ? (
+                        <div className="space-y-4">
+                            {activeCoverages.map((plan, i) => (
+                                <div key={i} className="border-b border-gray-50 dark:border-slate-800 last:border-0 pb-3 last:pb-0">
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <div className="font-bold text-gray-900 dark:text-white">{plan.coverage}</div>
+                                            <div className="text-xs text-gray-500">{plan.service}</div>
+                                        </div>
+                                        <div className="text-right">
+                                            {plan.dates.map((d, di) => (
+                                                <div key={di} className="text-xs font-mono text-gray-600 dark:text-slate-400">{d}</div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    {plan.messages.length > 0 && (
+                                        <div className="mt-2 text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 p-2 rounded">
+                                            {plan.messages.join(', ')}
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="text-sm text-gray-500 italic">No active coverage information found.</div>
+                    )}
+                </Card>
+
+                {/* Financial Summary */}
+                {financials.length > 0 && (
+                    <Card title="Financial Responsibility" icon="💰">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {financials.map((item, i) => (
+                                <div key={i} className="bg-gray-50 dark:bg-slate-800/50 p-3 rounded-lg border border-gray-100 dark:border-slate-800">
+                                    <div className="text-[10px] font-bold text-gray-400 uppercase mb-1">{item.type}</div>
+                                    <div className="flex justify-between items-end">
+                                        <div className="text-sm font-medium text-gray-700 dark:text-slate-300">{item.coverage}</div>
+                                        <div className="text-lg font-bold text-gray-900 dark:text-white">
+                                            {item.amount ? `$${item.amount}` : item.percent ? `${item.percent}%` : '—'}
+                                        </div>
+                                    </div>
+                                    <div className="text-[10px] text-gray-400 mt-1 text-right">{item.network}</div>
+                                </div>
+                            ))}
+                        </div>
+                    </Card>
+                )}
+
+                {/* Limitations Summary */}
+                {benefits.some(b => b.type.includes('Limitations')) && (
+                    <Card title="Limitations" icon="⚠️">
+                        <div className="space-y-3">
+                            {benefits.filter(b => b.type.includes('Limitations')).map((item, i) => (
+                                <div key={i} className="flex justify-between items-center border-b border-gray-50 dark:border-slate-800 last:border-0 pb-2 last:pb-0">
+                                    <div>
+                                        <div className="font-medium text-gray-900 dark:text-white">{item.coverage}</div>
+                                        <div className="text-xs text-gray-500">{item.service}</div>
+                                    </div>
+                                    <div className="text-right">
+                                        <div className="font-bold text-gray-900 dark:text-white">{item.quantity || '—'}</div>
+                                        <div className="text-[10px] text-gray-400">{item.messages.join(', ')}</div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </Card>
+                )}
             </div>
         );
     }

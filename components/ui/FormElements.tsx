@@ -38,16 +38,25 @@ export const SelectField = ({ label, value, onChange, onFocus, options, classNam
   </div>
 );
 
-export const MultiSelectField = ({ label, values = [], onChange, options, id, onFocus }: { label: string, values: string[], onChange: (vals: string[]) => void, options: Record<string, string>, id?: string, onFocus?: () => void }) => {
+export const MultiSelectField = ({ label, values = [], onChange, options, id, onFocus, align = 'left' }: { label: string, values: string[], onChange: (vals: string[]) => void, options: Record<string, string>, id?: string, onFocus?: () => void, align?: 'left' | 'right' }) => {
+    const [searchTerm, setSearchTerm] = useState('');
+    const [isOpen, setIsOpen] = useState(false);
+
     const handleAdd = (val: string) => {
         if (!values.includes(val)) {
             onChange([...values, val]);
         }
+        setSearchTerm('');
     };
 
     const handleRemove = (val: string) => {
         onChange(values.filter((v: string) => v !== val));
     };
+
+    const filteredOptions = Object.entries(options).filter(([code, desc]) => 
+        code.toLowerCase().includes(searchTerm.toLowerCase()) || 
+        desc.toLowerCase().includes(searchTerm.toLowerCase())
+    );
 
     return (
         <div className="mb-4">
@@ -69,28 +78,54 @@ export const MultiSelectField = ({ label, values = [], onChange, options, id, on
             </div>
 
             <div className="relative">
-                <select
-                    id={id}
-                    className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded text-sm text-gray-900 dark:text-white focus:outline-none focus:border-black dark:focus:border-brand-500 focus:ring-1 focus:ring-black dark:focus:ring-brand-500 transition-colors appearance-none cursor-pointer"
-                    onChange={e => {
-                        if (e.target.value) {
-                            handleAdd(e.target.value);
-                            e.target.value = "";
-                        }
-                    }}
-                    onFocus={onFocus}
-                    defaultValue=""
-                >
-                    <option value="" disabled>+ Add Service Type...</option>
-                    {Object.entries(options).map(([code, desc]) => (
-                        <option key={code} value={code} disabled={values.includes(code)}>
-                            {code} - {desc}
-                        </option>
-                    ))}
-                </select>
-                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500 dark:text-slate-400">
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
+                <div className="relative">
+                    <input
+                        id={id}
+                        type="text"
+                        className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded text-sm text-gray-900 dark:text-white focus:outline-none focus:border-black dark:focus:border-brand-500 focus:ring-1 focus:ring-black dark:focus:ring-brand-500 transition-colors placeholder-gray-400"
+                        value={searchTerm}
+                        onChange={e => {
+                            setSearchTerm(e.target.value);
+                            setIsOpen(true);
+                        }}
+                        onFocus={() => {
+                            setIsOpen(true);
+                            if (onFocus) onFocus();
+                        }}
+                        onBlur={() => setTimeout(() => setIsOpen(false), 200)}
+                        placeholder="+ Add Service Type..."
+                        autoComplete="off"
+                    />
+                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500 dark:text-slate-400">
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                    </div>
                 </div>
+                
+                {isOpen && (
+                    <div className={`absolute z-50 ${align === 'right' ? 'right-0' : 'left-0'} min-w-full w-[90vw] sm:w-[400px] mt-1 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 shadow-xl rounded-md max-h-80 overflow-y-auto`}>
+                        {filteredOptions.length > 0 ? (
+                            filteredOptions.map(([code, desc]) => {
+                                const isSelected = values.includes(code);
+                                return (
+                                    <div 
+                                        key={code} 
+                                        className={`px-4 py-3 border-b border-gray-50 dark:border-slate-700/50 last:border-0 ${isSelected ? 'bg-gray-50 dark:bg-slate-700/50 opacity-50 cursor-default' : 'hover:bg-gray-100 dark:hover:bg-slate-700 cursor-pointer'}`}
+                                        onClick={() => !isSelected && handleAdd(code)}
+                                    >
+                                        <div className="flex flex-col">
+                                            <span className="text-sm font-bold text-gray-900 dark:text-white mb-0.5">{code}</span>
+                                            <span className="text-xs text-gray-600 dark:text-slate-300 whitespace-normal leading-tight">{desc}</span>
+                                        </div>
+                                    </div>
+                                );
+                            })
+                        ) : (
+                            <div className="px-3 py-4 text-center text-xs text-gray-500 dark:text-slate-400">
+                                No matching service types found
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
         </div>
     );
