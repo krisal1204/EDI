@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect } from 'react';
-import { FormData270, FormData276, FormData837, FormData834, Member834, ServiceLine837, FormData850, FormData810, OrderLineItem, FormData856, ShipNoticeLineItem, FormData278, FormData820, Remittance820 } from '../services/ediBuilder';
+import React, { useEffect } from 'react';
+import { FormData270, FormData276, FormData837, FormData834, ServiceLine837, FormData850, FormData810, OrderLineItem, FormData856, ShipNoticeLineItem, FormData278, FormData820, Remittance820 } from '../services/ediBuilder';
 import { EdiSegment } from '../types';
 import { BenefitRow, ClaimStatusRow, PaymentInfo, RemittanceClaim } from '../services/ediMapper';
 import { BenefitTable } from './BenefitTable';
@@ -9,6 +9,8 @@ import { PaymentTable } from './PaymentTable';
 import { OrderTable } from './OrderTable';
 import { PROCEDURE_CODES, ICD10_CODES, SERVICE_TYPE_CODES } from '../services/referenceData';
 import { DatePicker } from './DatePicker';
+import { Form834 } from './forms/Form834';
+import { InputField, SelectField, MultiSelectField, AutocompleteField, SectionHeader, GENDER_OPTIONS } from './ui/FormElements';
 
 interface Props {
   formData: FormData270;
@@ -41,204 +43,6 @@ interface Props {
   highlightedField?: string | null;
 }
 
-const InputField = ({ label, value, onChange, onFocus, type = 'text', className = '', placeholder, id }: { label: string, value: string, onChange: (val: string) => void, onFocus?: () => void, type?: string, className?: string, placeholder?: string, id?: string }) => (
-  <div className={`mb-4 ${className}`}>
-    <label className="block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1.5 uppercase tracking-wide" htmlFor={id}>{label}</label>
-    <input
-      id={id}
-      type={type}
-      className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded text-sm text-gray-900 dark:text-white focus:outline-none focus:border-black dark:focus:border-brand-500 focus:ring-1 focus:ring-black dark:focus:ring-brand-500 transition-colors"
-      value={value || ''}
-      onChange={e => onChange(e.target.value)}
-      onFocus={onFocus}
-      placeholder={placeholder}
-    />
-  </div>
-);
-
-const SelectField = ({ label, value, onChange, onFocus, options, className = '', id }: { label: string, value: string, onChange: (val: string) => void, onFocus?: () => void, options: {value: string, label: string}[], className?: string, id?: string }) => (
-  <div className={`mb-4 ${className}`}>
-    <label className="block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1.5 uppercase tracking-wide" htmlFor={id}>{label}</label>
-    <div className="relative">
-      <select
-        id={id}
-        className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded text-sm text-gray-900 dark:text-white focus:outline-none focus:border-black dark:focus:border-brand-500 focus:ring-1 focus:ring-black dark:focus:ring-brand-500 transition-colors appearance-none cursor-pointer"
-        value={value || ''}
-        onChange={e => onChange(e.target.value)}
-        onFocus={onFocus}
-      >
-          {options.map(opt => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-          ))}
-      </select>
-      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500 dark:text-slate-400">
-        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
-      </div>
-    </div>
-  </div>
-);
-
-const MultiSelectField = ({ label, values = [], onChange, options, id, onFocus }: { label: string, values: string[], onChange: (vals: string[]) => void, options: Record<string, string>, id?: string, onFocus?: () => void }) => {
-    const handleAdd = (val: string) => {
-        if (!values.includes(val)) {
-            onChange([...values, val]);
-        }
-    };
-
-    const handleRemove = (val: string) => {
-        onChange(values.filter((v: string) => v !== val));
-    };
-
-    return (
-        <div className="mb-4">
-            <label className="block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1.5 uppercase tracking-wide" htmlFor={id}>{label}</label>
-            
-            {/* Selected Tags */}
-            <div className="flex flex-wrap gap-2 mb-2">
-                {values.map((val: string) => (
-                    <span key={val} className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300 border border-brand-100 dark:border-brand-800">
-                        <span className="font-bold">{val}</span>
-                        <span className="opacity-75 max-w-[150px] truncate hidden sm:inline">- {options[val] || ''}</span>
-                        <button 
-                            onClick={(e) => { e.preventDefault(); handleRemove(val); }} 
-                            className="ml-1 hover:text-brand-900 dark:hover:text-brand-100 font-bold"
-                        >
-                            ×
-                        </button>
-                    </span>
-                ))}
-            </div>
-
-            {/* Selector */}
-            <div className="relative">
-                <select
-                    id={id}
-                    className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded text-sm text-gray-900 dark:text-white focus:outline-none focus:border-black dark:focus:border-brand-500 focus:ring-1 focus:ring-black dark:focus:ring-brand-500 transition-colors appearance-none cursor-pointer"
-                    onChange={e => {
-                        if (e.target.value) {
-                            handleAdd(e.target.value);
-                            e.target.value = ""; // Reset select visual
-                        }
-                    }}
-                    onFocus={onFocus}
-                    defaultValue=""
-                >
-                    <option value="" disabled>+ Add Service Type...</option>
-                    {Object.entries(options).map(([code, desc]) => (
-                        <option key={code} value={code} disabled={values.includes(code)}>
-                            {code} - {desc}
-                        </option>
-                    ))}
-                </select>
-                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500 dark:text-slate-400">
-                    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-const AutocompleteField = ({ label, value, onChange, onFocus, options, placeholder, id }: { label: string, value: string, onChange: (val: string) => void, onFocus?: () => void, options: Record<string, string>, placeholder?: string, id?: string }) => {
-    const [showSuggestions, setShowSuggestions] = useState(false);
-    
-    // Ensure value is safe to check
-    const safeValue = value || '';
-
-    // Filter options based on input
-    const filtered = Object.entries(options)
-        .filter(([code, desc]) => 
-            code.toLowerCase().includes(safeValue.toLowerCase()) || 
-            desc.toLowerCase().includes(safeValue.toLowerCase())
-        )
-        .slice(0, 8); // Limit to 8 results
-
-    return (
-        <div className="mb-4 relative">
-            <label className="block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1.5 uppercase tracking-wide" htmlFor={id}>{label}</label>
-            <input
-                id={id}
-                type="text"
-                className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded text-sm text-gray-900 dark:text-white focus:outline-none focus:border-black dark:focus:border-brand-500 focus:ring-1 focus:ring-black dark:focus:ring-brand-500 transition-colors"
-                value={safeValue}
-                placeholder={placeholder}
-                onChange={e => {
-                    onChange(e.target.value);
-                    setShowSuggestions(true);
-                }}
-                onFocus={() => {
-                    if (onFocus) onFocus();
-                    setShowSuggestions(true);
-                }}
-                onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-                autoComplete="off"
-            />
-            {showSuggestions && safeValue && filtered.length > 0 && (
-                <div className="absolute z-50 left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 shadow-xl rounded-md max-h-48 overflow-y-auto">
-                    {filtered.map(([code, desc]) => (
-                        <div 
-                            key={code} 
-                            className="px-3 py-2 hover:bg-gray-100 dark:hover:bg-slate-700 cursor-pointer border-b border-gray-50 dark:border-slate-700/50 last:border-0"
-                            onClick={() => {
-                                onChange(code);
-                                setShowSuggestions(false);
-                            }}
-                        >
-                            <div className="flex items-baseline justify-between">
-                                <span className="text-xs font-bold text-gray-900 dark:text-white mr-2">{code}</span>
-                            </div>
-                            <div className="text-[10px] text-gray-500 dark:text-slate-400 truncate">{desc}</div>
-                        </div>
-                    ))}
-                </div>
-            )}
-        </div>
-    );
-};
-
-const SectionHeader = ({ title, action }: { title: string, action?: React.ReactNode }) => (
-  <div className="flex items-center justify-between mt-6 mb-4 pb-2 border-b border-gray-100 dark:border-slate-800">
-      <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
-        <span className="w-1 h-4 bg-brand-500 rounded-full"></span>
-        {title}
-      </h3>
-      {action}
-  </div>
-);
-
-const MAINT_TYPES = [
-    { value: '021', label: '021 - Addition' },
-    { value: '001', label: '001 - Change' },
-    { value: '024', label: '024 - Cancellation/Termination' },
-    { value: '030', label: '030 - Audit' },
-    { value: '025', label: '025 - Reinstatement' }
-];
-
-const MAINT_REASONS = [
-    { value: '01', label: '01 - Divorce' },
-    { value: '02', label: '02 - Birth' },
-    { value: '03', label: '03 - Death' },
-    { value: '05', label: '05 - Marriage' },
-    { value: '07', label: '07 - Termination of Employment' },
-    { value: '28', label: '28 - Initial Enrollment' },
-    { value: '41', label: '41 - Re-enrollment' },
-    { value: '43', label: '43 - Change of Location' }
-];
-
-const COVERAGE_LEVELS = [
-    { value: 'EMP', label: 'EMP - Employee Only' },
-    { value: 'FAM', label: 'FAM - Family' },
-    { value: 'ESP', label: 'ESP - Employee + Spouse' },
-    { value: 'ECH', label: 'ECH - Employee + Children' },
-    { value: 'IND', label: 'IND - Individual' },
-    { value: 'SPC', label: 'SPC - Spouse + Children' }
-];
-
-const GENDER_OPTIONS = [
-    { value: 'M', label: 'Male' },
-    { value: 'F', label: 'Female' },
-    { value: 'U', label: 'Unknown' }
-];
-
 export const EdiGenerator: React.FC<Props> = ({
   formData, onChange,
   formData276, onChange276,
@@ -257,7 +61,6 @@ export const EdiGenerator: React.FC<Props> = ({
   onFieldFocus,
   highlightedField
 }) => {
-  const activeMode = generatorMode;
 
   // React to external highlighting requests (from Tree click)
   useEffect(() => {
@@ -282,7 +85,7 @@ export const EdiGenerator: React.FC<Props> = ({
     return <PaymentTable info={remittanceInfo} claims={remittanceClaims} />;
   }
 
-  // --- 837 Service Lines ---
+  // --- 837 Service Lines Helpers ---
   const handleAddServiceLine = () => {
       const newLine: ServiceLine837 = { procedureCode: '', lineCharge: '0.00', units: '1', serviceDate: '' };
       onChange837({ ...formData837, serviceLines: [...formData837.serviceLines, newLine] });
@@ -300,25 +103,7 @@ export const EdiGenerator: React.FC<Props> = ({
       onChange837({ ...formData837, serviceLines: newLines });
   };
 
-  // --- 834 Dependents ---
-  const handleAddDependent = () => {
-      const newDep: Member834 = { id: '', firstName: '', lastName: '', ssn: '', dob: '', gender: '', relationship: '19' };
-      onChange834({ ...formData834, dependents: [...formData834.dependents, newDep] });
-  };
-
-  const handleRemoveDependent = (idx: number) => {
-      const newDeps = [...formData834.dependents];
-      newDeps.splice(idx, 1);
-      onChange834({ ...formData834, dependents: newDeps });
-  };
-
-  const updateDependent = (idx: number, field: keyof Member834, value: string) => {
-      const newDeps = [...formData834.dependents];
-      newDeps[idx] = { ...newDeps[idx], [field]: value };
-      onChange834({ ...formData834, dependents: newDeps });
-  };
-
-  // --- 850 PO Form ---
+  // --- 850 PO Form Helpers ---
   const handleAddOrderLine = (isPO: boolean) => {
       const newLine: OrderLineItem = {
           lineNo: isPO ? String((formData850?.lines.length || 0) + 1) : String((formData810?.lines.length || 0) + 1),
@@ -557,81 +342,6 @@ export const EdiGenerator: React.FC<Props> = ({
                     <div className="grid grid-cols-2 gap-4">
                         <InputField id={`line-${idx}-lineCharge`} label="Charge ($)" value={line.lineCharge} onChange={v => updateServiceLine(idx, 'lineCharge', v)} onFocus={() => onFieldFocus(`line-${idx}-lineCharge`)} />
                         <InputField id={`line-${idx}-units`} label="Units" value={line.units} onChange={v => updateServiceLine(idx, 'units', v)} onFocus={() => onFieldFocus(`line-${idx}-units`)} />
-                    </div>
-                </div>
-            ))}
-        </div>
-      </>
-  );
-
-  const renderForm834 = () => (
-      <>
-        <SectionHeader title="Sponsor & Payer" />
-        <div className="grid grid-cols-2 gap-4">
-            <InputField id="sponsorName" label="Sponsor Name" value={formData834.sponsorName} onChange={v => onChange834({...formData834, sponsorName: v})} onFocus={() => onFieldFocus('sponsorName')} />
-            <InputField id="sponsorTaxId" label="Sponsor Tax ID" value={formData834.sponsorTaxId} onChange={v => onChange834({...formData834, sponsorTaxId: v})} onFocus={() => onFieldFocus('sponsorTaxId')} />
-            <InputField id="payerName" label="Payer Name" value={formData834.payerName} onChange={v => onChange834({...formData834, payerName: v})} onFocus={() => onFieldFocus('payerName')} />
-            <InputField id="payerId" label="Payer ID" value={formData834.payerId} onChange={v => onChange834({...formData834, payerId: v})} onFocus={() => onFieldFocus('payerId')} />
-        </div>
-
-        <SectionHeader title="Enrollment Action" />
-        <div className="grid grid-cols-2 gap-4">
-            <SelectField id="maintenanceType" label="Type" value={formData834.maintenanceType} onChange={v => onChange834({...formData834, maintenanceType: v})} onFocus={() => onFieldFocus('maintenanceType')} options={MAINT_TYPES} />
-            <SelectField id="maintenanceReason" label="Reason" value={formData834.maintenanceReason} onChange={v => onChange834({...formData834, maintenanceReason: v})} onFocus={() => onFieldFocus('maintenanceReason')} options={MAINT_REASONS} />
-            <div id="planEffectiveDate" className="col-span-2">
-                <DatePicker label="Effective Date" value={formData834.planEffectiveDate} onChange={v => onChange834({...formData834, planEffectiveDate: v})} onFocus={() => onFieldFocus('planEffectiveDate')} />
-            </div>
-        </div>
-
-        <SectionHeader title="Subscriber" />
-        <div className="grid grid-cols-2 gap-4">
-            <InputField id="subFirstName" label="First Name" value={formData834.subscriber.firstName} onChange={v => onChange834({...formData834, subscriber: {...formData834.subscriber, firstName: v}})} onFocus={() => onFieldFocus('subFirstName')} />
-            <InputField id="subLastName" label="Last Name" value={formData834.subscriber.lastName} onChange={v => onChange834({...formData834, subscriber: {...formData834.subscriber, lastName: v}})} onFocus={() => onFieldFocus('subLastName')} />
-            <InputField id="subId" label="Member ID" value={formData834.subscriber.id} onChange={v => onChange834({...formData834, subscriber: {...formData834.subscriber, id: v}})} onFocus={() => onFieldFocus('subId')} />
-            <InputField id="subSsn" label="SSN" value={formData834.subscriber.ssn} onChange={v => onChange834({...formData834, subscriber: {...formData834.subscriber, ssn: v}})} onFocus={() => onFieldFocus('subSsn')} />
-            <div id="subDob">
-                <DatePicker label="DOB" value={formData834.subscriber.dob} onChange={v => onChange834({...formData834, subscriber: {...formData834.subscriber, dob: v}})} onFocus={() => onFieldFocus('subDob')} />
-            </div>
-            <SelectField id="subGender" label="Gender" value={formData834.subscriber.gender} onChange={v => onChange834({...formData834, subscriber: {...formData834.subscriber, gender: v}})} onFocus={() => onFieldFocus('subGender')} options={GENDER_OPTIONS} />
-        </div>
-
-        <SectionHeader title="Coverage" />
-        <div className="grid grid-cols-2 gap-4">
-            <InputField id="policyNumber" label="Policy Number" value={formData834.policyNumber} onChange={v => onChange834({...formData834, policyNumber: v})} onFocus={() => onFieldFocus('policyNumber')} />
-            <SelectField id="coverageLevelCode" label="Level" value={formData834.coverageLevelCode} onChange={v => onChange834({...formData834, coverageLevelCode: v})} onFocus={() => onFieldFocus('coverageLevelCode')} options={COVERAGE_LEVELS} />
-        </div>
-
-        <SectionHeader 
-            title="Dependents" 
-            action={
-                <button 
-                    onClick={handleAddDependent}
-                    className="text-[10px] bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-gray-900 dark:text-white px-3 py-1.5 rounded transition-colors font-medium border border-gray-200 dark:border-slate-700"
-                >
-                    + Add Dependent
-                </button>
-            }
-        />
-        <div className="space-y-4">
-            {formData834.dependents.map((dep, idx) => (
-                <div key={idx} className="bg-gray-50 dark:bg-slate-800/50 rounded p-4 border border-gray-100 dark:border-slate-800 relative group">
-                    <button 
-                        onClick={() => handleRemoveDependent(idx)}
-                        className="absolute top-2 right-2 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-1"
-                        title="Remove Dependent"
-                    >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                    </button>
-                    <div className="grid grid-cols-2 gap-4 mb-3">
-                        <InputField id={`dep-${idx}-firstName`} label="First Name" value={dep.firstName} onChange={v => updateDependent(idx, 'firstName', v)} onFocus={() => onFieldFocus(`dep-${idx}-firstName`)} />
-                        <InputField id={`dep-${idx}-lastName`} label="Last Name" value={dep.lastName} onChange={v => updateDependent(idx, 'lastName', v)} onFocus={() => onFieldFocus(`dep-${idx}-lastName`)} />
-                    </div>
-                    <div className="grid grid-cols-3 gap-4">
-                        <div id={`dep-${idx}-dob`}>
-                            <DatePicker label="DOB" value={dep.dob} onChange={v => updateDependent(idx, 'dob', v)} onFocus={() => onFieldFocus(`dep-${idx}-dob`)} />
-                        </div>
-                        <SelectField id={`dep-${idx}-gender`} label="Gender" value={dep.gender} onChange={v => updateDependent(idx, 'gender', v)} onFocus={() => onFieldFocus(`dep-${idx}-gender`)} options={GENDER_OPTIONS} />
-                        <InputField id={`dep-${idx}-rel`} label="Rel Code" value={dep.relationship} onChange={v => updateDependent(idx, 'relationship', v)} onFocus={() => onFieldFocus(`dep-${idx}-rel`)} placeholder="19=Child" />
                     </div>
                 </div>
             ))}
@@ -1025,7 +735,13 @@ export const EdiGenerator: React.FC<Props> = ({
         {generatorMode === '270' && renderForm270()}
         {generatorMode === '276' && renderForm276()}
         {generatorMode === '837' && renderForm837()}
-        {generatorMode === '834' && renderForm834()}
+        {generatorMode === '834' && (
+            <Form834 
+                formData={formData834} 
+                onChange={onChange834} 
+                onFieldFocus={onFieldFocus} 
+            />
+        )}
         {generatorMode === '278' && renderForm278()}
         {generatorMode === '820' && renderForm820()}
         {generatorMode === '850' && renderForm850()}

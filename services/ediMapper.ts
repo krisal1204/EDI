@@ -27,6 +27,7 @@ export interface BenefitRow {
     dates: string[];
     messages: string[];
     network: 'Yes' | 'No' | 'Unknown';
+    contacts?: string[];
 }
 
 // Interface for Claim Status rows used in Status Response (277)
@@ -570,21 +571,185 @@ export const mapEdiToBenefits = (doc: EdiDocument, recordId?: string): BenefitRo
     }
 
     let currentRef = "Unknown";
+    let payerContacts: string[] = [];
+    let entityContacts: string[] = [];
+    let lastEntity = "";
+
+    // Helper to parse PER
+    const parsePer = (seg: EdiSegment): string | null => {
+        const contactName = seg.elements[1]?.value; // PER02
+        const comms: string[] = [];
+        // Pairs: PER03/04, PER05/06, PER07/08
+        if (seg.elements[2]?.value && seg.elements[3]?.value) comms.push(`${seg.elements[2].value}: ${seg.elements[3].value}`);
+        if (seg.elements[4]?.value && seg.elements[5]?.value) comms.push(`${seg.elements[4].value}: ${seg.elements[5].value}`);
+        if (seg.elements[6]?.value && seg.elements[7]?.value) comms.push(`${seg.elements[6].value}: ${seg.elements[7].value}`);
+        
+        if (comms.length > 0) {
+            return `${contactName ? contactName + ' ' : ''}(${comms.join(', ')})`;
+        }
+        return null;
+    };
+
+    // Pre-fetch Payer contacts if scoped
+    if (recordId) {
+        const payerNm1 = findBackwards(flat, startIndex, s => s.tag === 'NM1' && s.elements[0]?.value === 'PR');
+        if (payerNm1) {
+            const idx = flat.indexOf(payerNm1);
+            for(let k=idx+1; k < flat.length; k++) {
+                 if (flat[k].tag === 'NM1' || flat[k].tag === 'HL') break;
+                 if (flat[k].tag === 'PER') {
+                     const c = parsePer(flat[k]);
+                     if (c) payerContacts.push(c);
+                 }
+            }
+        }
+    }
 
     for (let i = startIndex; i < endIndex; i++) {
         const seg = flat[i];
 
-        if (seg.tag === 'NM1' && (seg.elements[0]?.value === 'IL' || seg.elements[0]?.value === '03')) {
-            const first = seg.elements[3]?.value || '';
-            const last = seg.elements[2]?.value || '';
-            currentRef = `${first} ${last}`.trim() || "Subscriber";
+        if (seg.tag === 'NM1') {
+            lastEntity = seg.elements[0]?.value;
+            
+            if (lastEntity === 'IL' || lastEntity === '03') {
+                const first = seg.elements[3]?.value || '';
+                const last = seg.elements[2]?.value || '';
+                currentRef = `${first} ${last}`.trim() || "Subscriber";
+                // Reset entity contacts for new person
+                entityContacts = [];
+            }
+            
+            if (lastEntity === 'PR') {
+                // If we hit Payer in the loop (e.g. no recordId), reset payer contacts
+                payerContacts = [];
+            }
+        }
+
+        if (seg.tag === 'PER') {
+            const c = parsePer(seg);
+            if (c) {
+                if (lastEntity === 'PR') payerContacts.push(c);
+                else entityContacts.push(c);
+            }
         }
 
         if (seg.tag === 'EB') {
-            const typeCode = seg.elements[0]?.value;
-            const insuranceType = seg.elements[3]?.value;
-            const coverageLevel = seg.elements[1]?.value; // CHD, FAM, etc.
+            const typeCode = seg.elements[0]?.value?.trim().toUpperCase();
+            const coverageLevelCode = seg.elements[1]?.value?.trim().toUpperCase(); // EB02
+            const serviceTypeRaw = seg.elements[2]?.value; // EB03
+            const insuranceTypeCode = seg.elements[3]?.value?.trim().toUpperCase(); // EB04
             
+            // --- MAPPINGS ---
+
+            // EB01: Eligibility or Benefit Information
+            const benefitTypeMap: Record<string, string> = {
+                "1": "Active Coverage",
+                "2": "Active - Full Risk Capitation",
+                "3": "Active - Services Capitated",
+                "4": "Active - Services Capitated to PCP",
+                "5": "Active - Services Capitated to PCP",
+                "6": "Inactive",
+                "7": "Inactive - Pending Eligibility Update",
+                "8": "Inactive - Pending Open Enrollment",
+                "A": "Co-Insurance",
+                "B": "Co-Payment",
+                "C": "Deductible",
+                "D": "Benefit Description",
+                "E": "Exclusions",
+                "F": "Limitations",
+                "G": "Out of Pocket (Stop Loss)",
+                "H": "Unlimited",
+                "I": "Non-Covered",
+                "J": "Cost Containment",
+                "K": "Residual",
+                "L": "Benefit Limitation",
+                "M": "Monthly Capitation",
+                "N": "Services Restricted to Network",
+                "O": "Not Deemed Medical Necessity",
+                "P": "Pre-Authorization Required",
+                "Q": "Second Surgical Opinion Required",
+                "R": "Other or Additional Payor",
+                "S": "Spend Down",
+                "T": "Coverage Basis",
+                "U": "Deductible - Individual",
+                "V": "Deductible - Family",
+                "W": "Co-Insurance - Individual",
+                "X": "Co-Insurance - Family",
+                "Y": "Co-Payment - Individual",
+                "Z": "Co-Payment - Family",
+                "CB": "Coverage Basis",
+                "MC": "Managed Care Coordinator",
+                "PR": "Patient Responsibility"
+            };
+
+            // EB02: Coverage Level
+            const coverageLevelMap: Record<string, string> = {
+                "CHD": "Children Only",
+                "DEP": "Dependents Only",
+                "ECH": "Employee & Children",
+                "EMP": "Employee Only",
+                "ESP": "Employee & Spouse",
+                "FAM": "Family",
+                "IND": "Individual",
+                "SPC": "Spouse & Children",
+                "SPO": "Spouse Only"
+            };
+
+            // EB03: Service Type
+            const serviceTypeMap: Record<string, string> = {
+                "1": "Medical Care",
+                "30": "Health Benefit Plan Coverage",
+                "33": "Chiropractic",
+                "35": "Dental Care",
+                "47": "Hospital",
+                "48": "Hospital - Inpatient",
+                "50": "Hospital - Outpatient",
+                "51": "Hospital - Emergency",
+                "52": "Hospital - Outpatient",
+                "53": "Hospital - Ambulatory Surgical",
+                "86": "Emergency Services",
+                "88": "Pharmacy",
+                "98": "Physician Visit - Office",
+                "AL": "Vision (Optometry)",
+                "MH": "Mental Health",
+                "UC": "Urgent Care",
+                "PT": "Physical Therapy",
+                "AE": "Physical Medicine",
+                "AF": "Speech Therapy",
+                "AG": "Skilled Nursing Care",
+                "AI": "Substance Abuse",
+                "AJ": "Alcoholism",
+                "AK": "Drug Addiction",
+                "DM": "DME",
+                "E1": "Non-Medical Equipment",
+                "E2": "Hearing Aid",
+                "E3": "Vision Glasses",
+                "E4": "Vision Contacts",
+                "E5": "Vision Safety"
+            };
+
+            // EB04: Insurance Type
+            const insuranceTypeMap: Record<string, string> = {
+                "HM": "HMO",
+                "PR": "PPO",
+                "EPO": "EPO",
+                "POS": "POS",
+                "IND": "Indemnity",
+                "C1": "Commercial",
+                "GP": "Group Policy",
+                "MP": "Medicare Primary",
+                "MC": "Medicaid",
+                "QM": "Qualified Medicare Beneficiary"
+            };
+
+            const typeDesc = benefitTypeMap[typeCode] || typeCode;
+            
+            // Construct Coverage Description (combining Level and Type)
+            const levelDesc = coverageLevelMap[coverageLevelCode];
+            const insDesc = insuranceTypeMap[insuranceTypeCode] || insuranceTypeCode;
+            let coverageDesc = insDesc || 'Medical';
+            if (levelDesc) coverageDesc += ` - ${levelDesc}`;
+
             // Extract messages
             const messages: string[] = [];
             let j = i + 1;
@@ -604,30 +769,34 @@ export const mapEdiToBenefits = (doc: EdiDocument, recordId?: string): BenefitRo
                     if (qual === '348') dates.push(`Benefit Begin: ${dateVal}`);
                     if (qual === '349') dates.push(`Benefit End: ${dateVal}`);
                     if (qual === '291') dates.push(`Plan: ${dateVal}`);
+                    if (qual === '307') dates.push(`Eligibility Begin: ${dateVal}`);
+                    if (qual === '318') dates.push(`Added: ${dateVal}`);
+                    if (qual === '356') dates.push(`Effective: ${dateVal}`);
+                    if (qual === '357') dates.push(`End: ${dateVal}`);
                 }
                 j++;
             }
 
-            const serviceTypeCodes = seg.elements[2]?.value?.split(doc.componentSeparator || '>') || [];
+            const serviceTypeCodes = serviceTypeRaw?.split(doc.componentSeparator || '>') || [];
             // Map codes to text
             const serviceTexts = serviceTypeCodes.map((c: string) => {
-                // Check local dict
-                const dict: any = { "1": "Medical", "30": "Health Plan", "33": "Chiropractic", "35": "Dental", "88": "Pharmacy", "98": "Visit" };
-                return dict[c] || c;
+                const trimmed = c.trim();
+                return serviceTypeMap[trimmed] || trimmed;
             }).join(', ');
 
             rows.push({
                 reference: currentRef,
-                type: typeCode === '1' ? 'Active' : typeCode === '6' ? 'Inactive' : typeCode,
+                type: typeDesc,
                 service: serviceTexts,
-                coverage: insuranceType || 'Medical',
+                coverage: coverageDesc,
                 amount: seg.elements[6]?.value,
                 percent: seg.elements[7]?.value,
                 quantity: seg.elements[9]?.value,
                 quantityQualifier: seg.elements[8]?.value,
                 network: seg.elements[11]?.value === 'Y' ? 'Yes' : seg.elements[11]?.value === 'N' ? 'No' : 'Unknown',
                 dates,
-                messages
+                messages,
+                contacts: [...payerContacts, ...entityContacts]
             });
         }
     }
