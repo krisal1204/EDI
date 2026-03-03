@@ -634,11 +634,14 @@ export const mapEdiToBenefits = (doc: EdiDocument, recordId?: string): BenefitRo
         }
 
         if (seg.tag === 'EB') {
-            const typeCode = seg.elements[0]?.value;
-            const insuranceType = seg.elements[3]?.value;
-            const coverageLevel = seg.elements[1]?.value; // CHD, FAM, etc.
+            const typeCode = seg.elements[0]?.value?.trim().toUpperCase();
+            const coverageLevelCode = seg.elements[1]?.value?.trim().toUpperCase(); // EB02
+            const serviceTypeRaw = seg.elements[2]?.value; // EB03
+            const insuranceTypeCode = seg.elements[3]?.value?.trim().toUpperCase(); // EB04
             
-            // Map EB01 to full description
+            // --- MAPPINGS ---
+
+            // EB01: Eligibility or Benefit Information
             const benefitTypeMap: Record<string, string> = {
                 "1": "Active Coverage",
                 "2": "Active - Full Risk Capitation",
@@ -679,7 +682,73 @@ export const mapEdiToBenefits = (doc: EdiDocument, recordId?: string): BenefitRo
                 "PR": "Patient Responsibility"
             };
 
+            // EB02: Coverage Level
+            const coverageLevelMap: Record<string, string> = {
+                "CHD": "Children Only",
+                "DEP": "Dependents Only",
+                "ECH": "Employee & Children",
+                "EMP": "Employee Only",
+                "ESP": "Employee & Spouse",
+                "FAM": "Family",
+                "IND": "Individual",
+                "SPC": "Spouse & Children",
+                "SPO": "Spouse Only"
+            };
+
+            // EB03: Service Type
+            const serviceTypeMap: Record<string, string> = {
+                "1": "Medical Care",
+                "30": "Health Benefit Plan Coverage",
+                "33": "Chiropractic",
+                "35": "Dental Care",
+                "47": "Hospital",
+                "48": "Hospital - Inpatient",
+                "50": "Hospital - Outpatient",
+                "51": "Hospital - Emergency",
+                "52": "Hospital - Outpatient",
+                "53": "Hospital - Ambulatory Surgical",
+                "86": "Emergency Services",
+                "88": "Pharmacy",
+                "98": "Physician Visit - Office",
+                "AL": "Vision (Optometry)",
+                "MH": "Mental Health",
+                "UC": "Urgent Care",
+                "PT": "Physical Therapy",
+                "AE": "Physical Medicine",
+                "AF": "Speech Therapy",
+                "AG": "Skilled Nursing Care",
+                "AI": "Substance Abuse",
+                "AJ": "Alcoholism",
+                "AK": "Drug Addiction",
+                "DM": "DME",
+                "E1": "Non-Medical Equipment",
+                "E2": "Hearing Aid",
+                "E3": "Vision Glasses",
+                "E4": "Vision Contacts",
+                "E5": "Vision Safety"
+            };
+
+            // EB04: Insurance Type
+            const insuranceTypeMap: Record<string, string> = {
+                "HM": "HMO",
+                "PR": "PPO",
+                "EPO": "EPO",
+                "POS": "POS",
+                "IND": "Indemnity",
+                "C1": "Commercial",
+                "GP": "Group Policy",
+                "MP": "Medicare Primary",
+                "MC": "Medicaid",
+                "QM": "Qualified Medicare Beneficiary"
+            };
+
             const typeDesc = benefitTypeMap[typeCode] || typeCode;
+            
+            // Construct Coverage Description (combining Level and Type)
+            const levelDesc = coverageLevelMap[coverageLevelCode];
+            const insDesc = insuranceTypeMap[insuranceTypeCode] || insuranceTypeCode;
+            let coverageDesc = insDesc || 'Medical';
+            if (levelDesc) coverageDesc += ` - ${levelDesc}`;
 
             // Extract messages
             const messages: string[] = [];
@@ -700,23 +769,26 @@ export const mapEdiToBenefits = (doc: EdiDocument, recordId?: string): BenefitRo
                     if (qual === '348') dates.push(`Benefit Begin: ${dateVal}`);
                     if (qual === '349') dates.push(`Benefit End: ${dateVal}`);
                     if (qual === '291') dates.push(`Plan: ${dateVal}`);
+                    if (qual === '307') dates.push(`Eligibility Begin: ${dateVal}`);
+                    if (qual === '318') dates.push(`Added: ${dateVal}`);
+                    if (qual === '356') dates.push(`Effective: ${dateVal}`);
+                    if (qual === '357') dates.push(`End: ${dateVal}`);
                 }
                 j++;
             }
 
-            const serviceTypeCodes = seg.elements[2]?.value?.split(doc.componentSeparator || '>') || [];
+            const serviceTypeCodes = serviceTypeRaw?.split(doc.componentSeparator || '>') || [];
             // Map codes to text
             const serviceTexts = serviceTypeCodes.map((c: string) => {
-                // Check local dict
-                const dict: any = { "1": "Medical", "30": "Health Plan", "33": "Chiropractic", "35": "Dental", "88": "Pharmacy", "98": "Visit" };
-                return dict[c] || c;
+                const trimmed = c.trim();
+                return serviceTypeMap[trimmed] || trimmed;
             }).join(', ');
 
             rows.push({
                 reference: currentRef,
                 type: typeDesc,
                 service: serviceTexts,
-                coverage: insuranceType || 'Medical',
+                coverage: coverageDesc,
                 amount: seg.elements[6]?.value,
                 percent: seg.elements[7]?.value,
                 quantity: seg.elements[9]?.value,
