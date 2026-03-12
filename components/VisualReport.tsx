@@ -342,7 +342,7 @@ export const VisualReport: React.FC<Props> = ({ doc, selectedRecordId, onFieldFo
                         <DetailRow label="Service Date" value={data.serviceDate} field="serviceDate" onFocus={onFieldFocus} />
                     </Card>
                     <Card title="Patient" icon="👤">
-                        <DetailRow label="Name" value={data.hasDependent ? `${data.dependentFirstName} ${data.dependentLastName}` : `${data.subscriberFirstName} ${data.subscriberLastName}`} field="subscriberFirstName" onFocus={onFieldFocus} />
+                        <DetailRow label="Name" value={data.hasDependent ? `${data.dependentFirstName} ${data.dependentLastName}` : `${data.subscriberFirstName} ${data.subscriberLastName}`} field={data.hasDependent ? "dependentFirstName" : "subscriberFirstName"} onFocus={onFieldFocus} />
                         <DetailRow label="Subscriber ID" value={data.subscriberId} field="subscriberId" onFocus={onFieldFocus} />
                     </Card>
                 </div>
