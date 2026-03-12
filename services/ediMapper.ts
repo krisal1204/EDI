@@ -196,13 +196,18 @@ export const mapEdiToForm276 = (doc: EdiDocument, recordId?: string): Partial<Fo
         data.subscriberId = subSeg.elements[8]?.value;
     }
 
-    const trn = flat.slice(anchorIdx).find(s => s.tag === 'TRN');
+    let nextBoundary = flat.slice(anchorIdx + 1).findIndex(s => s.tag === 'TRN' || s.tag === 'HL' || s.tag === 'SE');
+    nextBoundary = nextBoundary === -1 ? flat.length : anchorIdx + 1 + nextBoundary;
+
+    const trnLoop = flat.slice(anchorIdx, nextBoundary);
+
+    const trn = trnLoop.find(s => s.tag === 'TRN');
     if (trn) data.claimId = trn.elements[1]?.value;
 
-    const amt = flat.slice(anchorIdx).find(s => s.tag === 'AMT');
+    const amt = trnLoop.find(s => s.tag === 'AMT');
     if (amt) data.chargeAmount = amt.elements[1]?.value;
 
-    const dtp = flat.slice(anchorIdx).find(s => s.tag === 'DTP' && s.elements[0]?.value === '472');
+    const dtp = trnLoop.find(s => s.tag === 'DTP' && s.elements[0]?.value === '472');
     if (dtp) data.serviceDate = formatDate(dtp.elements[2]?.value);
 
     // Determine dependency based on HL

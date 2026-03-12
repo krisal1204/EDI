@@ -40,6 +40,13 @@ const INITIAL_FORM_DATA_834: FormData834 = {
     dependents: []
 };
 
+const INITIAL_FORM_DATA_276: FormData276 = {
+    payerName: 'MEDICARE', payerId: 'CMS001', providerName: 'GENERAL HOSPITAL', providerNpi: '1234567890',
+    subscriberFirstName: 'JOHN', subscriberLastName: 'DOE', subscriberId: 'MBI123456789',
+    hasDependent: false, dependentFirstName: '', dependentLastName: '',
+    claimId: 'CLM987654321', chargeAmount: '150.00', serviceDate: new Date().toISOString().slice(0, 10)
+};
+
 const NavTab = ({ active, onClick, disabled, icon, label }: { active: boolean, onClick: () => void, disabled?: boolean, icon: React.ReactNode, label: string }) => (
   <button
     onClick={onClick}
@@ -68,7 +75,7 @@ export const Workspace = () => {
   const [jsonMode, setJsonMode] = useState<'structure' | 'simplified'>('simplified');
 
   const [formData, setFormData] = useState<FormData270>(INITIAL_FORM_DATA);
-  const [formData276, setFormData276] = useState<FormData276>({} as any);
+  const [formData276, setFormData276] = useState<FormData276>(INITIAL_FORM_DATA_276);
   const [formData837, setFormData837] = useState<FormData837>({} as any);
   const [formData834, setFormData834] = useState<FormData834>(INITIAL_FORM_DATA_834);
   const [formData278, setFormData278] = useState<FormData278>({} as any);
@@ -134,7 +141,7 @@ export const Workspace = () => {
       setSelectedRecordId(null);
       setSelectedSegment(null);
       setFormData(INITIAL_FORM_DATA);
-      setFormData276({} as any);
+      setFormData276(INITIAL_FORM_DATA_276);
       setFormData837({} as any);
       setFormData834(INITIAL_FORM_DATA_834);
       setFormData278({} as any);
@@ -169,7 +176,7 @@ export const Workspace = () => {
           setGeneratorMode('270');
       } 
       else if (type === '276') {
-          setFormData276({ ...mapEdiToForm276(parsed, recordId) } as any);
+          setFormData276({ ...INITIAL_FORM_DATA_276, ...mapEdiToForm276(parsed, recordId) } as any);
           setGeneratorMode('276');
       }
       else if (type === '837') {
@@ -362,13 +369,21 @@ export const Workspace = () => {
       }
 
       // 3. Static Field Mapping
+      if (fieldId === 'dependentDob' || fieldId === 'dependentGender') {
+          const depNm1Idx = flat.slice(searchStart).findIndex(s => s.tag === 'NM1' && s.elements[0]?.value === '03');
+          if (depNm1Idx !== -1) {
+              const dmg = flat.slice(searchStart + depNm1Idx).find(s => s.tag === 'DMG');
+              if (dmg) { setSelectedSegment(dmg); return; }
+          }
+      }
+
       let tag = '', el1Codes: string[] | undefined = undefined;
       let lookAheadFor = '';
 
       if (fieldId === 'payerName') { tag = 'NM1'; el1Codes = ['PR', '41', 'IN', '40']; }
       else if (fieldId === 'payerId') { tag = 'NM1'; el1Codes = ['PR', '41', 'IN']; }
-      else if (fieldId === 'providerName') { tag = 'NM1'; el1Codes = ['1P', '85', 'PE', 'FA']; }
-      else if (fieldId === 'providerNpi') { tag = 'NM1'; el1Codes = ['1P', '85', 'PE']; }
+      else if (fieldId === 'providerName') { tag = 'NM1'; el1Codes = ['1P', '85', 'PE', 'FA', '41']; }
+      else if (fieldId === 'providerNpi') { tag = 'NM1'; el1Codes = ['1P', '85', 'PE', '41']; }
       
       // Subscriber Mappings
       else if (fieldId === 'subscriberFirstName' || fieldId === 'subFirstName') { tag = 'NM1'; el1Codes = ['IL', '74']; }
@@ -377,6 +392,10 @@ export const Workspace = () => {
       else if (fieldId === 'subSsn') { tag = 'REF'; el1Codes = ['SY']; }
       else if (fieldId === 'subDob') { tag = 'DMG'; }
       else if (fieldId === 'subGender') { tag = 'DMG'; }
+      else if (fieldId === 'dependentFirstName') { tag = 'NM1'; el1Codes = ['03']; }
+      else if (fieldId === 'dependentLastName') { tag = 'NM1'; el1Codes = ['03']; }
+      else if (fieldId === 'dependentDob') { tag = 'DMG'; }
+      else if (fieldId === 'dependentGender') { tag = 'DMG'; }
       
       // 834 Specific
       else if (fieldId === 'sponsorName') { tag = 'N1'; el1Codes = ['P5']; }
@@ -392,8 +411,9 @@ export const Workspace = () => {
       else if (fieldId === 'billingProviderAddress') { tag = 'NM1'; el1Codes = ['85']; lookAheadFor = 'N3'; }
       else if (fieldId === 'billingProviderCity') { tag = 'NM1'; el1Codes = ['85']; lookAheadFor = 'N4'; }
       else if (fieldId === 'billingTaxId') { tag = 'REF'; el1Codes = ['EI']; }
-      else if (fieldId === 'claimId') { tag = 'CLM'; }
+      else if (fieldId === 'claimId') { tag = doc.transactionType === '276' ? 'TRN' : 'CLM'; }
       else if (fieldId === 'totalCharge') { tag = 'CLM'; }
+      else if (fieldId === 'chargeAmount') { tag = 'AMT'; }
       
       // Other
       else if (fieldId === 'serviceDate') { tag = 'DTP'; el1Codes = ['472', '291']; }
@@ -468,7 +488,8 @@ export const Workspace = () => {
 
       if (tag === 'NM1') {
           const q = val(0);
-          if (q === 'PR' || q === '41' || q === '40') fieldId = 'payerName';
+          if (q === 'PR' || q === '40') fieldId = 'payerName';
+          else if (q === '41') fieldId = doc.transactionType === '276' ? 'providerName' : 'payerName';
           else if (q === '1P') fieldId = 'providerName';
           else if (q === 'IL') {
               if (contextEntity === 'Subscriber') fieldId = 'subFirstName'; // 834
@@ -510,7 +531,11 @@ export const Workspace = () => {
       else if (tag === 'INS') { fieldId = 'maintenanceType'; }
       else if (tag === 'HD') { fieldId = 'coverageLevelCode'; }
       else if (tag === 'TRN') {
-          if (val(0) === '1') fieldId = 'checkNumber';
+          if (doc.transactionType === '276') fieldId = 'claimId';
+          else if (val(0) === '1') fieldId = 'checkNumber';
+      }
+      else if (tag === 'AMT') {
+          if (doc.transactionType === '276') fieldId = 'chargeAmount';
       }
       else if (tag === 'DTP') {
           const q = val(0);
