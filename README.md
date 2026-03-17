@@ -19,4 +19,9 @@ View your app in AI Studio: https://ai.studio/apps/drive/1RNZ6y79OVLTAXONQHsnEoJ
 3. Run the app:
    `npm run dev`
 
+ 
+ git pull 
+ merge origin main to local feat/improment 
  docker compose up --build -d
+
+
