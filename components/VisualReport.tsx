@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { EdiDocument } from '../types';
 import { 
     mapEdiToForm, mapEdiToForm834, mapEdiToForm837, mapEdiToForm276, mapEdiToForm278, mapEdiToForm820,
@@ -39,6 +39,7 @@ const DetailRow = ({ label, value, field, onFocus }: { label: string, value: any
 
 export const VisualReport: React.FC<Props> = ({ doc, selectedRecordId, onFieldFocus }) => {
     const type = doc.transactionType;
+    const [networkFilter, setNetworkFilter] = useState<'All' | 'In-Network' | 'Out-of-Network'>('All');
 
     if (type === '837') {
         const data = mapEdiToForm837(doc, selectedRecordId || undefined) as FormData837;
@@ -222,9 +223,17 @@ export const VisualReport: React.FC<Props> = ({ doc, selectedRecordId, onFieldFo
         const header = mapEdiToForm(doc, selectedRecordId || undefined) as Partial<FormData270>;
         const benefits = mapEdiToBenefits(doc, selectedRecordId || undefined);
         
+        // Apply Network Filter
+        let filteredBenefits = benefits;
+        if (networkFilter === 'In-Network') {
+            filteredBenefits = benefits.filter(b => b.network === 'In Network' || b.network === 'Yes');
+        } else if (networkFilter === 'Out-of-Network') {
+            filteredBenefits = benefits.filter(b => b.network === 'Out of Network' || b.network === 'No');
+        }
+
         // Calculate Summaries
-        const activeCoverages = benefits.filter(b => b.type.includes('Active Coverage'));
-        const financials = benefits.filter(b => 
+        const activeCoverages = filteredBenefits.filter(b => b.type.includes('Active Coverage'));
+        const financials = filteredBenefits.filter(b => 
             b.type.includes('Deductible') || 
             b.type.includes('Out of Pocket') || 
             b.type.includes('Co-Payment') || 
@@ -233,11 +242,28 @@ export const VisualReport: React.FC<Props> = ({ doc, selectedRecordId, onFieldFo
 
         return (
             <div className="p-8 h-full overflow-y-auto custom-scrollbar space-y-6 animate-fade-in">
-                <div className="mb-8">
-                    <span className="px-2 py-1 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 text-[10px] font-bold rounded uppercase tracking-widest mb-2 inline-block">
-                        Eligibility Response (271)
-                    </span>
-                    <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Benefit Summary</h2>
+                <div className="flex justify-between items-end mb-8">
+                    <div>
+                        <span className="px-2 py-1 bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 text-[10px] font-bold rounded uppercase tracking-widest mb-2 inline-block">
+                            Eligibility Response (271)
+                        </span>
+                        <h2 className="text-3xl font-bold text-gray-900 dark:text-white">Benefit Summary</h2>
+                    </div>
+                    <div className="flex bg-gray-100 dark:bg-slate-800 p-1 rounded-lg">
+                        {(['All', 'In-Network', 'Out-of-Network'] as const).map(filter => (
+                            <button
+                                key={filter}
+                                onClick={() => setNetworkFilter(filter)}
+                                className={`px-4 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                                    networkFilter === filter 
+                                        ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm' 
+                                        : 'text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-300'
+                                }`}
+                            >
+                                {filter}
+                            </button>
+                        ))}
+                    </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
@@ -303,10 +329,10 @@ export const VisualReport: React.FC<Props> = ({ doc, selectedRecordId, onFieldFo
                 )}
 
                 {/* Limitations Summary */}
-                {benefits.some(b => b.type.includes('Limitations')) && (
+                {filteredBenefits.some(b => b.type.includes('Limitations')) && (
                     <Card title="Limitations" icon="⚠️">
                         <div className="space-y-3">
-                            {benefits.filter(b => b.type.includes('Limitations')).map((item, i) => (
+                            {filteredBenefits.filter(b => b.type.includes('Limitations')).map((item, i) => (
                                 <div key={i} className="flex justify-between items-center border-b border-gray-50 dark:border-slate-800 last:border-0 pb-2 last:pb-0">
                                     <div>
                                         <div className="font-medium text-gray-900 dark:text-white">{item.coverage}</div>

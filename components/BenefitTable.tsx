@@ -96,12 +96,14 @@ export const BenefitTable = ({ benefits }: { benefits: BenefitRow[] }) => {
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
   const [selectedCoverages, setSelectedCoverages] = useState<string[]>([]);
+  const [selectedNetworks, setSelectedNetworks] = useState<string[]>([]);
 
   // --- Extract Unique Options ---
   const uniqueEntities = useMemo(() => Array.from(new Set(benefits.map(b => b.reference || 'Unknown'))).sort(), [benefits]);
   const uniqueTypes = useMemo(() => Array.from(new Set(benefits.map(b => b.type || 'Unknown'))).sort(), [benefits]);
   const uniqueServices = useMemo(() => Array.from(new Set(benefits.map(b => b.service || 'Unknown'))).sort(), [benefits]);
   const uniqueCoverages = useMemo(() => Array.from(new Set(benefits.map(b => b.coverage || 'Unknown'))).sort(), [benefits]);
+  const uniqueNetworks = useMemo(() => Array.from(new Set(benefits.map(b => b.network || 'Unknown'))).sort(), [benefits]);
 
   // --- Filtering Logic ---
   const filteredBenefits = useMemo(() => {
@@ -120,10 +122,11 @@ export const BenefitTable = ({ benefits }: { benefits: BenefitRow[] }) => {
       const matchesType = selectedTypes.length === 0 || selectedTypes.includes(b.type || 'Unknown');
       const matchesService = selectedServices.length === 0 || selectedServices.includes(b.service || 'Unknown');
       const matchesCoverage = selectedCoverages.length === 0 || selectedCoverages.includes(b.coverage || 'Unknown');
+      const matchesNetwork = selectedNetworks.length === 0 || selectedNetworks.includes(b.network || 'Unknown');
 
-      return matchesSearch && matchesEntity && matchesType && matchesService && matchesCoverage;
+      return matchesSearch && matchesEntity && matchesType && matchesService && matchesCoverage && matchesNetwork;
     });
-  }, [benefits, searchTerm, selectedEntities, selectedTypes, selectedServices, selectedCoverages]);
+  }, [benefits, searchTerm, selectedEntities, selectedTypes, selectedServices, selectedCoverages, selectedNetworks]);
 
   const clearFilters = () => {
     setSearchTerm('');
@@ -131,9 +134,10 @@ export const BenefitTable = ({ benefits }: { benefits: BenefitRow[] }) => {
     setSelectedTypes([]);
     setSelectedServices([]);
     setSelectedCoverages([]);
+    setSelectedNetworks([]);
   };
 
-  const hasActiveFilters = searchTerm || selectedEntities.length > 0 || selectedTypes.length > 0 || selectedServices.length > 0 || selectedCoverages.length > 0;
+  const hasActiveFilters = searchTerm || selectedEntities.length > 0 || selectedTypes.length > 0 || selectedServices.length > 0 || selectedCoverages.length > 0 || selectedNetworks.length > 0;
 
   if (!benefits || benefits.length === 0) {
     return (
@@ -174,6 +178,7 @@ export const BenefitTable = ({ benefits }: { benefits: BenefitRow[] }) => {
         <FilterDropdown label="Type" options={uniqueTypes} selected={selectedTypes} onChange={setSelectedTypes} />
         <FilterDropdown label="Service" options={uniqueServices} selected={selectedServices} onChange={setSelectedServices} />
         <FilterDropdown label="Coverage" options={uniqueCoverages} selected={selectedCoverages} onChange={setSelectedCoverages} />
+        <FilterDropdown label="Network" options={uniqueNetworks} selected={selectedNetworks} onChange={setSelectedNetworks} />
 
         {/* Reset */}
         {hasActiveFilters && (
@@ -193,6 +198,7 @@ export const BenefitTable = ({ benefits }: { benefits: BenefitRow[] }) => {
                 <thead className="bg-white dark:bg-slate-900 sticky top-0 z-10 shadow-sm">
                 <tr>
                     <th className="px-4 py-3 font-medium text-gray-900 dark:text-slate-300 uppercase tracking-wider bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 min-w-[120px]">Entity</th>
+                    <th className="px-4 py-3 font-medium text-gray-900 dark:text-slate-300 uppercase tracking-wider bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 min-w-[100px]">Network</th>
                     <th className="px-4 py-3 font-medium text-gray-900 dark:text-slate-300 uppercase tracking-wider bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 min-w-[200px]">Type</th>
                     <th className="px-4 py-3 font-medium text-gray-900 dark:text-slate-300 uppercase tracking-wider bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 min-w-[200px]">Service</th>
                     <th className="px-4 py-3 font-medium text-gray-900 dark:text-slate-300 uppercase tracking-wider bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 min-w-[150px]">Coverage</th>
@@ -206,6 +212,15 @@ export const BenefitTable = ({ benefits }: { benefits: BenefitRow[] }) => {
                     <tr key={i} className="hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors group">
                         <td className="px-4 py-3 whitespace-nowrap align-top text-gray-500 dark:text-slate-400 font-medium">
                             {b.reference}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap align-top">
+                            {b.network === 'In Network' || b.network === 'Yes' ? (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">In-Network</span>
+                            ) : b.network === 'Out of Network' || b.network === 'No' ? (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400">Out-of-Network</span>
+                            ) : (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-800 dark:bg-slate-800 dark:text-slate-400">{b.network || 'Unknown'}</span>
+                            )}
                         </td>
                         <td className="px-4 py-3 text-gray-900 dark:text-slate-200 align-top font-medium">{b.type}</td>
                         <td className="px-4 py-3 text-gray-600 dark:text-slate-400 align-top text-xs leading-relaxed min-w-[200px]">
@@ -231,11 +246,6 @@ export const BenefitTable = ({ benefits }: { benefits: BenefitRow[] }) => {
                              {b.messages.length > 0 && (
                                  <div className="mt-1 text-gray-500 dark:text-slate-400 italic">
                                      {b.messages.join(' ')}
-                                 </div>
-                             )}
-                             {b.network && b.network !== 'Unknown' && (
-                                 <div className="mt-1">
-                                     {b.network === 'Yes' ? <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">In Network</span> : <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">Out of Network</span>}
                                  </div>
                              )}
                              {b.contacts && b.contacts.length > 0 && (
